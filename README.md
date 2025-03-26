@@ -192,6 +192,49 @@ This is particularly useful for GPU farm operators who need to manage multiple m
 
 Visit [https://infernet.tech](https://infernet.tech) and [https://github.com/profullstack/infernet-protocol](https://github.com/profullstack/infernet-protocol)
 
+## USE CASES
+
+The Infernet Protocol enables a decentralized marketplace for AI computation resources, with two primary use cases that leverage Lightning Network (LN) for micropayments:
+
+### 1. Resource Provider: Donating or Renting GPU/CPU Time
+
+As a resource provider in the Infernet Protocol network, you can:
+
+- **Monetize Idle Computing Resources**: Convert underutilized GPU/CPU capacity into a source of passive income by offering it to the network
+- **Earn Lightning Network Payments**: Receive instant micropayments in Bitcoin via the Lightning Network for every computation task your hardware processes
+- **Set Custom Pricing Models**: Define your own pricing based on hardware capabilities, availability schedules, and computation types
+- **Build Reputation**: Establish a reputation score based on reliability, speed, and quality of service, attracting more clients
+- **Join Specialized Pools**: Participate in specialized computation pools for specific AI model types or industries
+- **Flexible Participation**: Choose between full-time operation or casual participation during off-hours
+
+The desktop application and PWA provide comprehensive dashboards for monitoring earnings, hardware utilization, and reputation metrics.
+
+### 2. Resource Consumer: Training and Inference on the P2P Network
+
+As a consumer of computing resources, you can:
+
+- **Access Distributed Computing Power**: Tap into a global network of GPUs and CPUs without capital investment in hardware
+- **Pay-as-You-Go with Lightning**: Pay only for the actual computation used via instant Lightning Network micropayments
+- **Scale Dynamically**: Easily scale your computation needs up or down based on project requirements
+- **Select Specialized Hardware**: Choose specific hardware profiles optimized for your particular AI models
+- **Prioritize Jobs**: Adjust pricing to prioritize urgent computation tasks
+- **Distribute Workloads**: Split large jobs across multiple providers for faster processing
+- **Ensure Privacy**: Leverage secure computation options for sensitive data processing
+
+The mobile and web applications provide intuitive interfaces for submitting jobs, tracking progress, and managing budgets.
+
+### Lightning Network Integration
+
+The Infernet Protocol uses Lightning Network for all transactions, enabling:
+
+- **Instant Micropayments**: Process payments in milliseconds with minimal fees
+- **Trustless Operation**: No need for credit checks or deposits - pay only for what you use
+- **Global Accessibility**: Anyone with internet access and Bitcoin can participate
+- **Programmable Payments**: Automated payments based on computation metrics
+- **Privacy-Preserving**: Transactions don't require revealing personal information
+
+This payment infrastructure allows for truly decentralized AI computation marketplace that operates efficiently at global scale.
+
 ## Contact
 For technical contributions or questions: protocol@infernet.tech
 

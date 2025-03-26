@@ -3,10 +3,10 @@
  * Demonstrates the use of the PocketBase database layer
  */
 
-const db = require('./db');
-const { Provider, Client, Job, Aggregator } = require('./db/models');
-const dbUtils = require('./db/utils');
-const config = require('./config');
+import db from './db/index.js';
+import { Provider, Client, Job, Aggregator } from './db/models/index.js';
+import * as dbUtils from './db/utils.js';
+import config from './config.js';
 
 /**
  * Initialize the application
@@ -277,7 +277,7 @@ async function shutdown() {
 }
 
 // Export the functions for use in other modules
-module.exports = {
+export {
     init,
     registerProvider,
     submitJob,

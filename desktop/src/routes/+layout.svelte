@@ -1,5 +1,25 @@
 <script>
   import '../app.css';
+  import { onMount } from 'svelte';
+  import { nodeActions } from '../stores/nodeStore.js';
+  import pocketbase, { pbConnectionStatus } from '../lib/pocketbase.js';
+
+  let connectionStatus;
+  
+  // Subscribe to connection status
+  pbConnectionStatus.subscribe(status => {
+    connectionStatus = status;
+  });
+
+  onMount(async () => {
+    // Initialize PocketBase connection
+    try {
+      await nodeActions.connectToPocketBase();
+      console.log('PocketBase initialized');
+    } catch (error) {
+      console.error('Failed to initialize PocketBase:', error);
+    }
+  });
 </script>
 
 <div class="app">

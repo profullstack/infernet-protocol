@@ -3,9 +3,10 @@
  * Based on Kademlia DHT for peer discovery
  */
 
-const crypto = require('crypto');
-const config = require('../config');
-const { createLogger } = require('../utils/logger');
+import crypto from 'crypto';
+import config from '../config.js';
+import { createLogger } from '../utils/logger.js';
+import fetch from 'node-fetch';
 
 const logger = createLogger('dht');
 
@@ -341,10 +342,39 @@ class DistributedHashTable {
      * @param {Function} discoveryCallback - Callback for discovery events
      * @private
      */
-    _performDiscovery(discoveryCallback) {
-        // In a real implementation, this would involve FIND_NODE RPCs
-        // to discover new nodes and update the routing table
+    async _performDiscovery(discoveryCallback) {
+        try {
+            // Check if remote node seeding is enabled
+            if (config.node.enableRemoteSeeding) {
+                // Fetch nodes from remote P2P instance
+                const remoteUrl = config.node.remoteNodeUrl || 'https://infernet.tech/nodes';
+                logger.info(`Fetching nodes from remote P2P instance: ${remoteUrl}`);
+                
+                const response = await fetch(remoteUrl);
+                
+                if (response.ok) {
+                    const remoteNodes = await response.json();
+                    logger.info(`Discovered ${remoteNodes.length} nodes from remote P2P instance`);
+                    
+                    // Add remote nodes to the DHT
+                    remoteNodes.forEach(node => {
+                        if (node.id && node.ip && node.port) {
+                            this.addNode(node.id, node.ip, node.port);
+                            logger.debug(`Added remote node: ${node.id} (${node.ip}:${node.port})`);
+                        }
+                    });
+                } else {
+                    logger.warn(`Failed to fetch nodes from remote P2P instance: ${response.status} ${response.statusText}`);
+                }
+            }
+        } catch (error) {
+            logger.error('Error during remote node discovery:', error);
+        }
         
+        // In a real implementation, this would also involve FIND_NODE RPCs
+        // to discover new nodes and update the routing table locally
+        
+        // Call the discovery callback with current nodes
         if (typeof discoveryCallback === 'function') {
             discoveryCallback(this.nodeId, Array.from(this.nodes.values()));
         }
@@ -418,4 +448,4 @@ class DistributedHashTable {
 // Create a singleton instance
 const dht = new DistributedHashTable();
 
-module.exports = dht;
+export default dht;

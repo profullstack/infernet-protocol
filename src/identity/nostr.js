@@ -3,9 +3,9 @@
  * Handles decentralized identity, reputation tracking, and public key-based authentication
  */
 
-const crypto = require('crypto');
-const config = require('../config');
-const { createLogger } = require('../utils/logger');
+import crypto from 'crypto';
+import config from '../config.js';
+import { createLogger } from '../utils/logger.js';
 
 const logger = createLogger('nostr');
 

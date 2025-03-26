@@ -10,6 +10,7 @@ import { logger as honoLogger } from 'hono/logger';
 import { serve } from '@hono/node-server';
 import { createLogger } from '../utils/logger.js';
 import config from '../config.js';
+import { registerNodeRoutes } from './routes/nodes.js';
 
 const logger = createLogger('api');
 
@@ -48,6 +49,10 @@ class ApiServer {
         this.app.get('/health', (c) => {
             return c.json({ status: 'healthy' });
         });
+        
+        // Register node routes
+        registerNodeRoutes(this.app, this.apiPrefix);
+        logger.info('Registered node routes');
         
         // Set up API routes
         this._setupRoutes();

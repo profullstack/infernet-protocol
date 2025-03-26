@@ -7,6 +7,12 @@ import pocketbaseService from './pocketbase.js';
 import { createLogger } from '../utils/logger.js';
 import { EventEmitter } from 'events';
 
+// Import models - these will be dynamically instantiated
+import Provider from './models/provider.js';
+import Client from './models/client.js';
+import Job from './models/job.js';
+import Aggregator from './models/aggregator.js';
+
 const logger = createLogger('database');
 
 class Database extends EventEmitter {
@@ -394,12 +400,6 @@ class Database extends EventEmitter {
      * @private
      */
     _initModels() {
-        // Import models
-        const Provider = require('./models/provider');
-        const Client = require('./models/client');
-        const Job = require('./models/job');
-        const Aggregator = require('./models/aggregator');
-        
         // Initialize models with database instance
         this.models = {
             provider: new Provider(this),

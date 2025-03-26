@@ -3,9 +3,9 @@
  * Handles real-time, bidirectional communication between nodes
  */
 
-const WebSocket = require('ws');
-const config = require('../config');
-const { createLogger } = require('../utils/logger');
+import WebSocket from 'ws';
+import config from '../config.js';
+import { createLogger } from '../utils/logger.js';
 
 const logger = createLogger('websocket');
 
@@ -379,7 +379,7 @@ class WebSocketClient {
     }
 }
 
-module.exports = {
+export {
     WebSocketServer,
     WebSocketClient
 };

@@ -1,7 +1,7 @@
 /**
  * Database utility functions for Infernet Protocol
  */
-const db = require('./index');
+import db from './index.js';
 
 /**
  * Initialize the database schema
@@ -179,9 +179,13 @@ async function getJobCountByStatus(status) {
     }
 }
 
-module.exports = {
+export {
     initializeSchema,
     backupDatabase,
     healthCheck,
-    getStats
+    getStats,
+    getCollectionCount,
+    getActiveProviderCount,
+    getActiveAggregatorCount,
+    getJobCountByStatus
 };

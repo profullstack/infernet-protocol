@@ -14,7 +14,7 @@ This document outlines the planned technical architecture and implementation det
 - **Communication**: WebSockets for real-time, bidirectional communication.
 - **Networking**: Decentralized discovery and peer-to-peer job distribution via DHT (Kademlia implementation).
 - **Containerization**: Docker-based task execution for sandboxing and security.
-- **Data Transport**: Large payloads (models, input data) distributed via IPFS.
+- **Data Transport**: Home-grown content addressing system for distributing models and large input data files.
 - **Styling**: Vanilla CSS across desktop and web interfaces for simplicity and consistency.
 
 ---
@@ -35,7 +35,7 @@ This document outlines the planned technical architecture and implementation det
   - Aggregator interface for splitting and tracking jobs.
   - Client submission form.
 - Embedded WebSocket client to communicate with the network.
-- IPFS client integration for uploading large models and datasets.
+- Home-grown content delivery system integration for uploading models and large datasets.
 - Local storage for logs and history.
 
 ## Mobile (React Native with Expo)
@@ -89,6 +89,7 @@ This document outlines the planned technical architecture and implementation det
 - Define Docker execution templates.
 - Create WebSocket communication spec (message types and formats).
 - Finalize DHT node join/leave protocols and health checks.
+- Begin design of home-grown content delivery and retrieval system.
 
 ## Contact
 For technical contributions or questions: protocol@infernet.tech

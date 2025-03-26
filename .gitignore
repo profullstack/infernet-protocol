@@ -1,3 +1,13 @@
 node_modules/
 pnpm-lock.yaml
 .env
+
+# Content storage directories
+/storage/
+/tmp/
+
+# PocketBase data
+/pb_data/
+
+# Logs
+/logs/

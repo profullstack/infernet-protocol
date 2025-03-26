@@ -75,6 +75,33 @@ Providers earn tokens for completed jobs, while clients gain scalable, on-demand
 - Decentralized inference APIs.
 - On-demand compute for research institutions.
 - Private inference jobs for enterprise use.
+- Distributed training of custom AI models.
+
+---
+
+## Distributed Model Training
+In addition to inference, Infernet Protocol enables distributed training of custom AI models across the network. This capability has the potential to democratize AI model development and challenge the dominance of large AI providers.
+
+### Training Architecture
+- **Federated Training**: Coordinate model training across multiple provider nodes.
+- **Gradient Aggregation**: Efficiently combine model updates from distributed training runs.
+- **Checkpoint Management**: Secure storage and versioning of model checkpoints.
+- **Hyperparameter Optimization**: Distributed search for optimal model configurations.
+
+### Economic Incentives
+- **Higher Compensation**: Training jobs typically offer higher rewards than inference due to increased resource utilization.
+- **Long-running Relationships**: Providers can commit to extended training campaigns for stability.
+- **Dataset Contribution**: Providers can optionally contribute data for improved training, with additional compensation.
+
+### Security and Privacy
+- **Differential Privacy**: Built-in mechanisms to protect training data privacy.
+- **Secure Aggregation**: Cryptographic protocols to combine model updates without revealing individual contributions.
+- **Verifiable Computation**: Ensure training steps are performed correctly without revealing the model architecture.
+
+### Democratizing AI Development
+- **Accessible Computing**: Startups and researchers can train large models without massive capital investment.
+- **Specialized Models**: Train domain-specific models that may be overlooked by major AI providers.
+- **Community Ownership**: Enable collaborative training of open-source models owned by the community.
 
 ---
 

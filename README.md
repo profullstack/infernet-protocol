@@ -11,6 +11,29 @@ Read the whitepaper at [INFERNET-PROTOCOL.md](https://github.com/profullstack/in
 
 The architecture is outlined in [INFERNET-ARCHITECTURE.md](https://github.com/profullstack/infernet-protocol/blob/master/INFERNET-ARCHITECTURE.md).
 
+## Table of Contents
+
+- [Technologies](#technologies)
+- [Platforms](#platforms)
+- [Database](#database)
+- [Repository Structure](#repository-structure)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Clone the Repository](#clone-the-repository)
+  - [Core Protocol](#core-protocol)
+  - [Desktop Application](#desktop-application)
+  - [Mobile Application](#mobile-application)
+  - [PocketBase Integration](#pocketbase-integration)
+- [PWA & Self-Hosting](#pwa--self-hosting)
+  - [PWA Development](#pwa-development)
+  - [Self-Hosting Mode](#self-hosting-mode)
+  - [Docker Support](#docker-support)
+- [USE CASES](#use-cases)
+  - [Resource Provider: Donating or Renting GPU/CPU Time](#1-resource-provider-donating-or-renting-gpucpu-time)
+  - [Resource Consumer: Training and Inference on the P2P Network](#2-resource-consumer-training-and-inference-on-the-p2p-network)
+  - [Lightning Network Integration](#lightning-network-integration)
+- [Contact](#contact)
+
 [![GitHub](https://img.shields.io/github/license/profullstack/infernet-protocol)](https://github.com/profullstack/infernet-protocol/blob/master/LICENSE)
 [![GitHub commit activity](https://img.shields.io/github/commit-activity/m/profullstack/infernet-protocol)](https://github.com/profullstack/infernet-protocol/pulse)
 [![GitHub last commit](https://img.shields.io/github/last-commit/profullstack/infernet-protocol)](https://github.com/profullstack/infernet-protocol/commits/master)

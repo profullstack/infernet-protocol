@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "electron": "electron .",
-    "electron:dev": "concurrently \"npm run dev\" \"npm run electron\"",
+    "electron:dev": "concurrently \"npm run dev\" \"NODE_ENV=development npm run electron\"",
     "electron:build": "npm run build && electron-builder"
   },
   "keywords": [

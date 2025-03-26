@@ -58,6 +58,7 @@ The architecture is outlined in [INFERNET-ARCHITECTURE.md](https://github.com/pr
 [![Windows](https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=fff&style=for-the-badge)](https://www.microsoft.com/windows)
 [![macOS](https://img.shields.io/badge/macOS-000000?logo=macos&logoColor=fff&style=for-the-badge)](https://www.apple.com/macos/)
 [![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=000&style=for-the-badge)](https://www.linux.org/)
+[![Web](https://img.shields.io/badge/Web-4285F4?logo=googlechrome&logoColor=fff&style=for-the-badge)](https://www.w3.org/standards/webdesign/)
 
 ### Database
 [![PocketBase](https://img.shields.io/badge/PocketBase-B8DBE4?logo=pocketbase&logoColor=000&style=for-the-badge)](https://pocketbase.io/)

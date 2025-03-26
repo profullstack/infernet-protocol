@@ -51,6 +51,88 @@ The architecture is outlined in [INFERNET-ARCHITECTURE.md](https://github.com/pr
 
 - `docs/` — Documentation, whitepaper, and assets
 
+## Getting Started
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) (v18 or later)
+- [pnpm](https://pnpm.io/) (v10 or later)
+- [Expo CLI](https://docs.expo.dev/get-started/installation/) (for mobile development)
+- [Android Studio](https://developer.android.com/studio) (for Android development)
+- [Xcode](https://developer.apple.com/xcode/) (for iOS development, macOS only)
+
+### Clone the Repository
+
+```bash
+git clone https://github.com/profullstack/infernet-protocol.git
+cd infernet-protocol
+pnpm install
+```
+
+### Core Protocol
+
+To run the core protocol server:
+
+```bash
+pnpm start
+```
+
+For development with auto-restart:
+
+```bash
+pnpm dev
+```
+
+### Desktop Application
+
+The desktop application uses Electron with Svelte for the UI.
+
+```bash
+cd desktop
+pnpm install
+```
+
+For development (runs both Vite dev server and Electron):
+
+```bash
+pnpm electron:dev
+```
+
+To build the desktop application:
+
+```bash
+pnpm electron:build
+```
+
+### Mobile Application
+
+The mobile application uses React Native with Expo.
+
+```bash
+cd mobile
+pnpm install
+```
+
+To start the Expo development server:
+
+```bash
+pnpm start
+```
+
+To run on Android or iOS:
+
+```bash
+pnpm android
+# or
+pnpm ios  # macOS only
+```
+
+### PocketBase Integration
+
+Both mobile and desktop applications use PocketBase locally for data management. They also connect to a remote P2P instance to seed nodes from https://infernet.tech/nodes.
+
+The API exposes a public `/nodes` route when running in server mode.
+
 Visit [https://infernet.tech](https://infernet.tech) and [https://github.com/profullstack/infernet-protocol](https://github.com/profullstack/infernet-protocol)
 
 ## Contact

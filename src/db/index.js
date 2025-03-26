@@ -1,11 +1,11 @@
 /**
  * Database layer for Infernet Protocol using PocketBase
  */
-const PocketBase = require('pocketbase');
-const config = require('../config');
-const pocketbaseService = require('./pocketbase');
-const { createLogger } = require('../utils/logger');
-const { EventEmitter } = require('events');
+import PocketBase from 'pocketbase';
+import config from '../config.js';
+import pocketbaseService from './pocketbase.js';
+import { createLogger } from '../utils/logger.js';
+import { EventEmitter } from 'events';
 
 const logger = createLogger('database');
 
@@ -514,4 +514,4 @@ class Database extends EventEmitter {
 // Create a singleton instance
 const db = new Database();
 
-module.exports = db;
+export default db;

@@ -76,11 +76,12 @@ This document outlines the planned technical architecture and implementation det
 
 ## Task Workflow Summary
 1. **Discovery**: Aggregator queries DHT for available providers.
-2. **Job Dispatch**: Aggregator distributes inference job shards via WebSocket.
-3. **Execution**: Provider executes job in a Docker container.
-4. **Result Submission**: Provider sends result hashes and data via WebSocket.
-5. **Verification**: Aggregator performs redundant checks or validator sampling.
-6. **Payment Settlement**: Upon verification, payments released via micro-payment systems.
+2. **Parallelism Strategy Selection**: Aggregator determines optimal parallelism strategy based on model size and available resources.
+3. **Job Dispatch**: Aggregator distributes inference job shards via WebSocket.
+4. **Execution**: Provider executes job in a Docker container.
+5. **Result Submission**: Provider sends result hashes and data via WebSocket.
+6. **Verification**: Aggregator performs redundant checks or validator sampling.
+7. **Payment Settlement**: Upon verification, payments released via micro-payment systems.
 
 ---
 
@@ -100,13 +101,51 @@ This document outlines the planned technical architecture and implementation det
 
 ---
 
+## Distributed Inference Architecture
+
+### Parallelism Strategies
+- **Tensor Parallelism**: Splitting model weights across multiple GPUs on a single provider node.
+  - Optimized for models too large for a single GPU but that fit on multiple GPUs in one node.
+  - Configurable with tensor parallel sizes (2, 4, or 8 GPUs recommended for quantized models).
+
+- **Pipeline Parallelism**: Splitting model across multiple provider nodes.
+  - Used when a model is too large to fit on a single node.
+  - Each provider processes different parts of the model pipeline.
+
+- **Hybrid Approach**: Combining tensor and pipeline parallelism.
+  - Tensor parallelism within provider nodes, pipeline parallelism across providers.
+  - Coordinated by aggregator nodes for optimal resource utilization.
+
+### Resource Management
+- **GPU Memory Allocation**:
+  - System calculates available "GPU blocks" to estimate maximum concurrent tokens.
+  - Dynamic allocation based on model size and throughput requirements.
+
+- **Scaling Decision Tree**:
+  - Single GPU → Multi-GPU on single node → Multi-node deployment.
+  - Automatic selection based on job requirements and available resources.
+
+### Network Optimization
+- **High-Performance Communication**:
+  - Support for Infiniband, RDMA, and other high-speed interconnects between nodes.
+  - Network performance testing and monitoring tools.
+  - Configurable network parameters for optimal cross-node communication.
+
+### Containerization Strategy
+- **Environment Consistency**:
+  - Docker containers ensure identical environments across provider nodes.
+  - Environment variable management for network and communication configuration.
+  - Shared model paths and runtime environments.
+
 ## Next Steps
 - Define schemas for discovery messages and job specifications.
-- Define Docker execution templates.
+- Define Docker execution templates with support for distributed inference.
 - Create WebSocket communication spec (message types and formats).
 - Finalize DHT node join/leave protocols and health checks.
 - Begin design of home-grown content delivery and retrieval system.
 - Integrate NOSTR protocol libraries for reputation and identity management.
+- Implement distributed inference strategies (tensor and pipeline parallelism).
+- Design network optimization tools for high-speed node communication.
 
 ## Contact
 For technical contributions or questions: protocol@infernet.tech

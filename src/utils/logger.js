@@ -3,9 +3,9 @@
  * Provides structured logging with different levels and formats
  */
 
-const fs = require('fs');
-const path = require('path');
-const config = require('../config');
+import fs from 'fs';
+import path from 'path';
+import config from '../config.js';
 
 // Ensure log directory exists
 function ensureLogDirectory() {
@@ -92,6 +92,6 @@ function createLogger(module) {
     };
 }
 
-module.exports = {
+export {
     createLogger
 };

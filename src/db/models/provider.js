@@ -3,8 +3,8 @@
  * Represents a GPU provider node in the network
  */
 
-const { createLogger } = require('../../utils/logger');
-const crypto = require('crypto');
+import { createLogger } from '../../utils/logger.js';
+import crypto from 'crypto';
 
 const logger = createLogger('model:provider');
 
@@ -293,4 +293,4 @@ class Provider {
     }
 }
 
-module.exports = Provider;
+export default Provider;

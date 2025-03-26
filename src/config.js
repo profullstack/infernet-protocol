@@ -3,9 +3,10 @@
  */
 
 // Load environment variables from .env file
-require('dotenv').config();
+import dotenv from 'dotenv';
+dotenv.config();
 
-module.exports = {
+export default {
     // PocketBase configuration
     pocketbase: {
         url: process.env.POCKETBASE_URL || 'http://127.0.0.1:8090',

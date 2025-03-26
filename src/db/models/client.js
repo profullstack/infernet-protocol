@@ -3,8 +3,8 @@
  * Represents a client node that submits jobs
  */
 
-const { createLogger } = require('../../utils/logger');
-const crypto = require('crypto');
+import { createLogger } from '../../utils/logger.js';
+import crypto from 'crypto';
 
 const logger = createLogger('model:client');
 

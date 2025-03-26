@@ -3,11 +3,11 @@
  * Manages the embedded PocketBase instance
  */
 
-const path = require('path');
-const fs = require('fs');
-const { spawn } = require('child_process');
-const config = require('../config');
-const { createLogger } = require('../utils/logger');
+import path from 'path';
+import fs from 'fs';
+import { spawn } from 'child_process';
+import config from '../config.js';
+import { createLogger } from '../utils/logger.js';
 
 const logger = createLogger('pocketbase');
 
@@ -174,4 +174,4 @@ class PocketBaseService {
 // Create a singleton instance
 const pocketbaseService = new PocketBaseService();
 
-module.exports = pocketbaseService;
+export default pocketbaseService;

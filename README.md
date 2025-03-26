@@ -52,3 +52,6 @@ The architecture is outlined in [INFERNET-ARCHITECTURE.md](https://github.com/pr
 - `docs/` — Documentation, whitepaper, and assets
 
 Visit [https://infernet.tech](https://infernet.tech) and [https://github.com/profullstack/infernet-protocol](https://github.com/profullstack/infernet-protocol)
+
+## Contact
+For technical contributions or questions: protocol@infernet.tech

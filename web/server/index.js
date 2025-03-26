@@ -8,6 +8,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import db from './db.js';
+import { registerNostrAuthHandlers } from './auth/nostrHandler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -21,7 +22,17 @@ const app = new Hono();
 
 // Middleware
 app.use('*', logger());
-app.use('/api/*', cors());
+app.use('/api/*', cors({
+  origin: '*',  // Allow all origins for API routes
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization'],
+  exposeHeaders: ['Content-Length'],
+  maxAge: 86400,
+  credentials: true,
+}));
+
+// Register Nostr authentication handlers
+registerNostrAuthHandlers(db.pb, app);
 
 // API Routes
 const api = new Hono();

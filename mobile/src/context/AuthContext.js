@@ -1,8 +1,12 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import PocketBase from 'pocketbase';
 
 // Create the context
 const AuthContext = createContext();
+
+// Initialize PocketBase
+const pb = new PocketBase('http://127.0.0.1:8080'); // Use environment variable in production
 
 // Custom hook to use the auth context
 export const useAuth = () => useContext(AuthContext);
@@ -113,6 +117,155 @@ export const AuthProvider = ({ children }) => {
     return await SecureStore.getItemAsync('token');
   };
 
+  // Nostr authentication functions
+  const checkNostrAvailability = async () => {
+    try {
+      // For React Native, we need to check if we can connect to a Nostr signer
+      // This is a placeholder - in a real app, you'd implement NIP-07 compatible
+      // communication with a native Nostr signer app via deep linking or other methods
+      
+      // For now, we'll return true to indicate Nostr is available
+      return true;
+    } catch (error) {
+      console.error('Error checking Nostr availability:', error);
+      return false;
+    }
+  };
+
+  const loginWithNostr = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // 1. Check if Nostr is available
+      const isNostrAvailable = await checkNostrAvailability();
+      if (!isNostrAvailable) {
+        throw new Error('Nostr is not available. Please install a Nostr signer app.');
+      }
+      
+      // 2. Get public key (in a real app, this would use deep linking to a Nostr signer)
+      // This is a placeholder - in production, you'd implement proper NIP-07 communication
+      const mockPublicKey = '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f';
+      
+      // 3. Create a signed event (in a real app, this would be signed by the Nostr signer)
+      // This is a placeholder - in production, the event would be properly signed
+      const mockSignedEvent = {
+        id: 'mock-event-id',
+        pubkey: mockPublicKey,
+        created_at: Math.floor(Date.now() / 1000),
+        kind: 22242,
+        tags: [],
+        content: 'Authenticate with Infernet Protocol',
+        sig: 'mock-signature'
+      };
+      
+      // 4. Authenticate with the server
+      const response = await fetch('http://127.0.0.1:3000/api/nostr/auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          publicKey: mockPublicKey,
+          signedEvent: mockSignedEvent
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Authentication failed');
+      }
+      
+      // Store user data and token in secure storage
+      const userData = result.data.record;
+      const token = result.data.token;
+      
+      await SecureStore.setItemAsync('user', JSON.stringify(userData));
+      await SecureStore.setItemAsync('token', token);
+      await SecureStore.setItemAsync('auth_method', 'nostr');
+      
+      setUser(userData);
+      return { success: true };
+    } catch (error) {
+      setError(error.message);
+      return { success: false, error: error.message };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const registerWithNostr = async (name) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      if (!name) {
+        throw new Error('Name is required');
+      }
+      
+      // 1. Check if Nostr is available
+      const isNostrAvailable = await checkNostrAvailability();
+      if (!isNostrAvailable) {
+        throw new Error('Nostr is not available. Please install a Nostr signer app.');
+      }
+      
+      // 2. Get public key (in a real app, this would use deep linking to a Nostr signer)
+      // This is a placeholder - in production, you'd implement proper NIP-07 communication
+      const mockPublicKey = '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f';
+      
+      // 3. Create a signed event (in a real app, this would be signed by the Nostr signer)
+      // This is a placeholder - in production, the event would be properly signed
+      const mockSignedEvent = {
+        id: 'mock-event-id',
+        pubkey: mockPublicKey,
+        created_at: Math.floor(Date.now() / 1000),
+        kind: 22242,
+        tags: [],
+        content: 'Register with Infernet Protocol',
+        sig: 'mock-signature'
+      };
+      
+      // 4. Register with the server
+      const response = await fetch('http://127.0.0.1:3000/api/nostr/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          publicKey: mockPublicKey,
+          signedEvent: mockSignedEvent,
+          userData: {
+            name,
+            username: `nostr_${mockPublicKey.substring(0, 8)}`
+          }
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Registration failed');
+      }
+      
+      // Store user data and token in secure storage
+      const userData = result.data.record;
+      const token = result.data.token;
+      
+      await SecureStore.setItemAsync('user', JSON.stringify(userData));
+      await SecureStore.setItemAsync('token', token);
+      await SecureStore.setItemAsync('auth_method', 'nostr');
+      
+      setUser(userData);
+      return { success: true };
+    } catch (error) {
+      setError(error.message);
+      return { success: false, error: error.message };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Context value
   const value = {
     user,
@@ -122,7 +275,10 @@ export const AuthProvider = ({ children }) => {
     logout,
     register,
     getToken,
-    isAuthenticated: !!user
+    isAuthenticated: !!user,
+    loginWithNostr,
+    registerWithNostr,
+    checkNostrAvailability
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

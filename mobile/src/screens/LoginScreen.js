@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, Image, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, Image, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 
 const LoginScreen = ({ navigation }) => {
@@ -8,8 +8,19 @@ const LoginScreen = ({ navigation }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [name, setName] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isNostrAvailable, setIsNostrAvailable] = useState(false);
   
-  const { login, register, isLoading, error } = useAuth();
+  const { login, register, isLoading, error, loginWithNostr, registerWithNostr, checkNostrAvailability } = useAuth();
+  
+  // Check if Nostr is available when component mounts
+  useEffect(() => {
+    const checkNostr = async () => {
+      const available = await checkNostrAvailability();
+      setIsNostrAvailable(available);
+    };
+    
+    checkNostr();
+  }, []);
 
   const handleAuth = async () => {
     setErrorMessage('');
@@ -43,6 +54,32 @@ const LoginScreen = ({ navigation }) => {
       }
     } catch (error) {
       setErrorMessage('An unexpected error occurred');
+      console.error(error);
+    }
+  };
+  
+  const handleNostrAuth = async () => {
+    setErrorMessage('');
+    
+    try {
+      let result;
+      
+      if (isRegistering) {
+        if (!name) {
+          setErrorMessage('Name is required');
+          return;
+        }
+        
+        result = await registerWithNostr(name);
+      } else {
+        result = await loginWithNostr();
+      }
+      
+      if (!result.success) {
+        setErrorMessage(result.error || 'Nostr authentication failed');
+      }
+    } catch (error) {
+      setErrorMessage('An unexpected error occurred with Nostr');
       console.error(error);
     }
   };
@@ -117,10 +154,34 @@ const LoginScreen = ({ navigation }) => {
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.buttonText}>
-                {isRegistering ? 'Sign Up' : 'Sign In'}
+                {isRegistering ? 'Sign Up' : 'Sign In'} with Email
               </Text>
             )}
           </TouchableOpacity>
+          
+          {isNostrAvailable && (
+            <>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>OR</Text>
+                <View style={styles.dividerLine} />
+              </View>
+              
+              <TouchableOpacity 
+                style={[styles.button, styles.nostrButton]} 
+                onPress={handleNostrAuth}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.buttonText}>
+                    {isRegistering ? 'Sign Up' : 'Sign In'} with Nostr
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
           
           <TouchableOpacity onPress={toggleAuthMode}>
             <Text style={styles.toggleText}>
@@ -196,6 +257,24 @@ const styles = StyleSheet.create({
     padding: 15,
     alignItems: 'center',
     marginTop: 10,
+  },
+  nostrButton: {
+    backgroundColor: '#8e44ad', // Purple color for Nostr button
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 15,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e9ecef',
+  },
+  dividerText: {
+    marginHorizontal: 10,
+    color: '#6c757d',
+    fontSize: 14,
   },
   buttonText: {
     color: 'white',

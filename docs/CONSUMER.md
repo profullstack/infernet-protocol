@@ -59,17 +59,32 @@ This document explains how to use the Infernet Protocol as a resource consumer t
 
 ### Advanced Inference Options
 
-#### Multi-Node Inference
+#### Distributed Inference
 
-For large inference jobs that benefit from parallelization:
+For large models or high-throughput inference jobs that benefit from parallelization:
 
-1. **Enable Multi-Node Processing**:
-   - Check the "Distribute across multiple nodes" option
-   - Set the number of parallel workers or let the system optimize
+1. **Enable Distributed Inference**:
+   - Check the "Use distributed inference" option when submitting your job
+   - The system will automatically select nodes with distributed inference capabilities
 
-2. **Configure Aggregation**:
-   - Choose how results should be combined
-   - Set verification requirements for result consistency
+2. **Select Distribution Strategy**:
+   - **Tensor Parallelism**: Best for large models that don't fit on a single GPU
+   - **Pipeline Parallelism**: Optimized for sequential processing across multiple nodes
+   - **Data Parallelism**: Ideal for batch processing multiple inputs in parallel
+
+3. **Configure Parameters**:
+   - Set the maximum number of nodes to use
+   - Adjust timeout and synchronization settings
+   - Configure fallback options if distributed inference is unavailable
+
+4. **Benefits**:
+   - Process larger models than would fit on a single node
+   - Achieve higher throughput for inference-intensive applications
+   - Reduce latency for time-sensitive applications
+
+5. **Cost Considerations**:
+   - Distributed inference may have different pricing than single-node inference
+   - The system will provide cost estimates based on your configuration
 
 #### Batch Processing
 

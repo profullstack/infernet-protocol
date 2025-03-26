@@ -154,6 +154,31 @@ For each node, you can configure:
 
 ## Advanced Features
 
+### Distributed Inference
+
+The Infernet Protocol supports distributed inference across multiple nodes, allowing you to process larger models and handle more inference requests:
+
+1. **Setup**:
+   - Configure one node as a coordinator
+   - Configure one or more nodes as workers
+   - Set up WebSocket communication between nodes
+
+2. **Distribution Strategies**:
+   - **Tensor Parallelism**: Split the model across multiple nodes horizontally
+   - **Pipeline Parallelism**: Process the model in stages across nodes
+   - **Data Parallelism**: Process different inputs in parallel across nodes
+
+3. **Configuration**:
+   - In your control interface, go to "Settings" > "Distributed Inference"
+   - Select a coordinator node and worker nodes
+   - Choose a distribution strategy
+   - Configure ports for WebSocket communication
+
+4. **Benefits**:
+   - Process larger models that don't fit on a single GPU
+   - Improve throughput for high-demand models
+   - Efficiently utilize resources across your node fleet
+
 ### Auto-scaling
 
 You can set up auto-scaling for your node fleet:

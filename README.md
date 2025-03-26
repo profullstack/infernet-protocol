@@ -14,7 +14,6 @@ The architecture is outlined in [INFERNET-ARCHITECTURE.md](https://github.com/pr
 [![GitHub](https://img.shields.io/github/license/profullstack/infernet-protocol)](https://github.com/profullstack/infernet-protocol/blob/master/LICENSE)
 [![GitHub commit activity](https://img.shields.io/github/commit-activity/m/profullstack/infernet-protocol)](https://github.com/profullstack/infernet-protocol/pulse)
 [![GitHub last commit](https://img.shields.io/github/last-commit/profullstack/infernet-protocol)](https://github.com/profullstack/infernet-protocol/commits/master)
-[![Discord badge](https://img.shields.io/discord/1011308539819597844?label=Discord&logo=Discord)](https://discord.gg/U7dEXfBA3s)
 
 ### Technologies
 [![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=000&style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
@@ -195,3 +194,6 @@ Visit [https://infernet.tech](https://infernet.tech) and [https://github.com/pro
 
 ## Contact
 For technical contributions or questions: protocol@infernet.tech
+
+[![Discord](https://img.shields.io/discord/1011308539819597844?label=Discord&logo=Discord&style=for-the-badge)](https://discord.gg/U7dEXfBA3s)
+[![Reddit](https://img.shields.io/badge/Reddit-FF4500?logo=reddit&logoColor=fff&style=for-the-badge)](https://www.reddit.com/r/Infernet/)

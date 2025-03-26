@@ -3,18 +3,18 @@ import { Hono } from 'hono';
 import { serveStatic } from 'hono/serve-static';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import { PocketBase } from 'pocketbase';
 import { Server } from 'socket.io';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import db from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 const POCKETBASE_URL = process.env.POCKETBASE_URL || 'http://127.0.0.1:8080';
 
 // Initialize PocketBase
-const pb = new PocketBase(POCKETBASE_URL);
+db.initialize(POCKETBASE_URL);
 
 // Create Hono app
 const app = new Hono();
@@ -29,28 +29,7 @@ const api = new Hono();
 // Get all nodes
 api.get('/nodes', async (c) => {
   try {
-    // In a production app, this would fetch from PocketBase
-    // For now, return mock data
-    const nodes = [
-      {
-        id: 'node-1',
-        name: 'Primary GPU Server',
-        status: 'online',
-        ip: '192.168.1.101',
-        lastSeen: new Date().toISOString(),
-        gpus: [
-          { name: 'NVIDIA RTX 4090', memory: '24GB', utilization: 92 },
-          { name: 'NVIDIA RTX 4090', memory: '24GB', utilization: 78 }
-        ],
-        cpus: [
-          { name: 'AMD Threadripper 5990X', cores: 64, utilization: 72 }
-        ],
-        jobsCompleted: 156,
-        uptime: '12d 5h 32m'
-      },
-      // More nodes would be here
-    ];
-    
+    const nodes = await db.getAllNodes();
     return c.json(nodes);
   } catch (error) {
     console.error('Error fetching nodes:', error);
@@ -62,25 +41,7 @@ api.get('/nodes', async (c) => {
 api.get('/nodes/:id', async (c) => {
   try {
     const id = c.req.param('id');
-    // In a production app, this would fetch from PocketBase
-    // For now, return mock data
-    const node = {
-      id,
-      name: 'Primary GPU Server',
-      status: 'online',
-      ip: '192.168.1.101',
-      lastSeen: new Date().toISOString(),
-      gpus: [
-        { name: 'NVIDIA RTX 4090', memory: '24GB', utilization: 92 },
-        { name: 'NVIDIA RTX 4090', memory: '24GB', utilization: 78 }
-      ],
-      cpus: [
-        { name: 'AMD Threadripper 5990X', cores: 64, utilization: 72 }
-      ],
-      jobsCompleted: 156,
-      uptime: '12d 5h 32m'
-    };
-    
+    const node = await db.getNodeById(id);
     return c.json(node);
   } catch (error) {
     console.error(`Error fetching node ${c.req.param('id')}:`, error);
@@ -91,19 +52,88 @@ api.get('/nodes/:id', async (c) => {
 // Get all jobs
 api.get('/jobs', async (c) => {
   try {
-    // In a production app, this would fetch from PocketBase
-    // For now, return mock data
-    const jobs = [
-      { id: 'job1', model: 'Stable Diffusion XL', status: 'Completed', runtime: '2m 34s', node: 'Node-01' },
-      { id: 'job2', model: 'Llama 3 70B', status: 'Running', runtime: '15m 12s', node: 'Node-03' },
-      { id: 'job3', model: 'Mistral 7B', status: 'Queued', runtime: '-', node: 'Pending' },
-      { id: 'job4', model: 'CLIP', status: 'Completed', runtime: '1m 05s', node: 'Node-02' }
-    ];
-    
+    const { status, model, node, client } = c.req.query();
+    const options = { status, model, node, client };
+    const jobs = await db.getAllJobs(options);
     return c.json(jobs);
   } catch (error) {
     console.error('Error fetching jobs:', error);
     return c.json({ error: 'Failed to fetch jobs' }, 500);
+  }
+});
+
+// Get job by ID
+api.get('/jobs/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const job = await db.getInstance().collection('jobs').getOne(id, {
+      expand: 'node,client'
+    });
+    
+    return c.json({
+      id: job.id,
+      model: job.model,
+      status: job.status,
+      runtime: job.runtime || '-',
+      node: job.expand?.node?.name || job.node || 'Pending',
+      startTime: job.startTime,
+      endTime: job.endTime,
+      inputTokens: job.inputTokens,
+      outputTokens: job.outputTokens,
+      cost: job.cost,
+      client: job.expand?.client?.name || job.client,
+      prompt: job.prompt,
+      result: job.result
+    });
+  } catch (error) {
+    console.error(`Error fetching job ${c.req.param('id')}:`, error);
+    return c.json({ error: 'Failed to fetch job' }, 500);
+  }
+});
+
+// Get dashboard stats
+api.get('/stats', async (c) => {
+  try {
+    const stats = await db.getDashboardStats();
+    return c.json(stats);
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+    return c.json({ error: 'Failed to fetch stats' }, 500);
+  }
+});
+
+// Get GPU stats
+api.get('/gpu-stats', async (c) => {
+  try {
+    const gpuStats = await db.getGpuStats();
+    return c.json(gpuStats);
+  } catch (error) {
+    console.error('Error fetching GPU stats:', error);
+    return c.json({ error: 'Failed to fetch GPU stats' }, 500);
+  }
+});
+
+// Get CPU stats
+api.get('/cpu-stats', async (c) => {
+  try {
+    const cpuStats = await db.getCpuStats();
+    return c.json(cpuStats);
+  } catch (error) {
+    console.error('Error fetching CPU stats:', error);
+    return c.json({ error: 'Failed to fetch CPU stats' }, 500);
+  }
+});
+
+// Get all models
+api.get('/models', async (c) => {
+  try {
+    const records = await db.getInstance().collection('models').getFullList({
+      sort: 'name'
+    });
+    return c.json(records);
+  } catch (error) {
+    console.error('Error fetching models:', error);
+    return c.json({ error: 'Failed to fetch models' }, 500);
   }
 });
 
@@ -132,21 +162,32 @@ const io = new Server(server, {
 });
 
 // Socket.IO event handlers
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
   console.log('Client connected:', socket.id);
   
-  // Send initial stats
-  socket.emit('stats', {
-    activeNodes: 12,
-    totalJobs: 248,
-    gpuUtilization: 78,
-    cpuUtilization: 65
-  });
-  
-  // Handle client disconnect
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-  });
+  try {
+    // Send initial stats from PocketBase
+    const stats = await db.getDashboardStats();
+    socket.emit('stats', stats);
+    
+    // Set up interval to send updated stats every 10 seconds
+    const statsInterval = setInterval(async () => {
+      try {
+        const updatedStats = await db.getDashboardStats();
+        socket.emit('stats', updatedStats);
+      } catch (error) {
+        console.error('Error sending stats update:', error);
+      }
+    }, 10000);
+    
+    // Handle client disconnect
+    socket.on('disconnect', () => {
+      console.log('Client disconnected:', socket.id);
+      clearInterval(statsInterval);
+    });
+  } catch (error) {
+    console.error('Error setting up socket connection:', error);
+  }
 });
 
 // Start server

@@ -8,7 +8,11 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "./build.sh",
     "start": "node src/app.js",
-    "dev": "node --watch src/app.js"
+    "dev": "node --watch src/app.js",
+    "db:setup": "node scripts/setup-pocketbase.js",
+    "db:start": "node scripts/start-pocketbase.js",
+    "db:migrate": "node scripts/run-migrations.js",
+    "db:create-migration": "node migrations/create-migration.js"
   },
   "keywords": ["infernet", "protocol", "ai", "inference"],
   "author": "",

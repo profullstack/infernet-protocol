@@ -15,7 +15,45 @@ const logger = createLogger('api:nodes');
  * @param {string} prefix - API prefix
  */
 export function registerNodeRoutes(app, prefix = '/api') {
-  // Get all available nodes
+  // Public route for node discovery (no API prefix)
+  app.get('/nodes', async (c) => {
+    try {
+      const pb = db.getInstance();
+      
+      if (!pb) {
+        return c.json({ error: 'Database not initialized' }, 500);
+      }
+      
+      // Get all active providers
+      const result = await pb.collection('providers').getList(1, 100, {
+        filter: 'status = "active" || status = "available"',
+        sort: '-created',
+        fields: 'id,created,updated,name,type,status,ip,port,supported_models,reputation_score,jobs_completed'
+      });
+      
+      // Format the response to include only necessary fields
+      const nodes = result.items.map(node => ({
+        id: node.id,
+        name: node.name,
+        type: node.type,
+        status: node.status,
+        ip: node.ip,
+        port: node.port,
+        supported_models: node.supported_models,
+        reputation_score: node.reputation_score,
+        jobs_completed: node.jobs_completed,
+        created: node.created,
+        updated: node.updated
+      }));
+      
+      return c.json(nodes);
+    } catch (error) {
+      logger.error('Error getting nodes:', error);
+      return c.json({ error: 'Failed to get nodes' }, 500);
+    }
+  });
+  
+  // API route for node discovery (with API prefix)
   app.get(`${prefix}/nodes`, async (c) => {
     try {
       const pb = db.getInstance();

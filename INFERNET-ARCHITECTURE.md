@@ -13,9 +13,11 @@ This document outlines the planned technical architecture and implementation det
 ## Core Technologies
 - **Communication**: WebSockets for real-time, bidirectional communication.
 - **Networking**: Decentralized discovery and peer-to-peer job distribution via DHT (Kademlia implementation).
+- **Backend**: PocketBase used as a local embedded backend for managing data, job metadata, reputation history, and local node configurations.
 - **Containerization**: Docker-based task execution for sandboxing and security.
 - **Data Transport**: Home-grown content addressing system for distributing models and large input data files.
 - **Styling**: Vanilla CSS across desktop and web interfaces for simplicity and consistency.
+- **Account and Reputation Management**: NOSTR protocol integration for decentralized identity, reputation tracking, and public key-based authentication.
 
 ---
 
@@ -25,6 +27,7 @@ This document outlines the planned technical architecture and implementation det
   - Persistent DHT connections for discovery.
   - WebSocket server for receiving inference tasks.
   - Task execution engine using Docker.
+  - PocketBase instance for local data management.
   - Result verification and submission.
   - Configuration file-based setup (JSON or YAML).
 
@@ -36,6 +39,7 @@ This document outlines the planned technical architecture and implementation det
   - Client submission form.
 - Embedded WebSocket client to communicate with the network.
 - Home-grown content delivery system integration for uploading models and large datasets.
+- PocketBase instance for local data and cache management.
 - Local storage for logs and history.
 
 ## Mobile (React Native with Expo)
@@ -46,6 +50,7 @@ This document outlines the planned technical architecture and implementation det
   - Ability to submit small inference jobs (low-volume interfaces).
   - Display provider reputation and availability.
 - Communication via secure WebSocket clients.
+- Sync with PocketBase backend for local state management.
 
 ---
 
@@ -56,6 +61,16 @@ This document outlines the planned technical architecture and implementation det
   - Aggregators search for best-fit nodes by reputation and load.
 - Dynamic updates for provider uptime and status.
 - Gossip-based protocol for reputation dissemination.
+
+---
+
+## Payment Systems
+- **Initial Release**:
+  - Polygon stablecoin payments.
+  - Bitcoin Lightning Network micro-payments.
+- **Future Payment Systems**:
+  - Solana integration for high-throughput, low-fee payments.
+  - Other L2 and cross-chain payment solutions.
 
 ---
 
@@ -73,6 +88,7 @@ This document outlines the planned technical architecture and implementation det
 - Container isolation (Docker).
 - End-to-end encryption for job payloads.
 - Validator sampling for result trust.
+- Use of NOSTR keys for identity verification and signing.
 - Potential use of secure enclaves (SGX/SEV) in future iterations.
 
 ---
@@ -90,6 +106,7 @@ This document outlines the planned technical architecture and implementation det
 - Create WebSocket communication spec (message types and formats).
 - Finalize DHT node join/leave protocols and health checks.
 - Begin design of home-grown content delivery and retrieval system.
+- Integrate NOSTR protocol libraries for reputation and identity management.
 
 ## Contact
 For technical contributions or questions: protocol@infernet.tech

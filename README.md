@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/profullstack/infernet-protocol/master/docs/logo.svg" alt="Infernet Protocol Logo" height="120" style="margin: 2.2rem;" />
+  <img src="https://raw.githubusercontent.com/profullstack/infernet-protocol/master/assets/logo.infernet.black.svg" alt="Infernet Protocol Logo" height="120" style="margin: 2.2rem;" />
 </p>
 
 # Infernet Protocol

@@ -32,7 +32,7 @@
   <header>
     <div class="logo">
       <a href="/">
-        <img src="/logo.svg" alt="Infernet Protocol" height="40" />
+        <img src="/logo.infernet.black.svg" alt="Infernet Protocol" height="30" />
         <span>Infernet Protocol</span>
       </a>
     </div>

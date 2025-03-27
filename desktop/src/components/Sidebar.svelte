@@ -22,6 +22,7 @@
 
 <aside class="sidebar">
   <div class="logo">
+    <img src="/logo.infernet.black.svg" alt="Infernet Protocol" height="30" />
     <h2>Infernet Protocol</h2>
   </div>
   
@@ -61,6 +62,10 @@
     padding: 1.5rem 1rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
   }
   
   .logo h2 {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, RefreshControl, Image } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 
 // Components (we'll create these later)
@@ -54,8 +54,18 @@ const HomeScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.greeting}>Hello, {user?.name || 'User'}</Text>
-        <Text style={styles.subGreeting}>Welcome to Infernet Protocol</Text>
+        <View style={styles.headerTop}>
+          <Image
+            source={require('../../assets/logo.infernet.black.svg')}
+            style={styles.logo}
+            height={24}
+            width={24}
+          />
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.greeting}>Hello, {user?.name || 'User'}</Text>
+            <Text style={styles.subGreeting}>Welcome to Infernet Protocol</Text>
+          </View>
+        </View>
       </View>
       
       <ScrollView 
@@ -135,6 +145,19 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 60,
     paddingBottom: 30,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logo: {
+    width: 24,
+    height: 24,
+    marginRight: 10,
+    tintColor: 'white',
+  },
+  headerTextContainer: {
+    flex: 1,
   },
   greeting: {
     fontSize: 24,

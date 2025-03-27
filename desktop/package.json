@@ -26,8 +26,8 @@
     "@sveltejs/kit": "^2.0.0",
     "@sveltejs/vite-plugin-svelte": "^3.0.0",
     "concurrently": "^8.2.2",
-    "electron": "^29.4.6",
-    "electron-builder": "^24.9.1",
+    "electron": "^35.1.2",
+    "electron-builder": "^24.13.3",
     "svelte": "^4.2.12",
     "vite": "^5.0.12"
   },

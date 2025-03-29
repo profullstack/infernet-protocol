@@ -47,3 +47,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getFileStatus: (hash) => ipcRenderer.invoke('content-get-file-status', hash)
   }
 });
+
+console.log('Preload script loaded'); // Add this line for debugging reaso

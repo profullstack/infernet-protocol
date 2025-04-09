@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/logo.infernet.black.svg">
-    <img src="assets/logo.infernet.white.svg" alt="Infernet Protocol Logo" width="400" />
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo.infernet.white.svg">
+    <img src="assets/logo.infernet.black.svg" alt="Infernet Protocol Logo" width="400" />
   </picture>
 </p>
 

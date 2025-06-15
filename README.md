@@ -7,6 +7,8 @@
 
 # Infernet Protocol
 
+[![Crypto Payment](https://paybadge.profullstack.com/badge.svg)](https://paybadge.profullstack.com/?tickers=btc%2Ceth%2Csol%2Cusdc)
+
 An open-source, peer-to-peer protocol for distributed GPU inference tasks.
 
 Read the whitepaper at [INFERNET-PROTOCOL.md](https://github.com/profullstack/infernet-protocol/blob/master/INFERNET-PROTOCOL.md).

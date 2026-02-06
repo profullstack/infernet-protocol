@@ -1,0 +1,26 @@
+{
+  "name": "@infernet/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Infernet Protocol mobile application",
+  "main": "expo-router/entry",
+  "scripts": {
+    "dev": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "build": "echo 'Use EAS Build'",
+    "clean": "rm -rf .expo dist"
+  },
+  "dependencies": {
+    "@infernet/sdk": "workspace:*",
+    "@infernet/shared": "workspace:*",
+    "expo": "~52.0.0",
+    "expo-router": "~4.0.0",
+    "react": "^19.0.0",
+    "react-native": "~0.76.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}

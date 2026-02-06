@@ -1,0 +1,33 @@
+{
+  "name": "@infernet/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Infernet core P2P protocol - networking, execution, identity, payments",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@chainsafe/libp2p-noise": "^16.1.0",
+    "@chainsafe/libp2p-yamux": "^7.0.1",
+    "@libp2p/bootstrap": "^11.0.0",
+    "@libp2p/circuit-relay-v2": "^3.1.0",
+    "@libp2p/identify": "^3.0.0",
+    "@libp2p/kad-dht": "^14.1.0",
+    "@libp2p/webrtc": "^5.0.0",
+    "@libp2p/websockets": "^9.0.0",
+    "@libp2p/webtransport": "^5.0.0",
+    "@profullstack/coinpay": "latest",
+    "libp2p": "^2.5.0",
+    "uint8arrays": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

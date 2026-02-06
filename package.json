@@ -1,27 +1,27 @@
 {
   "name": "infernet-protocol",
-  "version": "1.0.0",
-  "description": "Infernet Protocol implementation",
-  "type": "module",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "./build.sh",
-    "start": "node src/app.js",
-    "dev": "node --watch src/app.js",
-    "db:setup": "node scripts/setup-pocketbase.js",
-    "db:start": "node scripts/start-pocketbase.js",
-    "db:migrate": "node scripts/run-migrations.js",
-    "db:create-migration": "node migrations/create-migration.js"
-  },
-  "keywords": ["infernet", "protocol", "ai", "inference"],
-  "author": "",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Infernet: A Peer-to-Peer Distributed GPU Inference Protocol",
   "license": "ISC",
-  "packageManager": "pnpm@10.6.5",
-  "dependencies": {
-    "@hono/node-server": "^1.8.2",
-    "dotenv": "^16.3.1",
-    "hono": "^4.1.3",
-    "pocketbase": "^0.25.2"
+  "author": "Profullstack, Inc.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/profullstack/infernet-protocol.git"
+  },
+  "homepage": "https://infernetprotocol.com",
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "clean": "turbo clean",
+    "typecheck": "turbo typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0"
+  },
+  "packageManager": "pnpm@10.0.0",
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

@@ -1,0 +1,21 @@
+{
+  "name": "@infernet/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Infernet Protocol desktop application",
+  "main": "main.js",
+  "scripts": {
+    "dev": "electron .",
+    "build": "echo 'TODO: electron-builder'",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@infernet/core": "workspace:*",
+    "@infernet/sdk": "workspace:*",
+    "electron": "^33.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

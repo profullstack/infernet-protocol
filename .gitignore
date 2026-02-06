@@ -1,13 +1,37 @@
+# Dependencies
 node_modules/
-pnpm-lock.yaml
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+.expo/
+out/
+
+# Turbo
+.turbo/
+
+# Environment
 .env
+.env.local
+.env.*.local
 
-# Content storage directories
-/storage/
-/tmp/
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
-# PocketBase data
-/pb_data/
+# OS
+.DS_Store
+Thumbs.db
 
 # Logs
-/logs/
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+
+# Electron
+apps/desktop/dist/

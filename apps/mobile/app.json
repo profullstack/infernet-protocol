@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Infernet",
+    "slug": "infernet-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "infernet",
+    "platforms": ["ios", "android"],
+    "ios": {
+      "bundleIdentifier": "com.profullstack.infernet"
+    },
+    "android": {
+      "package": "com.profullstack.infernet"
+    }
+  }
+}

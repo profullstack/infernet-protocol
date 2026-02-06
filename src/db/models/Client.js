@@ -1,138 +1,202 @@
 /**
  * Client model for Infernet Protocol
- * Represents nodes that submit inference or training jobs
+ * Represents a client node that submits jobs
  */
-const db = require('../index');
+
+import { createLogger } from '../../utils/logger.js';
+import crypto from 'crypto';
+
+const logger = createLogger('model:client');
 
 class Client {
-    /**
-     * Get all clients
-     * @param {number} page - Page number for pagination
-     * @param {number} perPage - Items per page
-     * @param {Object} options - Additional query options
-     * @returns {Promise<Object>} - List of clients
-     */
-    static async getAll(page = 1, perPage = 50, options = {}) {
-        const pb = db.getInstance();
-        return await pb.collection('clients').getList(page, perPage, options);
+    constructor(db) {
+        this.db = db;
+        this.collection = 'clients';
     }
-    
+
     /**
-     * Get a single client by ID
-     * @param {string} id - Client ID
-     * @returns {Promise<Object>} - Client record
-     */
-    static async getById(id) {
-        const pb = db.getInstance();
-        return await pb.collection('clients').getOne(id);
-    }
-    
-    /**
-     * Create a new client
-     * @param {Object} data - Client data
+     * Register a new client
+     * @param {Object} clientData - Client data
      * @returns {Promise<Object>} - Created client record
      */
-    static async create(data) {
-        const pb = db.getInstance();
-        return await pb.collection('clients').create(data);
+    async register(clientData) {
+        try {
+            const pb = this.db.getInstance();
+            
+            // Generate nodeId if not provided
+            if (!clientData.nodeId) {
+                clientData.nodeId = `client_${crypto.randomBytes(8).toString('hex')}`;
+            }
+            
+            // Set default values
+            const client = {
+                nodeId: clientData.nodeId,
+                publicKey: clientData.publicKey,
+                address: clientData.address || null,
+                lastSeen: new Date().toISOString()
+            };
+            
+            // Check if client already exists
+            try {
+                const existing = await pb.collection(this.collection)
+                    .getFirstListItem(`nodeId="${client.nodeId}"`);
+                
+                // Update existing client
+                logger.info(`Updating existing client: ${client.nodeId}`);
+                return await pb.collection(this.collection).update(existing.id, client);
+            } catch (error) {
+                // Client doesn't exist, create new one
+                logger.info(`Registering new client: ${client.nodeId}`);
+                return await pb.collection(this.collection).create(client);
+            }
+        } catch (error) {
+            logger.error('Failed to register client:', error);
+            throw error;
+        }
     }
-    
+
     /**
-     * Update a client
-     * @param {string} id - Client ID
-     * @param {Object} data - Updated client data
+     * Find a client by nodeId
+     * @param {string} nodeId - Client node ID
+     * @returns {Promise<Object>} - Client record
+     */
+    async findByNodeId(nodeId) {
+        try {
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).getFirstListItem(`nodeId="${nodeId}"`);
+        } catch (error) {
+            if (error.status === 404) {
+                return null;
+            }
+            logger.error(`Failed to find client ${nodeId}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Find a client by public key
+     * @param {string} publicKey - Client public key
+     * @returns {Promise<Object>} - Client record
+     */
+    async findByPublicKey(publicKey) {
+        try {
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).getFirstListItem(`publicKey="${publicKey}"`);
+        } catch (error) {
+            if (error.status === 404) {
+                return null;
+            }
+            logger.error(`Failed to find client with public key ${publicKey}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Update client address
+     * @param {string} nodeId - Client node ID
+     * @param {string} address - New address
      * @returns {Promise<Object>} - Updated client record
      */
-    static async update(id, data) {
-        const pb = db.getInstance();
-        return await pb.collection('clients').update(id, data);
+    async updateAddress(nodeId, address) {
+        try {
+            const client = await this.findByNodeId(nodeId);
+            
+            if (!client) {
+                throw new Error(`Client ${nodeId} not found`);
+            }
+            
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).update(client.id, {
+                address,
+                lastSeen: new Date().toISOString()
+            });
+        } catch (error) {
+            logger.error(`Failed to update client ${nodeId} address:`, error);
+            throw error;
+        }
     }
-    
+
+    /**
+     * Get client job history
+     * @param {string} nodeId - Client node ID
+     * @returns {Promise<Array>} - Array of job records
+     */
+    async getJobHistory(nodeId) {
+        try {
+            const client = await this.findByNodeId(nodeId);
+            
+            if (!client) {
+                throw new Error(`Client ${nodeId} not found`);
+            }
+            
+            const pb = this.db.getInstance();
+            return await pb.collection('jobs').getFullList({
+                filter: `clientId="${nodeId}"`,
+                sort: '-created'
+            });
+        } catch (error) {
+            logger.error(`Failed to get job history for client ${nodeId}:`, error);
+            throw error;
+        }
+    }
+
     /**
      * Delete a client
-     * @param {string} id - Client ID
+     * @param {string} nodeId - Client node ID
      * @returns {Promise<boolean>} - Success status
      */
-    static async delete(id) {
-        const pb = db.getInstance();
-        await pb.collection('clients').delete(id);
-        return true;
+    async delete(nodeId) {
+        try {
+            const client = await this.findByNodeId(nodeId);
+            
+            if (!client) {
+                return false;
+            }
+            
+            const pb = this.db.getInstance();
+            await pb.collection(this.collection).delete(client.id);
+            return true;
+        } catch (error) {
+            logger.error(`Failed to delete client ${nodeId}:`, error);
+            throw error;
+        }
     }
-    
+
     /**
-     * Get client payment history
-     * @param {string} clientId - Client ID
-     * @param {number} page - Page number for pagination
-     * @param {number} perPage - Items per page
-     * @returns {Promise<Object>} - List of payment records
+     * Get all clients
+     * @returns {Promise<Array>} - Array of client records
      */
-    static async getPaymentHistory(clientId, page = 1, perPage = 20) {
-        const pb = db.getInstance();
-        return await pb.collection('payments').getList(page, perPage, {
-            filter: `client = "${clientId}"`,
-            sort: '-created'
-        });
+    async getAll() {
+        try {
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).getFullList();
+        } catch (error) {
+            logger.error('Failed to get all clients:', error);
+            throw error;
+        }
     }
-    
+
     /**
-     * Update client balance
-     * @param {string} id - Client ID
-     * @param {number} amount - Amount to add to balance (negative to subtract)
+     * Update client heartbeat
+     * @param {string} nodeId - Client node ID
      * @returns {Promise<Object>} - Updated client record
      */
-    static async updateBalance(id, amount) {
-        const pb = db.getInstance();
-        const client = await pb.collection('clients').getOne(id);
-        
-        const newBalance = (client.balance || 0) + amount;
-        
-        return await pb.collection('clients').update(id, { 
-            balance: newBalance 
-        });
-    }
-    
-    /**
-     * Record a payment transaction
-     * @param {string} clientId - Client ID
-     * @param {string} jobId - Job ID
-     * @param {number} amount - Payment amount
-     * @param {string} currency - Currency code
-     * @param {string} paymentMethod - Payment method
-     * @returns {Promise<Object>} - Created payment record
-     */
-    static async recordPayment(clientId, jobId, amount, currency = 'USD', paymentMethod = 'balance') {
-        const pb = db.getInstance();
-        
-        const paymentData = {
-            client: clientId,
-            job: jobId,
-            amount,
-            currency,
-            payment_method: paymentMethod,
-            status: 'completed',
-            created: new Date().toISOString()
-        };
-        
-        return await pb.collection('payments').create(paymentData);
-    }
-    
-    /**
-     * Subscribe to changes in client records
-     * @param {Function} callback - Callback function for updates
-     * @returns {void}
-     */
-    static subscribeToChanges(callback) {
-        const pb = db.getInstance();
-        pb.collection('clients').subscribe('*', callback);
-    }
-    
-    /**
-     * Unsubscribe from client changes
-     * @returns {void}
-     */
-    static unsubscribe() {
-        const pb = db.getInstance();
-        pb.collection('clients').unsubscribe();
+    async heartbeat(nodeId) {
+        try {
+            const client = await this.findByNodeId(nodeId);
+            
+            if (!client) {
+                throw new Error(`Client ${nodeId} not found`);
+            }
+            
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).update(client.id, {
+                lastSeen: new Date().toISOString()
+            });
+        } catch (error) {
+            logger.error(`Failed to update client ${nodeId} heartbeat:`, error);
+            throw error;
+        }
     }
 }
 

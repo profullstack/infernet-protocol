@@ -1,215 +1,373 @@
 /**
  * Job model for Infernet Protocol
- * Represents inference or training jobs submitted by clients
+ * Represents inference and training jobs
  */
-const db = require('../index');
+
+const { createLogger } = require('../../utils/logger');
+const crypto = require('crypto');
+
+const logger = createLogger('model:job');
 
 class Job {
-    /**
-     * Get all jobs with optional filtering
-     * @param {number} page - Page number for pagination
-     * @param {number} perPage - Items per page
-     * @param {Object} options - Additional query options
-     * @returns {Promise<Object>} - List of jobs
-     */
-    static async getAll(page = 1, perPage = 50, options = {}) {
-        const pb = db.getInstance();
-        return await pb.collection('jobs').getList(page, perPage, options);
+    constructor(db) {
+        this.db = db;
+        this.collection = 'jobs';
     }
-    
-    /**
-     * Get jobs by status
-     * @param {string} status - Job status (pending, running, completed, failed)
-     * @param {number} page - Page number for pagination
-     * @param {number} perPage - Items per page
-     * @returns {Promise<Object>} - List of jobs with the specified status
-     */
-    static async getByStatus(status, page = 1, perPage = 20) {
-        const pb = db.getInstance();
-        return await pb.collection('jobs').getList(page, perPage, {
-            filter: `status = "${status}"`,
-            sort: '-created'
-        });
-    }
-    
-    /**
-     * Get jobs assigned to a specific provider
-     * @param {string} providerId - Provider ID
-     * @param {number} page - Page number for pagination
-     * @param {number} perPage - Items per page
-     * @returns {Promise<Object>} - List of jobs assigned to the provider
-     */
-    static async getByProvider(providerId, page = 1, perPage = 20) {
-        const pb = db.getInstance();
-        return await pb.collection('jobs').getList(page, perPage, {
-            filter: `provider = "${providerId}"`,
-            sort: '-created'
-        });
-    }
-    
-    /**
-     * Get jobs submitted by a specific client
-     * @param {string} clientId - Client ID
-     * @param {number} page - Page number for pagination
-     * @param {number} perPage - Items per page
-     * @returns {Promise<Object>} - List of jobs submitted by the client
-     */
-    static async getByClient(clientId, page = 1, perPage = 20) {
-        const pb = db.getInstance();
-        return await pb.collection('jobs').getList(page, perPage, {
-            filter: `client = "${clientId}"`,
-            sort: '-created'
-        });
-    }
-    
-    /**
-     * Get a single job by ID
-     * @param {string} id - Job ID
-     * @returns {Promise<Object>} - Job record
-     */
-    static async getById(id) {
-        const pb = db.getInstance();
-        return await pb.collection('jobs').getOne(id);
-    }
-    
+
     /**
      * Create a new job
-     * @param {Object} data - Job data
+     * @param {Object} jobData - Job data
      * @returns {Promise<Object>} - Created job record
      */
-    static async create(data) {
-        const pb = db.getInstance();
-        
-        // Set default values if not provided
-        const jobData = {
-            status: 'pending',
-            created: new Date().toISOString(),
-            ...data
-        };
-        
-        return await pb.collection('jobs').create(jobData);
+    async create(jobData) {
+        try {
+            const pb = this.db.getInstance();
+            
+            // Generate jobId if not provided
+            if (!jobData.jobId) {
+                jobData.jobId = `job_${crypto.randomBytes(8).toString('hex')}`;
+            }
+            
+            // Set default values
+            const now = new Date().toISOString();
+            const job = {
+                jobId: jobData.jobId,
+                clientId: jobData.clientId,
+                providerId: jobData.providerId || null,
+                aggregatorId: jobData.aggregatorId || null,
+                type: jobData.type || 'inference',
+                status: 'pending',
+                specs: jobData.specs || {},
+                payment: jobData.payment || null,
+                created: now,
+                updated: now,
+                completed: null
+            };
+            
+            // Create the job
+            logger.info(`Creating new job: ${job.jobId} for client ${job.clientId}`);
+            return await pb.collection(this.collection).create(job);
+        } catch (error) {
+            logger.error('Failed to create job:', error);
+            throw error;
+        }
     }
-    
+
     /**
-     * Update a job
-     * @param {string} id - Job ID
-     * @param {Object} data - Updated job data
+     * Find a job by jobId
+     * @param {string} jobId - Job ID
+     * @returns {Promise<Object>} - Job record
+     */
+    async findByJobId(jobId) {
+        try {
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).getFirstListItem(`jobId="${jobId}"`);
+        } catch (error) {
+            if (error.status === 404) {
+                return null;
+            }
+            logger.error(`Failed to find job ${jobId}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Assign job to a provider
+     * @param {string} jobId - Job ID
+     * @param {string} providerId - Provider node ID
      * @returns {Promise<Object>} - Updated job record
      */
-    static async update(id, data) {
-        const pb = db.getInstance();
-        return await pb.collection('jobs').update(id, data);
+    async assignToProvider(jobId, providerId) {
+        try {
+            const job = await this.findByJobId(jobId);
+            
+            if (!job) {
+                throw new Error(`Job ${jobId} not found`);
+            }
+            
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).update(job.id, {
+                providerId,
+                status: 'assigned',
+                updated: new Date().toISOString()
+            });
+        } catch (error) {
+            logger.error(`Failed to assign job ${jobId} to provider ${providerId}:`, error);
+            throw error;
+        }
     }
-    
+
     /**
-     * Delete a job
-     * @param {string} id - Job ID
-     * @returns {Promise<boolean>} - Success status
+     * Assign job to an aggregator
+     * @param {string} jobId - Job ID
+     * @param {string} aggregatorId - Aggregator node ID
+     * @returns {Promise<Object>} - Updated job record
      */
-    static async delete(id) {
-        const pb = db.getInstance();
-        await pb.collection('jobs').delete(id);
-        return true;
+    async assignToAggregator(jobId, aggregatorId) {
+        try {
+            const job = await this.findByJobId(jobId);
+            
+            if (!job) {
+                throw new Error(`Job ${jobId} not found`);
+            }
+            
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).update(job.id, {
+                aggregatorId,
+                status: 'assigned',
+                updated: new Date().toISOString()
+            });
+        } catch (error) {
+            logger.error(`Failed to assign job ${jobId} to aggregator ${aggregatorId}:`, error);
+            throw error;
+        }
     }
-    
+
     /**
      * Update job status
-     * @param {string} id - Job ID
-     * @param {string} status - New status (pending, running, completed, failed)
-     * @param {Object} additionalData - Additional data to update
+     * @param {string} jobId - Job ID
+     * @param {string} status - New status
      * @returns {Promise<Object>} - Updated job record
      */
-    static async updateStatus(id, status, additionalData = {}) {
-        const pb = db.getInstance();
-        
-        const updateData = { 
-            status,
-            ...additionalData
-        };
-        
-        // Add timestamps based on status
-        if (status === 'running') {
-            updateData.started = new Date().toISOString();
-        } else if (status === 'completed' || status === 'failed') {
-            updateData.completed = new Date().toISOString();
+    async updateStatus(jobId, status) {
+        try {
+            const job = await this.findByJobId(jobId);
+            
+            if (!job) {
+                throw new Error(`Job ${jobId} not found`);
+            }
+            
+            const pb = this.db.getInstance();
+            
+            const updates = {
+                status,
+                updated: new Date().toISOString()
+            };
+            
+            // If job is completed or failed, set completed timestamp
+            if (status === 'completed' || status === 'failed') {
+                updates.completed = new Date().toISOString();
+            }
+            
+            return await pb.collection(this.collection).update(job.id, updates);
+        } catch (error) {
+            logger.error(`Failed to update job ${jobId} status:`, error);
+            throw error;
         }
-        
-        return await pb.collection('jobs').update(id, updateData);
     }
-    
+
     /**
-     * Assign a job to a provider
+     * Update job payment information
      * @param {string} jobId - Job ID
-     * @param {string} providerId - Provider ID
+     * @param {Object} payment - Payment information
      * @returns {Promise<Object>} - Updated job record
      */
-    static async assignToProvider(jobId, providerId) {
-        const pb = db.getInstance();
-        return await pb.collection('jobs').update(jobId, {
-            provider: providerId,
-            status: 'assigned',
-            assigned_at: new Date().toISOString()
-        });
+    async updatePayment(jobId, payment) {
+        try {
+            const job = await this.findByJobId(jobId);
+            
+            if (!job) {
+                throw new Error(`Job ${jobId} not found`);
+            }
+            
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).update(job.id, {
+                payment,
+                updated: new Date().toISOString()
+            });
+        } catch (error) {
+            logger.error(`Failed to update job ${jobId} payment:`, error);
+            throw error;
+        }
     }
-    
+
     /**
-     * Record job result
+     * Find pending jobs
+     * @param {Object} filters - Optional filters
+     * @returns {Promise<Array>} - Array of job records
+     */
+    async findPending(filters = {}) {
+        try {
+            const pb = this.db.getInstance();
+            
+            let filter = 'status="pending"';
+            
+            // Add additional filters
+            if (filters.type) {
+                filter += ` && type="${filters.type}"`;
+            }
+            
+            if (filters.clientId) {
+                filter += ` && clientId="${filters.clientId}"`;
+            }
+            
+            return await pb.collection(this.collection).getFullList({
+                filter,
+                sort: '+created'
+            });
+        } catch (error) {
+            logger.error('Failed to find pending jobs:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Find jobs by provider
+     * @param {string} providerId - Provider node ID
+     * @param {Object} filters - Optional filters
+     * @returns {Promise<Array>} - Array of job records
+     */
+    async findByProvider(providerId, filters = {}) {
+        try {
+            const pb = this.db.getInstance();
+            
+            let filter = `providerId="${providerId}"`;
+            
+            // Add additional filters
+            if (filters.status) {
+                filter += ` && status="${filters.status}"`;
+            }
+            
+            if (filters.type) {
+                filter += ` && type="${filters.type}"`;
+            }
+            
+            return await pb.collection(this.collection).getFullList({
+                filter,
+                sort: '-created'
+            });
+        } catch (error) {
+            logger.error(`Failed to find jobs for provider ${providerId}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Find jobs by aggregator
+     * @param {string} aggregatorId - Aggregator node ID
+     * @param {Object} filters - Optional filters
+     * @returns {Promise<Array>} - Array of job records
+     */
+    async findByAggregator(aggregatorId, filters = {}) {
+        try {
+            const pb = this.db.getInstance();
+            
+            let filter = `aggregatorId="${aggregatorId}"`;
+            
+            // Add additional filters
+            if (filters.status) {
+                filter += ` && status="${filters.status}"`;
+            }
+            
+            if (filters.type) {
+                filter += ` && type="${filters.type}"`;
+            }
+            
+            return await pb.collection(this.collection).getFullList({
+                filter,
+                sort: '-created'
+            });
+        } catch (error) {
+            logger.error(`Failed to find jobs for aggregator ${aggregatorId}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Find jobs by client
+     * @param {string} clientId - Client node ID
+     * @param {Object} filters - Optional filters
+     * @returns {Promise<Array>} - Array of job records
+     */
+    async findByClient(clientId, filters = {}) {
+        try {
+            const pb = this.db.getInstance();
+            
+            let filter = `clientId="${clientId}"`;
+            
+            // Add additional filters
+            if (filters.status) {
+                filter += ` && status="${filters.status}"`;
+            }
+            
+            if (filters.type) {
+                filter += ` && type="${filters.type}"`;
+            }
+            
+            return await pb.collection(this.collection).getFullList({
+                filter,
+                sort: '-created'
+            });
+        } catch (error) {
+            logger.error(`Failed to find jobs for client ${clientId}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Delete a job
      * @param {string} jobId - Job ID
-     * @param {Object} result - Job result data
-     * @returns {Promise<Object>} - Updated job record
+     * @returns {Promise<boolean>} - Success status
      */
-    static async recordResult(jobId, result) {
-        const pb = db.getInstance();
-        return await pb.collection('jobs').update(jobId, {
-            result,
-            status: 'completed',
-            completed: new Date().toISOString()
-        });
+    async delete(jobId) {
+        try {
+            const job = await this.findByJobId(jobId);
+            
+            if (!job) {
+                return false;
+            }
+            
+            const pb = this.db.getInstance();
+            await pb.collection(this.collection).delete(job.id);
+            return true;
+        } catch (error) {
+            logger.error(`Failed to delete job ${jobId}:`, error);
+            throw error;
+        }
     }
-    
+
     /**
-     * Record job failure
-     * @param {string} jobId - Job ID
-     * @param {string} error - Error message
-     * @returns {Promise<Object>} - Updated job record
+     * Get all jobs
+     * @returns {Promise<Array>} - Array of job records
      */
-    static async recordFailure(jobId, error) {
-        const pb = db.getInstance();
-        return await pb.collection('jobs').update(jobId, {
-            error,
-            status: 'failed',
-            completed: new Date().toISOString()
-        });
+    async getAll() {
+        try {
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).getFullList();
+        } catch (error) {
+            logger.error('Failed to get all jobs:', error);
+            throw error;
+        }
     }
-    
+
     /**
-     * Subscribe to changes in job records
-     * @param {Function} callback - Callback function for updates
-     * @returns {void}
+     * Get job statistics
+     * @returns {Promise<Object>} - Job statistics
      */
-    static subscribeToChanges(callback) {
-        const pb = db.getInstance();
-        pb.collection('jobs').subscribe('*', callback);
-    }
-    
-    /**
-     * Subscribe to changes in a specific job
-     * @param {string} jobId - Job ID
-     * @param {Function} callback - Callback function for updates
-     * @returns {void}
-     */
-    static subscribeToJob(jobId, callback) {
-        const pb = db.getInstance();
-        pb.collection('jobs').subscribe(jobId, callback);
-    }
-    
-    /**
-     * Unsubscribe from job changes
-     * @returns {void}
-     */
-    static unsubscribe() {
-        const pb = db.getInstance();
-        pb.collection('jobs').unsubscribe();
+    async getStats() {
+        try {
+            const pb = this.db.getInstance();
+            const jobs = await pb.collection(this.collection).getFullList();
+            
+            return {
+                total: jobs.length,
+                byStatus: {
+                    pending: jobs.filter(job => job.status === 'pending').length,
+                    assigned: jobs.filter(job => job.status === 'assigned').length,
+                    running: jobs.filter(job => job.status === 'running').length,
+                    completed: jobs.filter(job => job.status === 'completed').length,
+                    failed: jobs.filter(job => job.status === 'failed').length
+                },
+                byType: {
+                    inference: jobs.filter(job => job.type === 'inference').length,
+                    training: jobs.filter(job => job.type === 'training').length,
+                    other: jobs.filter(job => job.type === 'other').length
+                }
+            };
+        } catch (error) {
+            logger.error('Failed to get job statistics:', error);
+            throw error;
+        }
     }
 }
 

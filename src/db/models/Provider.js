@@ -1,146 +1,296 @@
 /**
  * Provider model for Infernet Protocol
- * Represents nodes that contribute GPU compute resources
+ * Represents a GPU provider node in the network
  */
-const db = require('../index');
+
+import { createLogger } from '../../utils/logger.js';
+import crypto from 'crypto';
+
+const logger = createLogger('model:provider');
 
 class Provider {
-    /**
-     * Get all available providers
-     * @param {number} page - Page number for pagination
-     * @param {number} perPage - Items per page
-     * @param {Object} options - Additional query options
-     * @returns {Promise<Object>} - List of providers
-     */
-    static async getAll(page = 1, perPage = 50, options = {}) {
-        const pb = db.getInstance();
-        return await pb.collection('providers').getList(page, perPage, options);
+    constructor(db) {
+        this.db = db;
+        this.collection = 'providers';
     }
-    
+
     /**
-     * Get providers filtered by GPU specifications
-     * @param {Object} gpuSpecs - GPU specifications to filter by
-     * @param {number} page - Page number for pagination
-     * @param {number} perPage - Items per page
-     * @returns {Promise<Object>} - List of matching providers
-     */
-    static async findByGpuSpecs(gpuSpecs, page = 1, perPage = 20) {
-        const pb = db.getInstance();
-        
-        // Construct filter based on GPU specifications
-        let filterParts = [];
-        
-        if (gpuSpecs.minVram) {
-            filterParts.push(`vram >= ${gpuSpecs.minVram}`);
-        }
-        
-        if (gpuSpecs.minCores) {
-            filterParts.push(`cuda_cores >= ${gpuSpecs.minCores}`);
-        }
-        
-        if (gpuSpecs.gpuModel) {
-            filterParts.push(`gpu_model ~ "${gpuSpecs.gpuModel}"`);
-        }
-        
-        // Add availability filter
-        filterParts.push('status = "available"');
-        
-        const filter = filterParts.join(' && ');
-        
-        return await pb.collection('providers').getList(page, perPage, {
-            filter,
-            sort: '-reputation,+price'
-        });
-    }
-    
-    /**
-     * Get a single provider by ID
-     * @param {string} id - Provider ID
-     * @returns {Promise<Object>} - Provider record
-     */
-    static async getById(id) {
-        const pb = db.getInstance();
-        return await pb.collection('providers').getOne(id);
-    }
-    
-    /**
-     * Create a new provider
-     * @param {Object} data - Provider data
+     * Register a new provider
+     * @param {Object} providerData - Provider data
      * @returns {Promise<Object>} - Created provider record
      */
-    static async create(data) {
-        const pb = db.getInstance();
-        return await pb.collection('providers').create(data);
+    async register(providerData) {
+        try {
+            const pb = this.db.getInstance();
+            
+            // Generate nodeId if not provided
+            if (!providerData.nodeId) {
+                providerData.nodeId = `provider_${crypto.randomBytes(8).toString('hex')}`;
+            }
+            
+            // Set default values
+            const provider = {
+                nodeId: providerData.nodeId,
+                publicKey: providerData.publicKey,
+                address: providerData.address,
+                port: providerData.port || 8080,
+                status: 'available',
+                reputation: 0,
+                specs: providerData.specs || {},
+                price: providerData.price || 0,
+                lastSeen: new Date().toISOString()
+            };
+            
+            // Check if provider already exists
+            try {
+                const existing = await pb.collection(this.collection)
+                    .getFirstListItem(`nodeId="${provider.nodeId}"`);
+                
+                // Update existing provider
+                logger.info(`Updating existing provider: ${provider.nodeId}`);
+                return await pb.collection(this.collection).update(existing.id, provider);
+            } catch (error) {
+                // Provider doesn't exist, create new one
+                logger.info(`Registering new provider: ${provider.nodeId}`);
+                return await pb.collection(this.collection).create(provider);
+            }
+        } catch (error) {
+            logger.error('Failed to register provider:', error);
+            throw error;
+        }
     }
-    
+
     /**
-     * Update a provider
-     * @param {string} id - Provider ID
-     * @param {Object} data - Updated provider data
-     * @returns {Promise<Object>} - Updated provider record
+     * Find a provider by nodeId
+     * @param {string} nodeId - Provider node ID
+     * @returns {Promise<Object>} - Provider record
      */
-    static async update(id, data) {
-        const pb = db.getInstance();
-        return await pb.collection('providers').update(id, data);
+    async findByNodeId(nodeId) {
+        try {
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).getFirstListItem(`nodeId="${nodeId}"`);
+        } catch (error) {
+            if (error.status === 404) {
+                return null;
+            }
+            logger.error(`Failed to find provider ${nodeId}:`, error);
+            throw error;
+        }
     }
-    
+
     /**
-     * Delete a provider
-     * @param {string} id - Provider ID
-     * @returns {Promise<boolean>} - Success status
+     * Find a provider by public key
+     * @param {string} publicKey - Provider public key
+     * @returns {Promise<Object>} - Provider record
      */
-    static async delete(id) {
-        const pb = db.getInstance();
-        await pb.collection('providers').delete(id);
-        return true;
+    async findByPublicKey(publicKey) {
+        try {
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).getFirstListItem(`publicKey="${publicKey}"`);
+        } catch (error) {
+            if (error.status === 404) {
+                return null;
+            }
+            logger.error(`Failed to find provider with public key ${publicKey}:`, error);
+            throw error;
+        }
     }
-    
+
     /**
      * Update provider status
-     * @param {string} id - Provider ID
-     * @param {string} status - New status (available, busy, offline)
+     * @param {string} nodeId - Provider node ID
+     * @param {string} status - New status
      * @returns {Promise<Object>} - Updated provider record
      */
-    static async updateStatus(id, status) {
-        const pb = db.getInstance();
-        return await pb.collection('providers').update(id, { status });
+    async updateStatus(nodeId, status) {
+        try {
+            const provider = await this.findByNodeId(nodeId);
+            
+            if (!provider) {
+                throw new Error(`Provider ${nodeId} not found`);
+            }
+            
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).update(provider.id, {
+                status,
+                lastSeen: new Date().toISOString()
+            });
+        } catch (error) {
+            logger.error(`Failed to update provider ${nodeId} status:`, error);
+            throw error;
+        }
     }
-    
+
     /**
-     * Update provider reputation score
-     * @param {string} id - Provider ID
-     * @param {number} reputationDelta - Change in reputation score
+     * Update provider specs
+     * @param {string} nodeId - Provider node ID
+     * @param {Object} specs - Provider specs
      * @returns {Promise<Object>} - Updated provider record
      */
-    static async updateReputation(id, reputationDelta) {
-        const pb = db.getInstance();
-        const provider = await pb.collection('providers').getOne(id);
-        
-        const newReputation = Math.max(0, Math.min(100, provider.reputation + reputationDelta));
-        
-        return await pb.collection('providers').update(id, { 
-            reputation: newReputation 
-        });
+    async updateSpecs(nodeId, specs) {
+        try {
+            const provider = await this.findByNodeId(nodeId);
+            
+            if (!provider) {
+                throw new Error(`Provider ${nodeId} not found`);
+            }
+            
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).update(provider.id, {
+                specs,
+                lastSeen: new Date().toISOString()
+            });
+        } catch (error) {
+            logger.error(`Failed to update provider ${nodeId} specs:`, error);
+            throw error;
+        }
     }
-    
+
     /**
-     * Subscribe to changes in provider records
-     * @param {Function} callback - Callback function for updates
-     * @returns {void}
+     * Update provider price
+     * @param {string} nodeId - Provider node ID
+     * @param {number} price - Provider price
+     * @returns {Promise<Object>} - Updated provider record
      */
-    static subscribeToChanges(callback) {
-        const pb = db.getInstance();
-        pb.collection('providers').subscribe('*', callback);
+    async updatePrice(nodeId, price) {
+        try {
+            const provider = await this.findByNodeId(nodeId);
+            
+            if (!provider) {
+                throw new Error(`Provider ${nodeId} not found`);
+            }
+            
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).update(provider.id, {
+                price,
+                lastSeen: new Date().toISOString()
+            });
+        } catch (error) {
+            logger.error(`Failed to update provider ${nodeId} price:`, error);
+            throw error;
+        }
     }
-    
+
     /**
-     * Unsubscribe from provider changes
-     * @returns {void}
+     * Update provider reputation
+     * @param {string} nodeId - Provider node ID
+     * @param {number} reputation - New reputation score
+     * @returns {Promise<Object>} - Updated provider record
      */
-    static unsubscribe() {
-        const pb = db.getInstance();
-        pb.collection('providers').unsubscribe();
+    async updateReputation(nodeId, reputation) {
+        try {
+            const provider = await this.findByNodeId(nodeId);
+            
+            if (!provider) {
+                throw new Error(`Provider ${nodeId} not found`);
+            }
+            
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).update(provider.id, {
+                reputation,
+                lastSeen: new Date().toISOString()
+            });
+        } catch (error) {
+            logger.error(`Failed to update provider ${nodeId} reputation:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Find available providers
+     * @param {Object} filters - Optional filters
+     * @returns {Promise<Array>} - Array of provider records
+     */
+    async findAvailable(filters = {}) {
+        try {
+            const pb = this.db.getInstance();
+            
+            let filter = 'status="available"';
+            
+            // Add additional filters
+            if (filters.minReputation) {
+                filter += ` && reputation>=${filters.minReputation}`;
+            }
+            
+            if (filters.maxPrice) {
+                filter += ` && price<=${filters.maxPrice}`;
+            }
+            
+            // Add GPU spec filters
+            if (filters.minVram) {
+                // This is a simplification, as filtering on JSON fields is more complex
+                // In a real implementation, you might need to use a more sophisticated approach
+                filter += ` && specs.vram>=${filters.minVram}`;
+            }
+            
+            return await pb.collection(this.collection).getFullList({
+                filter,
+                sort: '-reputation,+price'
+            });
+        } catch (error) {
+            logger.error('Failed to find available providers:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Delete a provider
+     * @param {string} nodeId - Provider node ID
+     * @returns {Promise<boolean>} - Success status
+     */
+    async delete(nodeId) {
+        try {
+            const provider = await this.findByNodeId(nodeId);
+            
+            if (!provider) {
+                return false;
+            }
+            
+            const pb = this.db.getInstance();
+            await pb.collection(this.collection).delete(provider.id);
+            return true;
+        } catch (error) {
+            logger.error(`Failed to delete provider ${nodeId}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get all providers
+     * @returns {Promise<Array>} - Array of provider records
+     */
+    async getAll() {
+        try {
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).getFullList();
+        } catch (error) {
+            logger.error('Failed to get all providers:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Update provider heartbeat
+     * @param {string} nodeId - Provider node ID
+     * @returns {Promise<Object>} - Updated provider record
+     */
+    async heartbeat(nodeId) {
+        try {
+            const provider = await this.findByNodeId(nodeId);
+            
+            if (!provider) {
+                throw new Error(`Provider ${nodeId} not found`);
+            }
+            
+            const pb = this.db.getInstance();
+            return await pb.collection(this.collection).update(provider.id, {
+                lastSeen: new Date().toISOString()
+            });
+        } catch (error) {
+            logger.error(`Failed to update provider ${nodeId} heartbeat:`, error);
+            throw error;
+        }
     }
 }
 
-module.exports = Provider;
+export default Provider;

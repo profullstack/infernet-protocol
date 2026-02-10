@@ -9,7 +9,7 @@ import { webSockets } from '@libp2p/websockets';
 import { circuitRelayTransport, circuitRelayServer } from '@libp2p/circuit-relay-v2';
 import type { InfernetConfig } from '@infernet/shared';
 
-const DEFAULT_BOOTSTRAP_PEERS = [
+const DEFAULT_BOOTSTRAP_PEERS: string[] = [
   // Infernet bootstrap nodes (Supabase-registered)
   // These will be fetched dynamically at startup
 ];
@@ -62,18 +62,6 @@ export async function createInfernetNode(options: CreateNodeOptions): Promise<Li
   //   transports.push(webTransport());
   // }
 
-  const services: Record<string, unknown> = {
-    identify: identify(),
-    dht: kadDHT({
-      clientMode: !isServer,
-    }),
-  };
-
-  // Relay servers help browser nodes connect to each other
-  if (isRelay) {
-    services.relay = circuitRelayServer();
-  }
-
   const node = await createLibp2p({
     addresses: {
       listen: listenAddresses,
@@ -84,7 +72,13 @@ export async function createInfernetNode(options: CreateNodeOptions): Promise<Li
     peerDiscovery: bootstrapPeers.length > 0
       ? [bootstrap({ list: bootstrapPeers })]
       : [],
-    services,
+    services: {
+      identify: identify(),
+      dht: kadDHT({
+        clientMode: !isServer,
+      }),
+      ...(isRelay ? { relay: circuitRelayServer() } : {}),
+    },
   });
 
   return node;

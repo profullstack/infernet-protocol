@@ -15,12 +15,18 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "clean": "turbo clean",
-    "typecheck": "turbo typecheck"
+    "typecheck": "turbo typecheck",
+    "test:nodes": "node --experimental-strip-types --no-warnings scripts/test-two-nodes.ts",
+    "test:flow": "node --experimental-strip-types --no-warnings scripts/test-full-flow.ts"
   },
   "devDependencies": {
+    "tsx": "^4.7.0",
     "turbo": "^2.4.0"
   },
   "packageManager": "pnpm@10.0.0",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "@ipshipyard/node-datachannel"]
+  },
   "engines": {
     "node": ">=18.0.0"
   }

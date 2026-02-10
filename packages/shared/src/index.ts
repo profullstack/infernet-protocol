@@ -237,7 +237,7 @@ export interface ReputationRecord {
   failedJobs: number;
   disputedJobs: number;
   averageScore: number;
-  totalEarned: Record<PaymentCurrency, number>;
+  totalEarned: Partial<Record<PaymentCurrency, number>>;
   lastActiveAt: number;
 }
 
@@ -256,8 +256,10 @@ export interface InfernetConfig {
   supabaseAnonKey?: string;
   /** CoinPay API key for payments */
   coinpayApiKey?: string;
-  /** CoinPay API URL */
+  /** CoinPay API URL (defaults to https://coinpayportal.com/api) */
   coinpayApiUrl?: string;
+  /** CoinPay business ID */
+  coinpayBusinessId?: string;
   /** Wallet addresses for receiving payments */
   walletAddresses?: Partial<Record<PaymentChain, string>>;
   /** Node capabilities (auto-detected if not set) */

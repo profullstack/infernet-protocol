@@ -1,26 +1,33 @@
+import { CoinPayClient } from '@profullstack/coinpay';
 import type {
   EscrowInfo,
   Payment,
   PaymentChain,
   PaymentCurrency,
-  PaymentStatus,
 } from '@infernet/shared';
 
 export interface CoinPayConfig {
   apiKey: string;
-  apiUrl: string;
+  apiUrl?: string;
+  businessId?: string;
 }
 
 /**
  * Payment manager using CoinPay Portal for non-custodial crypto payments.
- * Supports BTC, ETH, SOL, POL, BCH, and USDC on multiple chains.
+ * Wraps @profullstack/coinpay SDK for escrow-based job payments.
  */
 export class PaymentManager {
+  private client: CoinPayClient;
   private config: CoinPayConfig;
   private payments: Map<string, Payment> = new Map();
+  private escrows: Map<string, EscrowInfo> = new Map();
 
   constructor(config: CoinPayConfig) {
     this.config = config;
+    this.client = new CoinPayClient({
+      apiKey: config.apiKey,
+      ...(config.apiUrl ? { baseUrl: config.apiUrl } : {}),
+    });
   }
 
   /**
@@ -32,33 +39,26 @@ export class PaymentManager {
     currency: PaymentCurrency;
     fromPeerId: string;
     toPeerId: string;
-    webhookUrl?: string;
   }): Promise<Payment> {
     const chain = currencyToChain(params.currency);
 
-    const res = await fetch(`${this.config.apiUrl}/api/payments`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.config.apiKey}`,
+    const result = await this.client.createPayment({
+      businessId: this.config.businessId ?? '',
+      amount: params.amount,
+      currency: 'USD',
+      blockchain: params.currency,
+      description: `Infernet job ${params.jobId}`,
+      metadata: {
+        jobId: params.jobId,
+        fromPeerId: params.fromPeerId,
+        toPeerId: params.toPeerId,
       },
-      body: JSON.stringify({
-        amount: params.amount,
-        currency: 'USD',
-        cryptocurrency: chain,
-        description: `Infernet job ${params.jobId}`,
-        webhook_url: params.webhookUrl,
-      }),
     });
 
-    if (!res.ok) {
-      throw new Error(`CoinPay payment creation failed: ${res.statusText}`);
-    }
-
-    const data = await res.json();
+    const paymentData = (result as any).payment ?? result;
 
     const payment: Payment = {
-      id: data.id,
+      id: paymentData.id,
       jobId: params.jobId,
       fromPeerId: params.fromPeerId,
       toPeerId: params.toPeerId,
@@ -85,74 +85,101 @@ export class PaymentManager {
     beneficiaryAddress: string;
     expiresInHours?: number;
   }): Promise<EscrowInfo> {
-    const res = await fetch(`${this.config.apiUrl}/api/escrow`, {
+    const data = await this.client.request('/escrow', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.config.apiKey}`,
-      },
       body: JSON.stringify({
         chain: params.chain,
         amount: params.amount,
-        depositor_address: params.depositorAddress,
-        beneficiary_address: params.beneficiaryAddress,
-        expires_in_hours: params.expiresInHours ?? 48,
+        depositorAddress: params.depositorAddress,
+        beneficiaryAddress: params.beneficiaryAddress,
+        metadata: { jobId: params.jobId },
+        expiresInHours: params.expiresInHours ?? 24,
       }),
-    });
+    }) as Record<string, any>;
 
-    if (!res.ok) {
-      throw new Error(`CoinPay escrow creation failed: ${res.statusText}`);
-    }
-
-    const data = await res.json();
-
-    return {
+    const escrow: EscrowInfo = {
       id: data.id,
-      escrowAddress: data.escrow_address,
+      escrowAddress: data.escrowAddress,
       chain: params.chain,
       amount: params.amount,
       depositorAddress: params.depositorAddress,
       beneficiaryAddress: params.beneficiaryAddress,
-      releaseToken: data.release_token,
-      beneficiaryToken: data.beneficiary_token,
+      releaseToken: data.releaseToken,
+      beneficiaryToken: data.beneficiaryToken,
       status: 'created',
-      expiresAt: Date.now() + (params.expiresInHours ?? 48) * 3600 * 1000,
+      expiresAt: data.expiresAt ? new Date(data.expiresAt).getTime() : Date.now() + (params.expiresInHours ?? 24) * 3600_000,
     };
+
+    this.escrows.set(escrow.id, escrow);
+    return escrow;
   }
 
   /**
    * Release escrowed funds to the provider after job completion.
    */
   async releaseEscrow(escrowId: string, releaseToken: string): Promise<void> {
-    const res = await fetch(`${this.config.apiUrl}/api/escrow/${escrowId}/release`, {
+    await this.client.request(`/escrow/${escrowId}/release`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.config.apiKey}`,
-      },
-      body: JSON.stringify({ release_token: releaseToken }),
+      body: JSON.stringify({ releaseToken }),
     });
+    const escrow = this.escrows.get(escrowId);
+    if (escrow) escrow.status = 'released';
+  }
 
-    if (!res.ok) {
-      throw new Error(`CoinPay escrow release failed: ${res.statusText}`);
-    }
+  /**
+   * Refund escrowed funds to the depositor.
+   */
+  async refundEscrow(escrowId: string, releaseToken: string): Promise<void> {
+    await this.client.request(`/escrow/${escrowId}/refund`, {
+      method: 'POST',
+      body: JSON.stringify({ releaseToken }),
+    });
+    const escrow = this.escrows.get(escrowId);
+    if (escrow) escrow.status = 'refunded';
   }
 
   /**
    * Dispute an escrow if the job result is unsatisfactory.
    */
   async disputeEscrow(escrowId: string, releaseToken: string, reason: string): Promise<void> {
-    const res = await fetch(`${this.config.apiUrl}/api/escrow/${escrowId}/dispute`, {
+    await this.client.request(`/escrow/${escrowId}/dispute`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.config.apiKey}`,
-      },
-      body: JSON.stringify({ release_token: releaseToken, reason }),
+      body: JSON.stringify({ releaseToken, reason }),
     });
+    const escrow = this.escrows.get(escrowId);
+    if (escrow) escrow.status = 'disputed';
+  }
 
-    if (!res.ok) {
-      throw new Error(`CoinPay escrow dispute failed: ${res.statusText}`);
+  /**
+   * Get escrow status from CoinPay.
+   */
+  async getEscrowStatus(escrowId: string): Promise<EscrowInfo | undefined> {
+    const cached = this.escrows.get(escrowId);
+    if (!cached) return undefined;
+
+    try {
+      const result = await this.client.request(`/escrow/${escrowId}`) as Record<string, any>;
+      cached.status = result.status;
+      return cached;
+    } catch {
+      return cached;
+    }
+  }
+
+  /**
+   * Get payment status from CoinPay.
+   */
+  async getPaymentStatus(paymentId: string): Promise<Payment | undefined> {
+    const cached = this.payments.get(paymentId);
+    if (!cached) return undefined;
+
+    try {
+      const result = await this.client.getPayment(paymentId);
+      const paymentData = (result as any).payment ?? result;
+      cached.status = paymentData.status === 'completed' ? 'released' : cached.status;
+      return cached;
+    } catch {
+      return cached;
     }
   }
 
@@ -160,8 +187,23 @@ export class PaymentManager {
     return this.payments.get(id);
   }
 
+  getEscrow(id: string): EscrowInfo | undefined {
+    return this.escrows.get(id);
+  }
+
   getAllPayments(): Payment[] {
     return [...this.payments.values()];
+  }
+
+  getAllEscrows(): EscrowInfo[] {
+    return [...this.escrows.values()];
+  }
+
+  /**
+   * Get the underlying CoinPayClient for advanced operations.
+   */
+  getCoinPayClient(): CoinPayClient {
+    return this.client;
   }
 }
 

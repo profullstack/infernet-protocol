@@ -1,4 +1,5 @@
 import type { Libp2p } from 'libp2p';
+import { multiaddr } from '@multiformats/multiaddr';
 import type {
   InfernetConfig,
   InfernetEvent,
@@ -75,10 +76,11 @@ export class InfernetNode {
     this.jobs = new JobManager(this.messaging, peerId);
     this.identity = new IdentityManager(this.messaging, peerId);
 
-    if (this.config.coinpayApiKey && this.config.coinpayApiUrl) {
+    if (this.config.coinpayApiKey) {
       this.payments = new PaymentManager({
         apiKey: this.config.coinpayApiKey,
         apiUrl: this.config.coinpayApiUrl,
+        businessId: this.config.coinpayBusinessId,
       });
     }
 
@@ -195,6 +197,15 @@ export class InfernetNode {
 
   get connectedPeers(): number {
     return this.libp2p?.getPeers()?.length ?? 0;
+  }
+
+  get multiaddrs(): string[] {
+    return this.libp2p?.getMultiaddrs()?.map((ma) => ma.toString()) ?? [];
+  }
+
+  async dial(addr: string | Parameters<Libp2p['dial']>[0]): Promise<void> {
+    const target = typeof addr === 'string' ? multiaddr(addr) : addr;
+    await this.libp2p.dial(target as Parameters<Libp2p['dial']>[0]);
   }
 
   private emit(event: InfernetEvent): void {

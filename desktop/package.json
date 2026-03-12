@@ -1,16 +1,14 @@
 {
   "name": "infernet-protocol-desktop",
-  "version": "0.1.0",
-  "description": "Infernet Protocol Desktop Application",
+  "version": "2.0.0",
+  "description": "Infernet Protocol Electron desktop application",
   "main": "electron/main.js",
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "preview": "vite preview",
     "electron": "electron .",
-    "electron:dev": "concurrently \"npm run dev\" \"NODE_ENV=development npm run electron\"",
-    "electron:build": "npm run build && electron-builder"
+    "electron:dev": "concurrently \"cd .. && pnpm dev\" \"wait-on http://127.0.0.1:3000 && cross-env NODE_ENV=development NEXT_DESKTOP_URL=http://127.0.0.1:3000 electron .\"",
+    "electron:build": "cd .. && pnpm build",
+    "electron:start": "cross-env NODE_ENV=production NEXT_DESKTOP_URL=http://127.0.0.1:3000 electron ."
   },
   "keywords": [
     "infernet",
@@ -22,21 +20,13 @@
   "author": "Infernet Protocol Team",
   "license": "MIT",
   "devDependencies": {
-    "@sveltejs/adapter-static": "^3.0.0",
-    "@sveltejs/kit": "^2.0.0",
-    "@sveltejs/vite-plugin-svelte": "^3.0.0",
     "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
     "electron": "^35.1.2",
     "electron-builder": "^24.13.3",
-    "svelte": "^4.2.12",
-    "vite": "^5.0.12"
+    "wait-on": "^8.0.3"
   },
-  "dependencies": {
-    "chart.js": "^4.4.1",
-    "pocketbase": "^0.21.1",
-    "socket.io-client": "^4.7.4",
-    "svelte-chartjs": "^3.1.5"
-  },
+  "dependencies": {},
   "build": {
     "appId": "com.infernet.protocol.desktop",
     "productName": "Infernet Protocol",
@@ -44,8 +34,7 @@
       "output": "dist"
     },
     "files": [
-      "electron/**/*",
-      "build/**/*"
+      "electron/**/*"
     ],
     "mac": {
       "category": "public.app-category.developer-tools"

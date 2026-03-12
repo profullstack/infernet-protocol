@@ -16,7 +16,7 @@
 ### Web & Desktop
 - **Svelte 4**: For all web and desktop UI components
 - **Vanilla CSS**: No CSS frameworks or preprocessors
-- **Hono.js**: For web server implementation
+- **Next.js route handlers**: For server APIs
 
 ### Mobile
 - **React Native**: With Expo.dev for cross-platform mobile development

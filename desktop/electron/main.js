@@ -8,29 +8,30 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Keep a global reference of the window object to avoid garbage collection
 let mainWindow;
+const isDev = process.env.NODE_ENV === 'development';
+const appUrl = process.env.NEXT_DESKTOP_URL || 'http://127.0.0.1:3000';
 
 // Create the browser window
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: 1440,
+    height: 960,
+    minWidth: 1100,
+    minHeight: 720,
+    backgroundColor: '#06131a',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false,
       preload: path.join(__dirname, 'preload.mjs')
-    },
-    icon: path.join(__dirname, '../src/assets/icon.png')
+    }
   });
 
-  // Load the app - in development use the Vite dev server, in production use the built files
-  const isDev = process.env.NODE_ENV === 'development';
+  // Electron now wraps the root Next.js app.
+  mainWindow.loadURL(appUrl);
+
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173/');
-    // Open DevTools in development mode
     mainWindow.webContents.openDevTools();
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '../build/index.html'));
   }
 
   // Emitted when the window is closed
@@ -66,4 +67,8 @@ ipcMain.handle('get-system-info', () => {
   };
 });
 
-// Add more IPC handlers for PocketBase interactions, WebSocket connections, etc.
+ipcMain.handle('get-runtime-info', () => ({
+  desktop: 'electron',
+  renderer: 'nextjs',
+  appUrl
+}));

@@ -21,10 +21,7 @@
   "author": "Infernet Protocol Team",
   "license": "MIT",
   "dependencies": {
-    "@hono/node-server": "^1.8.2",
-    "hono": "^4.1.3",
     "pocketbase": "^0.25.2",
-    "socket.io": "^4.7.4",
     "socket.io-client": "^4.7.4"
   },
   "devDependencies": {

@@ -9,6 +9,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:db:reset": "supabase db reset",
     "test": "vitest run",
     "test:watch": "vitest"
   },

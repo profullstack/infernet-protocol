@@ -14,9 +14,10 @@
 ## Frontend Technologies
 
 ### Web & Desktop
-- **Svelte 4**: For all web and desktop UI components
-- **Vanilla CSS**: No CSS frameworks or preprocessors
-- **Next.js route handlers**: For server APIs
+- **Next.js**: For the primary web application
+- **Tailwind CSS**: For application styling
+- **Electron**: For the desktop shell over the Next.js app
+- **Next.js route handlers**: For server APIs over the local Supabase stack
 
 ### Mobile
 - **React Native**: With Expo.dev for cross-platform mobile development
@@ -25,10 +26,10 @@
 ## Backend Technologies
 
 ### Database
-- **PocketBase**: For local embedded database
-  - Used for managing data, job metadata, reputation history, and local node configurations
-  - Should be integrated in both mobile and desktop apps
-  - Should connect to remote P2P instance to seed nodes from https://infernet.tech/nodes
+- **Local open-source Supabase**: For application data, job metadata, and dashboard state
+  - Run locally via the Supabase CLI
+  - Access through server-side Next.js modules only
+  - Do not call Supabase directly from browser bundles
 
 ### Communication
 - **WebSockets**: For real-time, bidirectional communication

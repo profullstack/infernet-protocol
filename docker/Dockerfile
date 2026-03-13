@@ -1,55 +1,38 @@
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS deps
 
 WORKDIR /app
 
-# Install pnpm
 RUN npm install -g pnpm
 
-# Copy package files
 COPY package.json pnpm-lock.yaml* ./
-COPY web/package.json ./web/
+RUN pnpm install --no-frozen-lockfile
 
-# Install dependencies
-RUN pnpm install -r
+FROM node:20-alpine AS builder
 
-# Copy source code
+WORKDIR /app
+
+RUN npm install -g pnpm
+
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build the web application
-WORKDIR /app/web
 RUN pnpm build
 
-# Production stage
-FROM node:18-alpine AS production
+FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# Install pnpm
 RUN npm install -g pnpm
 
-# Copy built assets from builder stage
-COPY --from=builder /app/web/build /app/web/build
-COPY --from=builder /app/web/server /app/web/server
-COPY --from=builder /app/web/package.json /app/web/
+ENV NODE_ENV=production \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
 
-# Install production dependencies only
-WORKDIR /app/web
-RUN pnpm install --prod
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/node_modules ./node_modules
 
-# Set environment variables
-ENV NODE_ENV=production
-ENV PORT=3000
-ENV POCKETBASE_URL=http://localhost:8080
-
-# Expose ports for the web server and PocketBase
 EXPOSE 3000
-EXPOSE 8080
 
-# Copy PocketBase executable (assuming it's in the repo)
-COPY --from=builder /app/bin/pocketbase /app/bin/pocketbase
-
-# Copy startup script
-COPY docker/start.sh /app/
-RUN chmod +x /app/start.sh
-
-CMD ["/app/start.sh"]
+CMD ["pnpm", "start"]

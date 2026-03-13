@@ -1,46 +1,21 @@
 version: '3.8'
 
 services:
-  infernet-web:
+  infernet-app:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: infernet-web
+    container_name: infernet-app
     ports:
-      - "3000:3000"  # Web server port
-      - "8080:8080"  # PocketBase port
+      - "3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - POCKETBASE_URL=http://localhost:8080
-    volumes:
-      - pocketbase_data:/app/pb_data  # Persist PocketBase data
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+      - SUPABASE_URL=http://host.docker.internal:54321
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     restart: unless-stopped
     networks:
       - infernet-network
-
-  # Uncomment to run PocketBase as a separate service instead of embedded
-  # pocketbase:
-  #   image: ghcr.io/muchobien/pocketbase:latest
-  #   container_name: pocketbase
-  #   ports:
-  #     - "8080:8080"
-  #   volumes:
-  #     - pocketbase_data:/pb_data
-  #   restart: unless-stopped
-  #   networks:
-  #     - infernet-network
-
-volumes:
-  pocketbase_data:
-    driver: local
 
 networks:
   infernet-network:

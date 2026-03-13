@@ -3,7 +3,7 @@
 This repository now runs as a single Next.js application with:
 
 - Next.js App Router for UI and API routes
-- Supabase Cloud as the only database/backend
+- Local open-source Supabase as the database/backend
 - Tailwind CSS for styling
 - Vitest for tests
 - Electron for the desktop shell in `desktop/`
@@ -14,7 +14,7 @@ The active web/runtime is the root Next.js app. The desktop target remains Elect
 
 - Runtime: Node.js 18+
 - Framework: Next.js
-- Database: Supabase Cloud
+- Database: local open-source Supabase
 - Styling: Tailwind CSS
 - Testing: Vitest
 - Desktop: Electron
@@ -34,7 +34,7 @@ app/                     Next.js pages and route handlers
 components/              UI building blocks
 lib/                     Server-only env, Supabase, and data access helpers
 desktop/                 Electron shell for the desktop app
-supabase/migrations/     SQL schema for Supabase Cloud
+supabase/migrations/     SQL schema for local Supabase
 tests/                   Vitest coverage for env, data mapping, and route helpers
 ```
 
@@ -43,14 +43,22 @@ tests/                   Vitest coverage for env, data mapping, and route helper
 Copy `sample.env` into `.env.local` and set:
 
 ```bash
-SUPABASE_URL=https://your-project-ref.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_SERVICE_ROLE_KEY=your-local-service-role-key
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-## Database setup
+## Local Supabase setup
 
-Apply the migration in [supabase/migrations/20260312000000_initial_infernet_schema.sql](/home/ettinger/src/profullstack.com/infernet-protocol/supabase/migrations/20260312000000_initial_infernet_schema.sql) to your Supabase project. It creates:
+Start the local open-source Supabase stack first:
+
+```bash
+pnpm supabase:start
+```
+
+Then copy the local service-role key from `supabase status` into `.env.local`.
+
+Apply the migration in [supabase/migrations/20260312000000_initial_infernet_schema.sql](/home/ettinger/src/profullstack.com/infernet-protocol/supabase/migrations/20260312000000_initial_infernet_schema.sql). It creates:
 
 - `nodes`
 - `providers`
@@ -67,6 +75,7 @@ Install dependencies and run the app:
 
 ```bash
 pnpm install
+pnpm supabase:start
 pnpm dev
 ```
 
@@ -75,6 +84,8 @@ Useful commands:
 ```bash
 pnpm build
 pnpm start
+pnpm supabase:db:reset
+pnpm supabase:stop
 pnpm test
 ```
 

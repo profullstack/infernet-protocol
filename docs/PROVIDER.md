@@ -11,7 +11,7 @@ This document explains how to use the Infernet Protocol as a resource provider t
 1. **Control Interface**: Desktop app, PWA, or mobile app running on your personal device
 2. **Provider Nodes**: Docker containers running on machines with GPUs/CPUs
 3. **P2P Network**: Decentralized network connecting all nodes
-4. **PocketBase**: Local database for configuration and management
+4. **Local Supabase**: Self-hosted metadata store for configuration and management
 
 ## Setup Process
 

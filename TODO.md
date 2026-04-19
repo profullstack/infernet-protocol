@@ -65,6 +65,7 @@ All application data flows through **Supabase** — operators pick self-hosted (
 ## Additional Tasks
 
 - [ ] Document the migration flow for both self-hosted (`supabase db reset`) and cloud (`supabase db push`) deployments.
-- [ ] Add authentication for API routes (Supabase Auth + Nostr-linked identities).
+- [x] Add authentication for the node API routes (Nostr / BIP-340 Schnorr, verified per request) — shipped 2026-04-19.
+- [ ] Extend signature-based auth to the read routes (`/api/overview`, `/api/nodes`, etc.) so operators can scope views to an identity.
 - [ ] Implement real-time updates using Supabase Realtime channels, fronted by a Next.js API for mobile clients.
 - [ ] Add proper error handling and loading states throughout the React app.

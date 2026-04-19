@@ -1,13 +1,16 @@
 /**
- * Database layer for Infernet Protocol using PocketBase
+ * Database layer for Infernet Protocol using Supabase.
+ *
+ * This is the CLI / daemon Node.js data layer. It is NOT Next.js code,
+ * so it does not import `server-only` or pull helpers from `@/lib/*` —
+ * it instantiates its own Supabase client using the service role key.
  */
-import PocketBase from 'pocketbase';
-import config from '../config.js';
-import pocketbaseService from './pocketbase.js';
-import { createLogger } from '../utils/logger.js';
+import { createClient } from '@supabase/supabase-js';
 import { EventEmitter } from 'events';
 
-// Import models - these will be dynamically instantiated
+import config from '../config.js';
+import { createLogger } from '../utils/logger.js';
+
 import Provider from './models/provider.js';
 import Client from './models/client.js';
 import Job from './models/job.js';
@@ -18,403 +21,94 @@ const logger = createLogger('database');
 class Database extends EventEmitter {
     constructor() {
         super();
-        this.pb = null;
+        this.supabase = null;
         this.isConnected = false;
-        this.collections = {};
-        this.subscriptions = new Map();
         this.models = {};
     }
 
     /**
-     * Initialize the database connection
-     * @param {string} url - PocketBase server URL
-     * @param {boolean} startEmbedded - Whether to start the embedded PocketBase server
-     * @returns {Promise<PocketBase>} - PocketBase instance
+     * Initialize the Supabase client.
+     * @param {string} [url] - Optional Supabase URL override.
+     * @returns {Promise<import('@supabase/supabase-js').SupabaseClient>}
      */
-    async connect(url = config.pocketbase.url, startEmbedded = config.pocketbase.useEmbedded) {
+    async connect(url) {
         try {
-            // Start embedded PocketBase server if configured
-            if (startEmbedded) {
-                logger.info('Starting embedded PocketBase server...');
-                await pocketbaseService.start();
-                url = pocketbaseService.getUrl();
+            const supabaseUrl = url || config.supabase.url;
+            const serviceRoleKey = config.supabase.serviceRoleKey;
+            const schema = config.supabase.schema || 'public';
+
+            if (!supabaseUrl) {
+                throw new Error(
+                    'Supabase URL is not configured. Set SUPABASE_URL in the environment.'
+                );
             }
-            
-            logger.info(`Connecting to PocketBase at ${url}`);
-            this.pb = new PocketBase(url);
-            
-            // Test connection by fetching health info
-            const health = await this.pb.health.check();
-            logger.info('PocketBase connection established:', health);
-            
+            if (!serviceRoleKey) {
+                throw new Error(
+                    'Supabase service role key is not configured. Set SUPABASE_SERVICE_ROLE_KEY in the environment.'
+                );
+            }
+
+            logger.info(`Connecting to Supabase at ${supabaseUrl} (schema=${schema})`);
+
+            this.supabase = createClient(supabaseUrl, serviceRoleKey, {
+                auth: {
+                    autoRefreshToken: false,
+                    persistSession: false
+                },
+                db: { schema }
+            });
+
+            // Simple reachability check: a head-only count against a known table.
+            const { error } = await this.supabase
+                .from('nodes')
+                .select('*', { count: 'exact', head: true });
+
+            if (error) {
+                throw new Error(`Supabase health probe failed: ${error.message}`);
+            }
+
             this.isConnected = true;
-            
-            // Try to authenticate as admin if credentials are provided
-            if (config.pocketbase.adminEmail && config.pocketbase.adminPassword) {
-                try {
-                    await this.pb.admins.authWithPassword(
-                        config.pocketbase.adminEmail,
-                        config.pocketbase.adminPassword
-                    );
-                    logger.info('Authenticated as admin');
-                } catch (authError) {
-                    logger.warn('Admin authentication failed:', authError);
-                }
-            }
-            
-            // Initialize schemas if needed
-            await this._initializeSchemas();
-            
-            // Initialize collection subscriptions
-            await this._initSubscriptions();
-            
-            // Initialize models
+
             this._initModels();
-            
+
             this.emit('connected');
-            return this.pb;
+            logger.info('Supabase connection established');
+            return this.supabase;
         } catch (error) {
-            logger.error('Failed to connect to PocketBase:', error);
+            logger.error('Failed to connect to Supabase:', error);
             throw error;
         }
     }
-    
+
     /**
-     * Get the PocketBase instance
-     * @returns {PocketBase} - PocketBase instance
+     * Get the Supabase client instance.
+     * @returns {import('@supabase/supabase-js').SupabaseClient}
      */
     getInstance() {
-        if (!this.isConnected) {
+        if (!this.isConnected || !this.supabase) {
             throw new Error('Database not connected. Call connect() first.');
         }
-        return this.pb;
+        return this.supabase;
     }
-    
+
     /**
-     * Initialize database schemas
-     * @private
-     */
-    async _initializeSchemas() {
-        logger.info('Initializing database schemas...');
-        
-        // Check if collections exist, create them if they don't
-        try {
-            // Define the collections we need
-            const requiredCollections = [
-                {
-                    name: 'providers',
-                    schema: {
-                        name: 'providers',
-                        type: 'base',
-                        schema: [
-                            {
-                                name: 'nodeId',
-                                type: 'text',
-                                required: true,
-                                unique: true
-                            },
-                            {
-                                name: 'publicKey',
-                                type: 'text',
-                                required: true
-                            },
-                            {
-                                name: 'address',
-                                type: 'text',
-                                required: true
-                            },
-                            {
-                                name: 'port',
-                                type: 'number',
-                                required: true
-                            },
-                            {
-                                name: 'status',
-                                type: 'select',
-                                options: {
-                                    values: ['available', 'busy', 'offline']
-                                },
-                                required: true
-                            },
-                            {
-                                name: 'reputation',
-                                type: 'number',
-                                default: 0
-                            },
-                            {
-                                name: 'specs',
-                                type: 'json'
-                            },
-                            {
-                                name: 'price',
-                                type: 'number',
-                                default: 0
-                            },
-                            {
-                                name: 'lastSeen',
-                                type: 'date'
-                            }
-                        ]
-                    }
-                },
-                {
-                    name: 'clients',
-                    schema: {
-                        name: 'clients',
-                        type: 'base',
-                        schema: [
-                            {
-                                name: 'nodeId',
-                                type: 'text',
-                                required: true,
-                                unique: true
-                            },
-                            {
-                                name: 'publicKey',
-                                type: 'text',
-                                required: true
-                            },
-                            {
-                                name: 'address',
-                                type: 'text'
-                            },
-                            {
-                                name: 'lastSeen',
-                                type: 'date'
-                            }
-                        ]
-                    }
-                },
-                {
-                    name: 'jobs',
-                    schema: {
-                        name: 'jobs',
-                        type: 'base',
-                        schema: [
-                            {
-                                name: 'jobId',
-                                type: 'text',
-                                required: true,
-                                unique: true
-                            },
-                            {
-                                name: 'clientId',
-                                type: 'text',
-                                required: true
-                            },
-                            {
-                                name: 'providerId',
-                                type: 'text'
-                            },
-                            {
-                                name: 'aggregatorId',
-                                type: 'text'
-                            },
-                            {
-                                name: 'type',
-                                type: 'select',
-                                options: {
-                                    values: ['inference', 'training', 'other']
-                                },
-                                required: true
-                            },
-                            {
-                                name: 'status',
-                                type: 'select',
-                                options: {
-                                    values: ['pending', 'assigned', 'running', 'completed', 'failed']
-                                },
-                                required: true
-                            },
-                            {
-                                name: 'specs',
-                                type: 'json'
-                            },
-                            {
-                                name: 'payment',
-                                type: 'json'
-                            },
-                            {
-                                name: 'created',
-                                type: 'date',
-                                required: true
-                            },
-                            {
-                                name: 'updated',
-                                type: 'date',
-                                required: true
-                            },
-                            {
-                                name: 'completed',
-                                type: 'date'
-                            }
-                        ]
-                    }
-                },
-                {
-                    name: 'aggregators',
-                    schema: {
-                        name: 'aggregators',
-                        type: 'base',
-                        schema: [
-                            {
-                                name: 'nodeId',
-                                type: 'text',
-                                required: true,
-                                unique: true
-                            },
-                            {
-                                name: 'publicKey',
-                                type: 'text',
-                                required: true
-                            },
-                            {
-                                name: 'address',
-                                type: 'text',
-                                required: true
-                            },
-                            {
-                                name: 'port',
-                                type: 'number',
-                                required: true
-                            },
-                            {
-                                name: 'status',
-                                type: 'select',
-                                options: {
-                                    values: ['available', 'busy', 'offline']
-                                },
-                                required: true
-                            },
-                            {
-                                name: 'reputation',
-                                type: 'number',
-                                default: 0
-                            },
-                            {
-                                name: 'load',
-                                type: 'number',
-                                default: 0
-                            },
-                            {
-                                name: 'maxLoad',
-                                type: 'number',
-                                default: 100
-                            },
-                            {
-                                name: 'lastSeen',
-                                type: 'date'
-                            }
-                        ]
-                    }
-                },
-                {
-                    name: 'reputation',
-                    schema: {
-                        name: 'reputation',
-                        type: 'base',
-                        schema: [
-                            {
-                                name: 'nodeId',
-                                type: 'text',
-                                required: true
-                            },
-                            {
-                                name: 'publicKey',
-                                type: 'text',
-                                required: true
-                            },
-                            {
-                                name: 'score',
-                                type: 'number',
-                                required: true
-                            },
-                            {
-                                name: 'reason',
-                                type: 'text'
-                            },
-                            {
-                                name: 'reporterId',
-                                type: 'text',
-                                required: true
-                            },
-                            {
-                                name: 'timestamp',
-                                type: 'date',
-                                required: true
-                            }
-                        ]
-                    }
-                }
-            ];
-            
-            // Create collections if they don't exist
-            for (const collection of requiredCollections) {
-                try {
-                    await this.pb.collections.getOne(collection.name);
-                    logger.debug(`Collection ${collection.name} already exists`);
-                } catch (error) {
-                    if (error.status === 404) {
-                        logger.info(`Creating collection ${collection.name}`);
-                        await this.pb.collections.create(collection.schema);
-                    } else {
-                        throw error;
-                    }
-                }
-            }
-            
-            logger.info('Database schemas initialized successfully');
-        } catch (error) {
-            logger.error('Failed to initialize database schemas:', error);
-            throw error;
-        }
-    }
-    
-    /**
-     * Initialize real-time subscriptions for collections
-     * @private
-     */
-    async _initSubscriptions() {
-        logger.info('Initializing collection subscriptions...');
-        
-        const collections = ['providers', 'clients', 'jobs', 'aggregators', 'reputation'];
-        
-        for (const collection of collections) {
-            try {
-                const subscription = this.pb.collection(collection).subscribe('*', (data) => {
-                    logger.debug(`${collection} update:`, data.action);
-                    this.emit(`${collection}.${data.action}`, data.record);
-                    this.emit(`${collection}.change`, data.action, data.record);
-                });
-                
-                this.subscriptions.set(collection, subscription);
-                logger.debug(`Subscribed to ${collection} collection`);
-            } catch (error) {
-                logger.error(`Failed to subscribe to ${collection} collection:`, error);
-            }
-        }
-    }
-    
-    /**
-     * Initialize model classes
+     * Initialize model classes.
      * @private
      */
     _initModels() {
-        // Initialize models with database instance
         this.models = {
             provider: new Provider(this),
             client: new Client(this),
             job: new Job(this),
             aggregator: new Aggregator(this)
         };
-        
         logger.info('Database models initialized');
     }
-    
+
     /**
-     * Get a model instance
-     * @param {string} modelName - Model name
-     * @returns {Object} - Model instance
+     * Get a model instance by name.
+     * @param {string} modelName
+     * @returns {Object}
      */
     model(modelName) {
         if (!this.models[modelName]) {
@@ -422,96 +116,47 @@ class Database extends EventEmitter {
         }
         return this.models[modelName];
     }
-    
+
     /**
-     * Check database health
-     * @returns {Promise<Object>} - Health status
+     * Realtime subscription helper — NOT IMPLEMENTED.
+     *
+     * For realtime updates, callers should use
+     * `db.getInstance().channel(name).on('postgres_changes', ...).subscribe()`
+     * directly. This stub preserves a legacy call site but logs a warning.
+     *
+     * @param {string} table
+     * @returns {null}
      */
-    async checkHealth() {
-        try {
-            const health = await this.pb.health.check();
-            return {
-                status: 'healthy',
-                details: health
-            };
-        } catch (error) {
-            return {
-                status: 'unhealthy',
-                error: error.message
-            };
-        }
+    subscribe(table) {
+        logger.warn(
+            `subscribe(${table}) is not implemented for the Supabase backend; ` +
+                `use supabase.channel().on('postgres_changes', ...).subscribe() directly.`
+        );
+        return null;
     }
-    
+
     /**
-     * Get database statistics
-     * @returns {Promise<Object>} - Database statistics
-     */
-    async getStats() {
-        try {
-            const stats = {
-                providers: await this.pb.collection('providers').getFullList(),
-                clients: await this.pb.collection('clients').getFullList(),
-                jobs: await this.pb.collection('jobs').getFullList(),
-                aggregators: await this.pb.collection('aggregators').getFullList()
-            };
-            
-            return {
-                counts: {
-                    providers: stats.providers.length,
-                    clients: stats.clients.length,
-                    jobs: stats.jobs.length,
-                    aggregators: stats.aggregators.length
-                },
-                jobStats: {
-                    pending: stats.jobs.filter(job => job.status === 'pending').length,
-                    running: stats.jobs.filter(job => job.status === 'running').length,
-                    completed: stats.jobs.filter(job => job.status === 'completed').length,
-                    failed: stats.jobs.filter(job => job.status === 'failed').length
-                },
-                providerStats: {
-                    available: stats.providers.filter(provider => provider.status === 'available').length,
-                    busy: stats.providers.filter(provider => provider.status === 'busy').length,
-                    offline: stats.providers.filter(provider => provider.status === 'offline').length
-                }
-            };
-        } catch (error) {
-            logger.error('Failed to get database statistics:', error);
-            throw error;
-        }
-    }
-    
-    /**
-     * Close the database connection and clean up subscriptions
+     * Disconnect and clean up.
      */
     async disconnect() {
         logger.info('Disconnecting from database...');
-        
-        if (this.pb) {
-            // Unsubscribe from all collections
-            for (const [collection, subscription] of this.subscriptions.entries()) {
-                try {
-                    this.pb.collection(collection).unsubscribe();
-                    logger.debug(`Unsubscribed from ${collection} collection`);
-                } catch (error) {
-                    logger.error(`Failed to unsubscribe from ${collection} collection:`, error);
-                }
+        if (this.supabase) {
+            try {
+                // Close any open realtime channels, if any were opened by callers.
+                await this.supabase.removeAllChannels();
+            } catch (err) {
+                logger.warn('Error while removing realtime channels:', err);
             }
-            
-            this.subscriptions.clear();
-            this.isConnected = false;
-            
-            // Stop embedded PocketBase server if it was started
-            if (config.pocketbase.useEmbedded) {
-                await pocketbaseService.stop();
-            }
-            
-            this.emit('disconnected');
-            logger.info('Database connection closed');
         }
+        this.supabase = null;
+        this.isConnected = false;
+        this.models = {};
+        this.emit('disconnected');
+        logger.info('Database connection closed');
     }
 }
 
-// Create a singleton instance
+// Singleton instance — callers share one Supabase client.
 const db = new Database();
 
 export default db;

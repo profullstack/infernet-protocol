@@ -11,12 +11,12 @@ import { MessageTypes, createMessage, parseMessage } from './protocol.js';
 export class InferenceWorker {
   /**
    * Create a new inference worker
-   * 
-   * @param {Object} pb - PocketBase instance
+   *
+   * @param {SupabaseClient} supabase - Supabase client instance
    * @param {Object} config - Configuration options
    */
-  constructor(pb, config = {}) {
-    this.pb = pb;
+  constructor(supabase, config = {}) {
+    this.supabase = supabase;
     this.config = {
       coordinatorUrl: null,
       reconnectInterval: 5000, // 5 seconds

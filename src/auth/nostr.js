@@ -65,32 +65,41 @@ export const createAuthChallenge = (serverPublicKey) => {
   };
 };
 
-// Verify a Nostr public key with PocketBase
-export const verifyNostrAuth = async (pb, publicKey, signedEvent) => {
+// Verify a Nostr public key against the Supabase `users` table
+export const verifyNostrAuth = async (supabase, publicKey, signedEvent) => {
   try {
-    // Call PocketBase auth endpoint with the Nostr data
-    const authData = await pb.collection('users').authWithNostr({
-      publicKey,
-      signedEvent,
-    });
-    
-    return { success: true, authData };
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('nostr_public_key', publicKey)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) {
+      return { success: false, error: 'Unknown Nostr public key' };
+    }
+
+    // Signature verification should be performed by the caller (e.g. a Next.js
+    // route handler) before this function is invoked — this helper only
+    // resolves the Nostr pubkey to a Supabase user row.
+    return { success: true, authData: { user: data, signedEvent } };
   } catch (error) {
-    console.error('Error verifying Nostr auth with PocketBase:', error);
+    console.error('Error verifying Nostr auth with Supabase:', error);
     return { success: false, error: error.message || 'Authentication failed' };
   }
 };
 
-// Register a new user with Nostr public key
-export const registerWithNostr = async (pb, publicKey, userData) => {
+// Register a new user with a Nostr public key
+export const registerWithNostr = async (supabase, publicKey, userData) => {
   try {
-    // Create a new user with the Nostr public key
-    const user = await pb.collection('users').create({
-      nostrPublicKey: publicKey,
-      ...userData,
-    });
-    
-    return { success: true, user };
+    const { data, error } = await supabase
+      .from('users')
+      .insert({ nostr_public_key: publicKey, ...userData })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { success: true, user: data };
   } catch (error) {
     console.error('Error registering with Nostr:', error);
     return { success: false, error: error.message || 'Registration failed' };

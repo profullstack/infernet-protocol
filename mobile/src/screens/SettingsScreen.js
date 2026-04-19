@@ -5,48 +5,48 @@ import * as SecureStore from 'expo-secure-store';
 
 const SettingsScreen = () => {
   const { user, logout } = useAuth();
-  
-  // PocketBase settings
-  const [pocketBaseUrl, setPocketBaseUrl] = useState('');
+
+  // Supabase settings
+  const [supabaseUrl, setSupabaseUrl] = useState('');
   const [isConnected, setIsConnected] = useState(false);
-  
+
   // App settings
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
-  
+
   // Payment settings
   const [paymentAddress, setPaymentAddress] = useState('');
-  
+
   useEffect(() => {
     loadSettings();
   }, []);
-  
+
   const loadSettings = async () => {
     try {
-      // Load PocketBase settings
-      const storedPocketBaseUrl = await SecureStore.getItemAsync('pocketBaseUrl');
-      if (storedPocketBaseUrl) {
-        setPocketBaseUrl(storedPocketBaseUrl);
+      // Load Supabase settings
+      const storedSupabaseUrl = await SecureStore.getItemAsync('supabaseUrl');
+      if (storedSupabaseUrl) {
+        setSupabaseUrl(storedSupabaseUrl);
         setIsConnected(true);
       }
-      
+
       // Load app settings
       const notificationsEnabledValue = await SecureStore.getItemAsync('notificationsEnabled');
       if (notificationsEnabledValue !== null) {
         setNotificationsEnabled(notificationsEnabledValue === 'true');
       }
-      
+
       const darkModeEnabledValue = await SecureStore.getItemAsync('darkModeEnabled');
       if (darkModeEnabledValue !== null) {
         setDarkModeEnabled(darkModeEnabledValue === 'true');
       }
-      
+
       const autoRefreshEnabledValue = await SecureStore.getItemAsync('autoRefreshEnabled');
       if (autoRefreshEnabledValue !== null) {
         setAutoRefreshEnabled(autoRefreshEnabledValue === 'true');
       }
-      
+
       // Load payment settings
       const storedPaymentAddress = await SecureStore.getItemAsync('paymentAddress');
       if (storedPaymentAddress) {
@@ -56,80 +56,80 @@ const SettingsScreen = () => {
       console.error('Error loading settings:', error);
     }
   };
-  
+
   const saveSettings = async () => {
     try {
-      // Save PocketBase settings
-      await SecureStore.setItemAsync('pocketBaseUrl', pocketBaseUrl);
-      
+      // Save Supabase settings
+      await SecureStore.setItemAsync('supabaseUrl', supabaseUrl);
+
       // Save app settings
       await SecureStore.setItemAsync('notificationsEnabled', notificationsEnabled.toString());
       await SecureStore.setItemAsync('darkModeEnabled', darkModeEnabled.toString());
       await SecureStore.setItemAsync('autoRefreshEnabled', autoRefreshEnabled.toString());
-      
+
       // Save payment settings
       await SecureStore.setItemAsync('paymentAddress', paymentAddress);
-      
+
       Alert.alert('Success', 'Settings saved successfully');
     } catch (error) {
       console.error('Error saving settings:', error);
       Alert.alert('Error', 'Failed to save settings');
     }
   };
-  
-  const connectToPocketBase = async () => {
+
+  const connectToSupabase = async () => {
     try {
-      // In a real app, this would attempt to connect to the PocketBase instance
+      // In a real app, this would attempt to connect to the Supabase instance
       // For demo purposes, we'll just simulate a connection
-      if (!pocketBaseUrl) {
-        Alert.alert('Error', 'Please enter a valid PocketBase URL');
+      if (!supabaseUrl) {
+        Alert.alert('Error', 'Please enter a valid Supabase URL');
         return;
       }
-      
+
       // Simulate connection attempt
-      Alert.alert('Connecting', 'Attempting to connect to PocketBase...');
-      
+      Alert.alert('Connecting', 'Attempting to connect to Supabase...');
+
       // Simulate API call delay
       await new Promise(resolve => setTimeout(resolve, 1500));
-      
+
       // Simulate successful connection
       setIsConnected(true);
-      await SecureStore.setItemAsync('pocketBaseUrl', pocketBaseUrl);
-      
-      Alert.alert('Success', 'Connected to PocketBase successfully');
+      await SecureStore.setItemAsync('supabaseUrl', supabaseUrl);
+
+      Alert.alert('Success', 'Connected to Supabase successfully');
     } catch (error) {
-      console.error('Error connecting to PocketBase:', error);
-      Alert.alert('Error', 'Failed to connect to PocketBase');
+      console.error('Error connecting to Supabase:', error);
+      Alert.alert('Error', 'Failed to connect to Supabase');
     }
   };
-  
-  const disconnectFromPocketBase = async () => {
+
+  const disconnectFromSupabase = async () => {
     try {
-      // In a real app, this would close the connection to the PocketBase instance
+      // In a real app, this would close the connection to the Supabase instance
       // For demo purposes, we'll just simulate disconnection
-      
+
       // Simulate API call delay
       await new Promise(resolve => setTimeout(resolve, 500));
-      
+
       // Simulate successful disconnection
       setIsConnected(false);
-      await SecureStore.deleteItemAsync('pocketBaseUrl');
-      
-      Alert.alert('Success', 'Disconnected from PocketBase');
+      await SecureStore.deleteItemAsync('supabaseUrl');
+
+      Alert.alert('Success', 'Disconnected from Supabase');
     } catch (error) {
-      console.error('Error disconnecting from PocketBase:', error);
-      Alert.alert('Error', 'Failed to disconnect from PocketBase');
+      console.error('Error disconnecting from Supabase:', error);
+      Alert.alert('Error', 'Failed to disconnect from Supabase');
     }
   };
-  
+
   const handleLogout = async () => {
     Alert.alert(
       'Confirm Logout',
       'Are you sure you want to log out?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Log Out', 
+        {
+          text: 'Log Out',
           style: 'destructive',
           onPress: async () => {
             await logout();
@@ -138,7 +138,7 @@ const SettingsScreen = () => {
       ]
     );
   };
-  
+
   // Render a settings section
   const SettingsSection = ({ title, children }) => (
     <View style={styles.section}>
@@ -148,7 +148,7 @@ const SettingsScreen = () => {
       </View>
     </View>
   );
-  
+
   // Render a toggle setting
   const ToggleSetting = ({ title, value, onValueChange, description }) => (
     <View style={styles.settingRow}>
@@ -164,13 +164,13 @@ const SettingsScreen = () => {
       />
     </View>
   );
-  
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Settings</Text>
       </View>
-      
+
       <ScrollView style={styles.content}>
         {/* Account Section */}
         <SettingsSection title="Account">
@@ -178,49 +178,49 @@ const SettingsScreen = () => {
             <Text style={styles.accountName}>{user?.name || 'User'}</Text>
             <Text style={styles.accountEmail}>{user?.email || 'user@example.com'}</Text>
           </View>
-          
+
           <TouchableOpacity style={styles.button} onPress={handleLogout}>
             <Text style={styles.buttonText}>Log Out</Text>
           </TouchableOpacity>
         </SettingsSection>
-        
-        {/* PocketBase Connection Section */}
-        <SettingsSection title="PocketBase Connection">
+
+        {/* Supabase Connection Section */}
+        <SettingsSection title="Supabase Connection">
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>PocketBase URL</Text>
+            <Text style={styles.inputLabel}>Supabase URL</Text>
             <TextInput
               style={styles.input}
-              placeholder="http://localhost:8090"
-              value={pocketBaseUrl}
-              onChangeText={setPocketBaseUrl}
+              placeholder="https://your-project.supabase.co"
+              value={supabaseUrl}
+              onChangeText={setSupabaseUrl}
               editable={!isConnected}
             />
           </View>
-          
+
           {isConnected ? (
             <View>
               <View style={styles.connectionStatus}>
                 <View style={styles.statusIndicator} />
-                <Text style={styles.connectionStatusText}>Connected to PocketBase</Text>
+                <Text style={styles.connectionStatusText}>Connected to Supabase</Text>
               </View>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={[styles.button, styles.disconnectButton]}
-                onPress={disconnectFromPocketBase}
+                onPress={disconnectFromSupabase}
               >
                 <Text style={styles.buttonText}>Disconnect</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.button}
-              onPress={connectToPocketBase}
+              onPress={connectToSupabase}
             >
               <Text style={styles.buttonText}>Connect</Text>
             </TouchableOpacity>
           )}
         </SettingsSection>
-        
+
         {/* App Settings Section */}
         <SettingsSection title="App Settings">
           <ToggleSetting
@@ -229,14 +229,14 @@ const SettingsScreen = () => {
             onValueChange={setNotificationsEnabled}
             description="Receive notifications for job status updates"
           />
-          
+
           <ToggleSetting
             title="Dark Mode"
             value={darkModeEnabled}
             onValueChange={setDarkModeEnabled}
             description="Enable dark theme for the app"
           />
-          
+
           <ToggleSetting
             title="Auto Refresh"
             value={autoRefreshEnabled}
@@ -244,7 +244,7 @@ const SettingsScreen = () => {
             description="Automatically refresh job and provider data"
           />
         </SettingsSection>
-        
+
         {/* Payment Settings Section */}
         <SettingsSection title="Payment Settings">
           <View style={styles.inputContainer}>
@@ -260,12 +260,12 @@ const SettingsScreen = () => {
             </Text>
           </View>
         </SettingsSection>
-        
+
         {/* Save Button */}
         <TouchableOpacity style={styles.saveButton} onPress={saveSettings}>
           <Text style={styles.saveButtonText}>Save Settings</Text>
         </TouchableOpacity>
-        
+
         {/* App Info */}
         <View style={styles.appInfo}>
           <Text style={styles.appVersion}>Infernet Protocol v0.1.0</Text>

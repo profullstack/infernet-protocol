@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import pocketbase, { availableNodes } from '../lib/pocketbase.js';
+import supabaseService, { availableNodes } from '../lib/supabase';
 
 // Create the context
 const NodeContext = createContext();
@@ -17,43 +17,44 @@ export const NodeProvider = ({ children }) => {
   const [connectionError, setConnectionError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Subscribe to availableNodes store from PocketBase
+  // Subscribe to the availableNodes store backed by Supabase Realtime.
   useEffect(() => {
     const unsubscribe = availableNodes.subscribe(($nodes) => {
       setNodes($nodes);
-      setLocalNodes($nodes.filter(node => node.source === 'local'));
-      setRemoteNodes($nodes.filter(node => node.source === 'remote'));
-      setActiveNodes($nodes.filter(node => 
-        node.status === 'active' || node.status === 'available'
-      ));
+      setLocalNodes($nodes.filter((node) => node.source === 'local'));
+      setRemoteNodes($nodes.filter((node) => node.source === 'remote'));
+      setActiveNodes(
+        $nodes.filter((node) => node.status === 'active' || node.status === 'available'),
+      );
     });
 
-    // Initialize connection to PocketBase
-    connectToPocketBase();
+    // Initialize connection to the backend.
+    connectToBackend();
 
-    // Clean up subscription
+    // Clean up subscription and disconnect on unmount.
     return () => {
       unsubscribe();
-      disconnectFromPocketBase();
+      disconnectFromBackend();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Connect to PocketBase
-  const connectToPocketBase = async (url = 'http://127.0.0.1:8090') => {
+  // Connect to the Supabase backend.
+  const connectToBackend = async (url) => {
     try {
       setIsLoading(true);
       setConnectionError(null);
-      
-      const success = await pocketbase.init(url);
+
+      const success = await supabaseService.init(url);
       setIsConnected(success);
-      
+
       if (success) {
         await refreshNodes();
       }
-      
+
       return success;
     } catch (error) {
-      console.error('Failed to connect to PocketBase:', error);
+      console.error('Failed to connect to backend:', error);
       setConnectionError(error.message);
       return false;
     } finally {
@@ -61,17 +62,17 @@ export const NodeProvider = ({ children }) => {
     }
   };
 
-  // Disconnect from PocketBase
-  const disconnectFromPocketBase = () => {
-    pocketbase.disconnect();
+  // Disconnect from the Supabase backend.
+  const disconnectFromBackend = () => {
+    supabaseService.disconnect();
     setIsConnected(false);
   };
 
-  // Refresh nodes list
+  // Refresh nodes list.
   const refreshNodes = async () => {
     try {
       setIsLoading(true);
-      await pocketbase.fetchNodes();
+      await supabaseService.fetchNodes();
       return true;
     } catch (error) {
       console.error('Failed to refresh nodes:', error);
@@ -81,11 +82,11 @@ export const NodeProvider = ({ children }) => {
     }
   };
 
-  // Submit a job to the network
+  // Submit a job to the network.
   const submitJob = async (jobData) => {
     try {
       setIsLoading(true);
-      return await pocketbase.submitJob(jobData);
+      return await supabaseService.submitJob(jobData);
     } catch (error) {
       console.error('Failed to submit job:', error);
       throw error;
@@ -94,21 +95,21 @@ export const NodeProvider = ({ children }) => {
     }
   };
 
-  // Get job status
+  // Get job status.
   const getJobStatus = async (jobId) => {
     try {
-      return await pocketbase.getJobStatus(jobId);
+      return await supabaseService.getJobStatus(jobId);
     } catch (error) {
       console.error('Failed to get job status:', error);
       throw error;
     }
   };
 
-  // Get user jobs
+  // Get user jobs.
   const getUserJobs = async (userId) => {
     try {
       setIsLoading(true);
-      return await pocketbase.getUserJobs(userId);
+      return await supabaseService.getUserJobs(userId);
     } catch (error) {
       console.error('Failed to get user jobs:', error);
       throw error;
@@ -127,12 +128,12 @@ export const NodeProvider = ({ children }) => {
         isConnected,
         connectionError,
         isLoading,
-        connectToPocketBase,
-        disconnectFromPocketBase,
+        connectToBackend,
+        disconnectFromBackend,
         refreshNodes,
         submitJob,
         getJobStatus,
-        getUserJobs
+        getUserJobs,
       }}
     >
       {children}

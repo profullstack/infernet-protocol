@@ -11,12 +11,12 @@ const ProvidersScreen = ({ navigation }) => {
     fetchProviders();
   }, []);
 
-  // Simulate fetching providers from PocketBase
+  // Simulate fetching providers from Supabase
   const fetchProviders = async () => {
     setLoading(true);
-    
+
     try {
-      // In a real app, this would be a call to PocketBase
+      // In a real app, this would be a call to Supabase
       // For demo, we'll simulate an API call delay
       await new Promise(resolve => setTimeout(resolve, 1000));
       

@@ -66,14 +66,14 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check if user is logged in and initialize PocketBase
+  // Check if user is logged in and initialize Supabase
   useEffect(() => {
     const initApp = async () => {
       try {
         // In a real app, check for stored credentials
         // For demo purposes, we'll just simulate a loading state
-        
-        // We'll initialize PocketBase in the NodeProvider
+
+        // We'll initialize Supabase in the NodeProvider
         // This will happen automatically when the provider mounts
         
         // For demo purposes, let's assume user is not logged in initially

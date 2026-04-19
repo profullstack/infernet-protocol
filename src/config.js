@@ -7,14 +7,11 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export default {
-    // PocketBase configuration
-    pocketbase: {
-        url: process.env.POCKETBASE_URL || 'http://127.0.0.1:8090',
-        adminEmail: process.env.POCKETBASE_ADMIN_EMAIL,
-        adminPassword: process.env.POCKETBASE_ADMIN_PASSWORD,
-        dataDir: process.env.POCKETBASE_DATA_DIR || './pb_data',
-        useEmbedded: process.env.USE_EMBEDDED_POCKETBASE === 'true' || false,
-        autoStart: process.env.POCKETBASE_AUTO_START === 'true' || false
+    // Supabase configuration (self-hosted via `supabase start` or cloud)
+    supabase: {
+        url: process.env.SUPABASE_URL || 'http://127.0.0.1:54321',
+        serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+        schema: process.env.SUPABASE_SCHEMA || 'public'
     },
     
     // Server configuration

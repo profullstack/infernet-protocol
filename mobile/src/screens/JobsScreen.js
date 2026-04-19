@@ -13,12 +13,12 @@ const JobsScreen = ({ navigation }) => {
     fetchJobs();
   }, []);
 
-  // Simulate fetching jobs from PocketBase
+  // Simulate fetching jobs from Supabase
   const fetchJobs = async () => {
     setLoading(true);
-    
+
     try {
-      // In a real app, this would be a call to PocketBase
+      // In a real app, this would be a call to Supabase
       // For demo, we'll simulate an API call delay
       await new Promise(resolve => setTimeout(resolve, 1000));
       

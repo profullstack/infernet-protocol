@@ -27,14 +27,25 @@ A decentralized GPU inference marketplace. Rent a GPU anywhere, run one `docker`
 - **Multi-coin payments** via CoinPayPortal — BTC, BCH, ETH, SOL, POL, BNB, XRP, ADA, DOGE, plus USDT/USDC on ETH/Polygon/Solana/Base.
 - **GPU auto-detect** — nvidia-smi, rocm-smi, Apple Silicon; stashed in `providers.specs.gpus` for control-plane job matching.
 
+## Security & anonymity model
+
+Design goals: a GPU node should be able to run as an unprivileged user, leak as little as possible about its host, and never hold a credential that could compromise the rest of the network.
+
+- **No database credential on nodes.** The CLI holds a Nostr (secp256k1 / BIP-340 Schnorr) keypair and nothing else. The control plane is the only thing that talks to Supabase; nodes talk to the control plane over `/api/v1/node/*` with a signed envelope on every request.
+- **Signed-request envelope.** Each call carries `X-Infernet-Auth: base64url({ v, pubkey, created_at, nonce, sig })` where `sig` is a Schnorr signature over `METHOD + path + created_at + nonce + sha256(body)`. 60-second replay window, per-process nonce cache, pubkey must match `public_key` on the target row.
+- **Minimized telemetry.** Heartbeats carry only coarse GPU capability: `{ vendor, vram_tier, model }` per GPU. Hostname, platform, arch, CPU model, RAM total are discarded both client-side and at the server sanitizer.
+- **Outbound-only mode.** Pass `--no-advertise` to `init` / `register` / `start` and the node never publishes an IP or port; it only pulls work via signed polls. Pairs naturally with Tor or a NAT.
+- **Unprivileged install.** Config lives at `~/.config/infernet/config.json` (mode 0600). No `/etc`, no `/var`, no sudo, no privileged ports (default P2P port 46337, override with `--p2p-port`).
+- **Auto-migration.** Legacy configs that still carry `supabase.serviceRoleKey` are stripped silently on load — the field never gets re-saved to disk.
+
 ## Deployment modes
 
 The control plane runs one of two ways:
 
 1. **Self-hosted** — run Supabase yourself via the Supabase CLI (`supabase start`). Best for privacy and offline development.
-2. **Infernet cloud** — point the CLI at our hosted Supabase project. Rent a GPU anywhere, `infernet init`, start earning.
+2. **Infernet cloud** — point the CLI at the hosted control plane at `https://infernet.tech`. Rent a GPU anywhere, `infernet init`, start earning.
 
-Operators can run **many GPU nodes against the same Supabase project** — they all show up in the same dashboard.
+Operators can point **many GPU nodes at the same control plane** — each node has its own Nostr identity and shows up as its own row in the dashboard.
 
 ---
 
@@ -166,7 +177,7 @@ Node lifecycle:
 Daemon:
   start         Start daemon (detached; --foreground for supervisors)
   stop          Stop daemon (graceful via IPC, signal fallback)
-  status        Supabase row + live daemon snapshot
+  status        Control-plane row + live daemon snapshot
   stats         Live in-memory daemon stats via IPC
   logs          Show / tail the daemon log (-f for follow)
 
@@ -183,7 +194,7 @@ Payments:
 
 `infernet start` detaches into the background (logs at `~/.config/infernet/daemon.log`) and exposes a **Unix-domain IPC socket** at `~/.config/infernet/daemon.sock`. The other CLI commands use that socket for live queries:
 
-- `infernet status` merges Supabase state with the daemon's in-memory snapshot.
+- `infernet status` fetches this node's row from the control plane (signed POST `/api/v1/node/me`) and merges it with the daemon's in-memory snapshot.
 - `infernet stats` shows heartbeat counts, poll counts, active jobs, uptime, P2P connections.
 - `infernet stop` sends a graceful shutdown command; falls back to SIGTERM via the PID file.
 - `infernet logs -f` tails the log file.
@@ -192,7 +203,7 @@ Use `infernet start --foreground` under systemd / Docker / Kubernetes when a sup
 
 ### P2P port
 
-Each provider/aggregator node binds TCP **46337** (dual-stack) for peer communication. Change with `--p2p-port`, or disable with `--no-p2p`. The node advertises its `address:port` to Supabase on every heartbeat so other nodes (and the dashboard) can discover it.
+Each provider/aggregator node binds TCP **46337** (dual-stack) for peer communication. Change with `--p2p-port`, or disable with `--no-p2p`. The node advertises its `address:port` to the control plane on every signed heartbeat so other nodes can discover it — unless it was started with `--no-advertise`, in which case nothing is published and the node operates outbound-only.
 
 Need to open the port on your firewall? `infernet firewall` prints the exact commands for ufw / firewalld / nftables / iptables (Linux), pf (macOS), or netsh (Windows). We never touch firewall state automatically.
 
@@ -205,7 +216,7 @@ The CLI auto-detects GPUs on `init`, `register`, `update`, and daemon heartbeat:
 - **Apple Silicon** via `system_profiler` — model, unified memory.
 - Falls back to CPU-only if no GPU tooling is installed.
 
-Detected GPUs land in `providers.specs.gpus` (jsonb), which powers job matching on the control plane (e.g. "find me a provider with ≥80GB VRAM and CUDA 12.4").
+Detected GPUs feed the coarse capability payload that lands in `providers.specs.gpus` (jsonb): `{ vendor, vram_tier, model }` per card, plus `gpu_count`. Enough to route jobs (e.g. "find me a provider in the 24-48gb tier") without broadcasting the machine's full fingerprint.
 
 ---
 
@@ -249,8 +260,8 @@ apps/
 
 packages/
   config/                Payment-coin list + canonical deposit addresses
-  auth/                  Nostr auth helpers
-  db/                    Supabase-backed model layer
+  auth/                  Nostr identity + signed-request envelope (BIP-340)
+  db/                    Supabase-backed model layer (server-side only)
   gpu/                   GPU detection (NVIDIA / AMD / Apple Silicon)
   inference/             Distributed inference coordinator / worker
   payments/              CoinPayPortal gateway
@@ -299,7 +310,7 @@ POST  /api/v1/node/payments/list           List payment_transactions for this no
 POST  /api/v1/node/payouts/{list,set}      Manage provider_payouts rows
 ```
 
-All server-only. The Supabase service-role client is never imported into browser bundles. OpenAPI 3.1 spec ships as [`@infernetprotocol/api-schema`](./packages/api-schema) (raw YAML at `packages/api-schema/openapi.yaml`).
+Web/mobile routes are server-only — the Supabase service-role client is never imported into browser bundles. The `/api/v1/node/*` routes are the only ones nodes ever touch, and they verify a Nostr signature before any DB write. OpenAPI 3.1 spec ships as [`@infernetprotocol/api-schema`](./packages/api-schema) (raw YAML at `packages/api-schema/openapi.yaml`).
 
 ## Developer surfaces
 
@@ -317,7 +328,7 @@ Tag a `v*.*.*` and [`.github/workflows/release.yml`](./.github/workflows/release
 
 ## One-click GPU deploy
 
-The `/deploy` page (backed by `POST /api/deploy/runpod`) spins up an Infernet provider node on RunPod using a user-supplied API key. The server proxies the RunPod API call and immediately drops the key — nothing is persisted. The pod boots the `infernet-provider` image, registers with the supplied Supabase control plane, and starts heartbeating.
+The `/deploy` page (backed by `POST /api/deploy/runpod`) spins up an Infernet provider node on RunPod using a user-supplied API key. The server proxies the RunPod API call and immediately drops the key — nothing is persisted. The pod boots the `infernet-provider` image, generates a Nostr keypair, registers itself with the control plane over a signed request, and starts heartbeating.
 
 ---
 

@@ -28,7 +28,9 @@ RUN pnpm install --frozen-lockfile --filter @infernetprotocol/cli...
 
 # `pnpm deploy` materializes the workspace deps into a single self-contained
 # tree under /out so the runtime image doesn't need pnpm or workspace plumbing.
-RUN pnpm --filter @infernetprotocol/cli deploy --prod /out
+# --legacy is required in pnpm v10 for workspaces that don't set
+# inject-workspace-packages=true (which we don't).
+RUN pnpm --filter @infernetprotocol/cli deploy --legacy --prod /out
 
 # ---------------------------------------------------------------------------
 # Runtime stage — minimal.

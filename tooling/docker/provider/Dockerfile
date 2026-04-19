@@ -1,6 +1,8 @@
-# Infernet provider image — pre-built Docker image that launches the
-# `infernet` CLI in --foreground mode, ready to accept jobs from a
-# remote Supabase control plane.
+# Infernet provider image — boots the `infernet` CLI as a provider node.
+#
+# Built directly from the git checkout via pnpm deploy — no npm registry
+# dependency. The release pipeline (.github/workflows/release.yml) uses
+# the repo root as the build context so workspace dependencies resolve.
 #
 # Required env at runtime:
 #   SUPABASE_URL
@@ -8,9 +10,29 @@
 #   INFERNET_NODE_NAME               (defaults to hostname)
 #   INFERNET_NODE_ROLE               (defaults to 'provider')
 #   INFERNET_P2P_PORT                (defaults to 46337)
-#
-# Published to ghcr.io/profullstack/infernet-provider:<tag>.
 
+# ---------------------------------------------------------------------------
+# Build stage — install workspace deps + produce a self-contained CLI deploy.
+# ---------------------------------------------------------------------------
+FROM node:20-slim AS builder
+
+RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
+
+WORKDIR /build
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY packages ./packages
+COPY apps/cli ./apps/cli
+
+# Install only the dep cone the CLI needs.
+RUN pnpm install --frozen-lockfile --filter @infernetprotocol/cli...
+
+# `pnpm deploy` materializes the workspace deps into a single self-contained
+# tree under /out so the runtime image doesn't need pnpm or workspace plumbing.
+RUN pnpm --filter @infernetprotocol/cli deploy --prod /out
+
+# ---------------------------------------------------------------------------
+# Runtime stage — minimal.
+# ---------------------------------------------------------------------------
 FROM node:20-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -19,15 +41,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tini \
     && rm -rf /var/lib/apt/lists/*
 
-# Pre-install the CLI from npm. The RunPod pod template and similar
-# template-based services will pull this image and run it; keeping
-# the install bake-time keeps cold-start latency low.
-ARG INFERNET_CLI_VERSION=latest
-RUN npm install -g "@infernetprotocol/cli@${INFERNET_CLI_VERSION}"
+COPY --from=builder /out /app
+RUN chmod +x /app/index.js && ln -s /app/index.js /usr/local/bin/infernet
 
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY tooling/docker/provider/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 46337/tcp
-
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]

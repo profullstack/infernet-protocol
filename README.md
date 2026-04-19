@@ -98,19 +98,32 @@ pnpm dev
 
 Copy `sample.env` → `.env.local` and fill in `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and the CoinPayPortal keys.
 
-### 2. Each GPU server
+### 2. Each GPU server (Docker — the supported install path today)
 
 ```bash
-pnpm install -g .        # or: pnpm link --global from the repo
-infernet init            # prompts for Supabase URL/key, role, P2P port, identity
-infernet gpu list        # confirm your GPUs were detected
-infernet register        # announce this node to the control plane
-infernet start           # daemon: heartbeat + job poll + P2P listener (detaches by default)
-infernet status          # combined Supabase row + live daemon snapshot
-infernet stats           # live in-memory counters via IPC
-infernet logs -f         # tail ~/.config/infernet/daemon.log
-infernet firewall        # prints ufw/firewalld/iptables commands for the P2P port
+docker run --rm -it \
+  --gpus all \
+  -p 46337:46337 \
+  -e SUPABASE_URL=https://<your-project>.supabase.co \
+  -e SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key> \
+  -e INFERNET_NODE_NAME=edge-01 \
+  ghcr.io/profullstack/infernet-provider:latest
 ```
+
+Multi-arch (`linux/amd64` + `linux/arm64`). The image calls `infernet init` → `infernet register` → `infernet start --foreground` internally, so one command boots a provider and starts accepting jobs.
+
+#### Running the CLI directly
+
+If you cloned the repo:
+
+```bash
+pnpm install
+pnpm --filter @infernetprotocol/cli start -- help     # any subcommand
+```
+
+Full CLI surface: `init`, `login`, `register`, `update`, `remove`, `start`, `stop`, `status`, `stats`, `logs`, `payout`, `payments`, `gpu`, `firewall`. Config lives at `~/.config/infernet/config.json`.
+
+npm install (`npm i -g @infernetprotocol/cli`) and Homebrew (`brew install infernet`) are on the roadmap.
 
 `infernet init` walks through:
 
@@ -250,11 +263,9 @@ All server-only. The Supabase service-role client is never imported into browser
 
 ## Distribution
 
-- **npm** — every public `@infernetprotocol/*` workspace package (CLI, SDK, deploy-providers, api-schema, payments, config, db, gpu, auth, logger, inference) is published on tag push.
-- **Docker** ([tooling/docker/provider](./tooling/docker/provider)) — `ghcr.io/profullstack/infernet-provider:<version>` / `:latest` / `:edge` images. Basis for the one-click deploy flow.
-- **Homebrew** ([tooling/dist/homebrew](./tooling/dist/homebrew)) — formula + updater script. On release, the generated `infernet.rb` is attached to the GitHub Release; sync into the `profullstack/homebrew-infernet` tap.
-
-The full release pipeline lives at [`.github/workflows/release.yml`](./.github/workflows/release.yml) — tag a `v*.*.*` and it publishes npm, builds + pushes the Docker image, and generates the Homebrew formula. See [docs/RELEASING.md](./docs/RELEASING.md) for secrets setup + rollback notes.
+- **Docker** ([tooling/docker/provider](./tooling/docker/provider)) — `ghcr.io/profullstack/infernet-provider:<version>` + `:latest`, multi-arch. The only supported install path today — tag a `v*.*.*` and `.github/workflows/release.yml` builds + pushes.
+- **npm** — `@infernetprotocol/*` packages are wired up (all 11 publishable) but **not shipping yet**. Scaffolding under [packages/](./packages) + [apps/cli](./apps/cli); re-enable publishing in release.yml once the npm account dance is sorted.
+- **Homebrew** ([tooling/dist/homebrew](./tooling/dist/homebrew)) — formula + updater script scaffolded, also waiting on npm (the formula currently installs via npm tarball).
 
 ## One-click GPU deploy
 

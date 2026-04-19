@@ -6,9 +6,8 @@ on:
       - 'v*.*.*'
 
 permissions:
-  contents: write      # upload release assets (Homebrew formula)
+  contents: write      # create GitHub Release + attach assets
   packages: write      # push Docker images to ghcr.io
-  id-token: write      # npm provenance
 
 concurrency:
   group: release-${{ github.ref }}
@@ -16,73 +15,21 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # npm — bump every publishable @infernetprotocol/* workspace package to the tag's
-  # version and publish to npmjs.org with provenance. Internal workspace:*
-  # deps are rewritten to the concrete version by `pnpm publish`.
+  # Docker — build ghcr.io/<owner>/infernet-provider:<version> + :latest
+  # directly from the git checkout (no npm registry needed). Multi-arch.
   # ---------------------------------------------------------------------------
-  npm:
+  docker:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.6.5
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          registry-url: https://registry.npmjs.org
-
       - name: Extract version from tag
         id: version
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Releasing version $VERSION"
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Stamp workspace versions
-        run: |
-          pnpm -r --workspace-concurrency=1 \
-            exec npm version "${{ steps.version.outputs.version }}" \
-            --no-git-tag-version --allow-same-version
-
-      - name: Publish public @infernetprotocol/* packages
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true
-        run: |
-          pnpm publish \
-            --filter "@infernetprotocol/cli" \
-            --filter "@infernetprotocol/sdk" \
-            --filter "@infernetprotocol/api-schema" \
-            --filter "@infernetprotocol/deploy-providers" \
-            --filter "@infernetprotocol/auth" \
-            --filter "@infernetprotocol/config" \
-            --filter "@infernetprotocol/db" \
-            --filter "@infernetprotocol/gpu" \
-            --filter "@infernetprotocol/inference" \
-            --filter "@infernetprotocol/logger" \
-            --filter "@infernetprotocol/payments" \
-            --access public \
-            --no-git-checks \
-            --tag latest
-
-  # ---------------------------------------------------------------------------
-  # Docker — build the ghcr.io/<org>/infernet-provider image with the tag
-  # version and :latest, pinning INFERNET_CLI_VERSION to the npm version
-  # we just published.
-  # ---------------------------------------------------------------------------
-  docker:
-    runs-on: ubuntu-latest
-    needs: npm
-    steps:
-      - uses: actions/checkout@v4
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
@@ -94,77 +41,52 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Wait for npm package to be resolvable
-        # Publishes take a few seconds to appear on the CDN. Poll until we
-        # can resolve the version we just shipped.
-        run: |
-          set -e
-          for i in $(seq 1 30); do
-            if npm view "@infernetprotocol/cli@${{ needs.npm.outputs.version }}" version >/dev/null 2>&1; then
-              echo "npm: version ${{ needs.npm.outputs.version }} is live"
-              exit 0
-            fi
-            echo "waiting for @infernetprotocol/cli@${{ needs.npm.outputs.version }} on npm... ($i/30)"
-            sleep 5
-          done
-          echo "timed out waiting for npm propagation"
-          exit 1
-
       - name: Build and push provider image
         uses: docker/build-push-action@v5
         with:
-          context: tooling/docker/provider
+          context: .
           file: tooling/docker/provider/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          build-args: |
-            INFERNET_CLI_VERSION=${{ needs.npm.outputs.version }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/infernet-provider:${{ needs.npm.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/infernet-provider:${{ steps.version.outputs.version }}
             ghcr.io/${{ github.repository_owner }}/infernet-provider:latest
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ needs.npm.outputs.version }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
 
   # ---------------------------------------------------------------------------
-  # Homebrew — run update-formula.mjs against the just-published npm tarball
-  # and upload the resulting infernet.rb as a release asset. A separate
-  # workflow (or a human) can then sync it into the homebrew tap repo.
+  # GitHub Release — capture the version + Docker pull command as release notes.
   # ---------------------------------------------------------------------------
-  homebrew:
+  release:
     runs-on: ubuntu-latest
-    needs: npm
+    needs: docker
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Wait for npm package to be resolvable
-        run: |
-          set -e
-          for i in $(seq 1 30); do
-            if npm view "@infernetprotocol/cli@${{ needs.npm.outputs.version }}" version >/dev/null 2>&1; then
-              exit 0
-            fi
-            sleep 5
-          done
-          exit 1
-
-      - name: Generate pinned Homebrew formula
-        run: node tooling/dist/homebrew/update-formula.mjs "${{ needs.npm.outputs.version }}"
-
-      - name: Attach formula to GitHub Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: tooling/dist/homebrew/infernet.rb
-          fail_on_unmatched_files: true
+          tag_name: v${{ needs.docker.outputs.version }}
+          name: Infernet v${{ needs.docker.outputs.version }}
           body: |
-            ## Infernet ${{ needs.npm.outputs.version }}
+            ## Infernet v${{ needs.docker.outputs.version }}
 
-            Published artifacts:
-            - npm: `@infernetprotocol/cli@${{ needs.npm.outputs.version }}` + the rest of the `@infernetprotocol/*` workspace packages
-            - Docker: `ghcr.io/${{ github.repository_owner }}/infernet-provider:${{ needs.npm.outputs.version }}`
-            - Homebrew: `infernet.rb` attached below — copy into the `profullstack/homebrew-infernet` tap repo and push.
+            ### Run a provider node
+
+            ```bash
+            docker run --rm -it \
+              --gpus all \
+              -p 46337:46337 \
+              -e SUPABASE_URL=https://<your-project>.supabase.co \
+              -e SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key> \
+              -e INFERNET_NODE_NAME=<your-node-name> \
+              ghcr.io/${{ github.repository_owner }}/infernet-provider:${{ needs.docker.outputs.version }}
+            ```
+
+            Multi-arch: `linux/amd64` + `linux/arm64`.
+
+            ### Platforms coming soon
+
+            npm packages (`@infernetprotocol/*`) and Homebrew install (`brew install infernet`) are on the roadmap but not shipped with this release. For now, Docker is the supported install path.

@@ -1,9 +1,8 @@
 /**
  * `infernet status` — print the current state of this node.
  *
- * When the daemon is alive, we merge its live IPC snapshot with the
- * persisted Supabase row. When it isn't, we fall back to the Supabase row
- * alone so operators can still see how the control plane sees this node.
+ * Fetches the server-side row via signed POST to /api/v1/node/me and
+ * merges it with the live daemon IPC snapshot when the daemon is running.
  */
 
 import { isDaemonAlive, sendToDaemon } from '../lib/ipc.js';
@@ -15,18 +14,9 @@ Usage:
   infernet status [flags]
 
 Flags:
-  --json    Print JSON combining Supabase row + live daemon snapshot
+  --json    Print JSON combining remote row + live daemon snapshot
   --help    Show this help
 `;
-
-function tableFor(role) {
-    switch (role) {
-        case 'provider':   return 'providers';
-        case 'aggregator': return 'aggregators';
-        case 'client':     return 'clients';
-        default: throw new Error(`Unknown role "${role}"`);
-    }
-}
 
 function fmtUptime(ms) {
     if (!Number.isFinite(ms) || ms < 0) return '?';
@@ -45,29 +35,22 @@ export default async function status(args, ctx) {
         return 0;
     }
 
-    const { config, supabase } = ctx;
+    const { config, client } = ctx;
     const node = config.node ?? {};
     if (!node.role || !node.nodeId) {
         process.stderr.write('Config is missing node.role/node.nodeId. Run `infernet init` first.\n');
         return 1;
     }
 
-    const table = tableFor(node.role);
-
-    const { data: row, error } = await supabase
-        .from(table).select('*').eq('node_id', node.nodeId).maybeSingle();
-    if (error) {
-        process.stderr.write(`Supabase error: ${error.message}\n`);
-        return 1;
-    }
-    if (!row) {
-        process.stderr.write(
-            `No row found in ${table} for node_id "${node.nodeId}". Run \`infernet register\`.\n`
-        );
-        return 1;
+    let row = null;
+    try {
+        const result = await client.me();
+        row = result?.row ?? null;
+    } catch (err) {
+        process.stderr.write(`Remote status lookup failed: ${err?.message ?? err}\n`);
+        // Keep going — we can still show the daemon snapshot and local config.
     }
 
-    // Best-effort daemon snapshot.
     let daemon = null;
     if (await isDaemonAlive()) {
         const res = await sendToDaemon('status', null, { timeoutMs: 2000 });
@@ -80,22 +63,26 @@ export default async function status(args, ctx) {
     }
 
     process.stdout.write(`Role:       ${node.role}\n`);
-    process.stdout.write(`Name:       ${row.name ?? node.name ?? '(unnamed)'}\n`);
-    process.stdout.write(`node_id:    ${row.node_id ?? node.nodeId}\n`);
-    process.stdout.write(`uuid:       ${row.id}\n`);
-    process.stdout.write(`Status:     ${row.status ?? '(unknown)'}${daemon ? ' (daemon running)' : ' (daemon not running)'}\n`);
-    process.stdout.write(`Last seen:  ${row.last_seen ?? '(never)'}\n`);
-    if (row.reputation !== undefined) process.stdout.write(`Reputation: ${row.reputation}\n`);
-    if (row.price !== undefined)     process.stdout.write(`Price:      ${row.price}\n`);
-    if (row.address) {
+    process.stdout.write(`Name:       ${row?.name ?? node.name ?? '(unnamed)'}\n`);
+    process.stdout.write(`node_id:    ${row?.node_id ?? node.nodeId}\n`);
+    if (row?.id) process.stdout.write(`uuid:       ${row.id}\n`);
+    process.stdout.write(
+        `Status:     ${row?.status ?? '(unknown)'}${daemon ? ' (daemon running)' : ' (daemon not running)'}\n`
+    );
+    process.stdout.write(`Last seen:  ${row?.last_seen ?? '(never)'}\n`);
+    if (row?.reputation !== undefined) process.stdout.write(`Reputation: ${row.reputation}\n`);
+    if (row?.price !== undefined)     process.stdout.write(`Price:      ${row.price}\n`);
+    if (row?.address) {
         process.stdout.write(`Endpoint:   ${formatEndpoint(row.address, row.port ?? 0)}\n`);
     }
 
-    if (row.specs && row.specs.gpus && Array.isArray(row.specs.gpus) && row.specs.gpus.length > 0) {
+    if (row?.specs?.gpus && Array.isArray(row.specs.gpus) && row.specs.gpus.length > 0) {
         process.stdout.write(`GPUs:       ${row.specs.gpus.length}\n`);
         for (const g of row.specs.gpus) {
-            const vram = g.vram_mb ? `${(g.vram_mb / 1024).toFixed(1)} GB` : 'VRAM?';
-            process.stdout.write(`  - [${g.vendor}:${g.index}] ${g.model} — ${vram}${g.cuda ? ` cuda=${g.cuda}` : ''}\n`);
+            const tier = g.vram_tier ?? 'unknown';
+            const vendor = g.vendor ?? 'unknown';
+            const model = g.model ? ` (${g.model})` : '';
+            process.stdout.write(`  - ${vendor}:${tier}${model}\n`);
         }
     }
 
@@ -110,18 +97,17 @@ export default async function status(args, ctx) {
     }
 
     if (node.role === 'provider') {
-        const { data: txs, error: txErr } = await supabase
-            .from('payment_transactions')
-            .select('amount_usd,status,direction')
-            .eq('provider_id', row.id)
-            .eq('direction', 'outbound');
-        if (txErr) {
-            process.stderr.write(`earnings query error: ${txErr.message}\n`);
-        } else {
+        try {
+            const { rows } = await client.listPayments(100);
             const sum = (list) => list.reduce((a, t) => a + (Number.parseFloat(t.amount_usd) || 0), 0);
-            const confirmed = (txs ?? []).filter((t) => t.status === 'confirmed');
-            const pending = (txs ?? []).filter((t) => t.status === 'pending');
-            process.stdout.write(`Earnings:   $${sum(confirmed).toFixed(2)} confirmed, $${sum(pending).toFixed(2)} pending (USD)\n`);
+            const outbound = (rows ?? []).filter((t) => t.direction === 'outbound');
+            const confirmed = outbound.filter((t) => t.status === 'confirmed');
+            const pending = outbound.filter((t) => t.status === 'pending');
+            process.stdout.write(
+                `Earnings:   $${sum(confirmed).toFixed(2)} confirmed, $${sum(pending).toFixed(2)} pending (USD)\n`
+            );
+        } catch (err) {
+            process.stderr.write(`earnings query failed: ${err?.message ?? err}\n`);
         }
     }
     return 0;

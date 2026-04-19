@@ -2,18 +2,25 @@
  * Config helpers for the infernet CLI.
  *
  * Config lives at ~/.config/infernet/config.json with mode 0600.
- * Shape:
+ *
+ * Shape (v2 — signed-API era):
  *   {
- *     "supabase": { "url": "...", "serviceRoleKey": "...", "schema": "public" },
+ *     "controlPlane": { "url": "https://infernet.tech" },
  *     "node": {
- *       "id": "...",         // Supabase uuid, set after first register
- *       "nodeId": "...",     // Human-readable slug e.g. provider-abc123
+ *       "id": "...",         // server-assigned uuid after register
+ *       "nodeId": "...",     // human-readable slug e.g. provider-abc123
  *       "role": "provider",  // provider | aggregator | client
  *       "name": "...",
- *       "publicKey": "...",  // Nostr pubkey hex
- *       "privateKey": "..."  // Nostr privkey hex (locally generated if absent)
+ *       "publicKey":  "...", // Nostr (secp256k1 / BIP-340 x-only) pubkey hex
+ *       "privateKey": "...", // Nostr privkey hex — proves ownership on every call
+ *       "payoutPublicKey": "...", // optional: separate identity for payouts
+ *       "address": "...|null",
+ *       "port": 46337
  *     }
  *   }
+ *
+ * Old configs with `supabase.serviceRoleKey` still load (we ignore the key and
+ * migrate `supabase.url` -> `controlPlane.url` transparently).
  */
 
 import fs from 'node:fs/promises';
@@ -43,42 +50,48 @@ export function getDaemonLogPath() {
 }
 
 /**
- * Load the CLI config. Returns null if the file does not exist.
+ * Normalize legacy (v1, Supabase-keyed) configs to the v2 shape. Never
+ * silently keeps a service-role key around.
+ */
+function migrate(raw) {
+    if (!raw || typeof raw !== 'object') return raw;
+    const out = { ...raw };
+    if (!out.controlPlane || typeof out.controlPlane !== 'object') {
+        const legacyUrl = out.supabase?.url;
+        if (legacyUrl) out.controlPlane = { url: legacyUrl };
+    }
+    if (out.supabase) {
+        // Drop the service-role key. It's no longer needed on nodes.
+        delete out.supabase;
+    }
+    return out;
+}
+
+/**
  * @returns {Promise<Object|null>}
  */
 export async function loadConfig() {
     const p = getConfigPath();
     try {
         const raw = await fs.readFile(p, 'utf8');
-        return JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        return migrate(parsed);
     } catch (err) {
         if (err && err.code === 'ENOENT') return null;
         throw err;
     }
 }
 
-/**
- * Persist the CLI config. Ensures the config dir exists and chmods 0600.
- * @param {Object} config
- */
 export async function saveConfig(config) {
     const dir = getConfigDir();
     await fs.mkdir(dir, { recursive: true, mode: 0o700 });
     const p = getConfigPath();
     const json = JSON.stringify(config, null, 2) + '\n';
     await fs.writeFile(p, json, { mode: 0o600 });
-    try {
-        await fs.chmod(p, 0o600);
-    } catch {
-        // best-effort; ignore on filesystems that don't honor chmod
-    }
+    try { await fs.chmod(p, 0o600); } catch { /* ignore */ }
     return p;
 }
 
-/**
- * Load the config, throwing a helpful error if missing.
- * @returns {Promise<Object>}
- */
 export async function requireConfig() {
     const cfg = await loadConfig();
     if (!cfg) {
@@ -89,4 +102,14 @@ export async function requireConfig() {
         throw err;
     }
     return cfg;
+}
+
+export function getControlPlaneUrl(config) {
+    const url = config?.controlPlane?.url;
+    if (!url) {
+        throw new Error(
+            'config.controlPlane.url is not set. Run `infernet login --url <https://...>` to point this node at a control plane.'
+        );
+    }
+    return url;
 }

@@ -1,18 +1,13 @@
 /**
  * `infernet register`
  *
- * Reads the CLI config, connects to Supabase, inserts/upserts this node into
- * the appropriate table based on `config.node.role`:
+ * Announces this node to the control plane via a Nostr-signed POST to
+ * /api/v1/node/register. The server verifies ownership of the pubkey and
+ * upserts a row in providers / aggregators / clients keyed on node_id.
  *
- *   provider   -> providers
- *   aggregator -> aggregators
- *   client     -> clients
- *
- * Keyed on `node_id` (text, unique). Captures local specs via `os` and stores
- * them in `specs` (providers/aggregators) / payload fields.
+ * Only coarse capability data is sent — vendor + VRAM tier per GPU. No
+ * hostname, platform, CPU model, or RAM total leaves the node.
  */
-
-import os from 'node:os';
 
 import { saveConfig } from '../lib/config.js';
 import { resolveP2pPort, detectLocalAddress } from '../lib/network.js';
@@ -28,33 +23,28 @@ Flags:
   --port <n>          Public port to advertise
   --gpu-model <name>  GPU model (providers only)
   --price <n>         Price offer (providers only)
+  --no-advertise      Don't send address / port
   --help              Show this help
 `;
 
-function tableFor(role) {
-    switch (role) {
-        case 'provider':
-            return 'providers';
-        case 'aggregator':
-            return 'aggregators';
-        case 'client':
-            return 'clients';
-        default:
-            throw new Error(`Unknown role "${role}"`);
-    }
+function vramTier(vramMb) {
+    if (!Number.isFinite(vramMb) || vramMb <= 0) return 'unknown';
+    if (vramMb < 8 * 1024) return '<8gb';
+    if (vramMb < 16 * 1024) return '8-16gb';
+    if (vramMb < 24 * 1024) return '16-24gb';
+    if (vramMb < 48 * 1024) return '24-48gb';
+    return '>=48gb';
 }
 
-async function gatherSpecs() {
+async function gatherCoarseSpecs() {
     const gpus = await detectGpus();
     return {
-        cpu_count: os.cpus().length,
-        total_memory: os.totalmem(),
-        hostname: os.hostname(),
-        platform: os.platform(),
-        arch: os.arch(),
-        release: os.release(),
-        node_version: process.version,
-        gpus
+        gpu_count: gpus.length,
+        gpus: gpus.map((g) => ({
+            vendor: (g.vendor ?? 'unknown').toLowerCase(),
+            vram_tier: vramTier(g.vram_mb),
+            model: typeof g.model === 'string' ? g.model.slice(0, 64) : null
+        }))
     };
 }
 
@@ -64,67 +54,62 @@ export default async function register(args, ctx) {
         return 0;
     }
 
-    const { config, supabase, configPath } = ctx;
+    const { config, client, configPath } = ctx;
     const node = config.node ?? {};
     if (!node.role || !node.nodeId) {
         process.stderr.write('Config is missing node.role or node.nodeId. Run `infernet init` first.\n');
         return 1;
     }
 
-    const table = tableFor(node.role);
-    const specs = await gatherSpecs();
-
-    // Resolve address + port: flag > config > autodetect.
+    const noAdvertise = args.has('no-advertise');
     const addressFlag = args.get('address');
     const portFlag = args.get('port') ?? args.get('p2p-port');
-    const address = addressFlag ?? node.address ?? detectLocalAddress();
-    const port = portFlag ? Number.parseInt(portFlag, 10) : resolveP2pPort({ node });
+    const address = noAdvertise ? undefined : (addressFlag ?? node.address ?? detectLocalAddress());
+    const portRaw = portFlag ?? node.port;
+    const port = noAdvertise ? undefined
+        : (portRaw ? Number.parseInt(portRaw, 10) : resolveP2pPort({ node }));
 
-    const basePayload = {
+    const payload = {
         node_id: node.nodeId,
-        name: node.name ?? node.nodeId,
-        public_key: node.publicKey ?? null,
-        last_seen: new Date().toISOString(),
-        status: 'available'
+        name: node.name ?? node.nodeId
     };
-
-    if (address) basePayload.address = address;
-    if (Number.isFinite(port) && port > 0) basePayload.port = port;
+    if (address) payload.address = address;
+    if (Number.isFinite(port) && port > 0) payload.port = port;
 
     if (node.role === 'provider') {
-        basePayload.specs = specs;
+        const specs = await gatherCoarseSpecs();
+        payload.specs = specs;
         const gpuModel = args.get('gpu-model') ?? specs.gpus?.[0]?.model;
-        if (gpuModel) basePayload.gpu_model = gpuModel;
+        if (gpuModel) payload.gpu_model = gpuModel;
         const price = args.get('price');
         if (price !== undefined) {
             const n = Number.parseFloat(price);
-            if (Number.isFinite(n)) basePayload.price = n;
+            if (Number.isFinite(n)) payload.price = n;
         }
-    } else if (node.role === 'client') {
-        delete basePayload.status; // clients.status default is 'active'
     }
 
-    process.stdout.write(`Registering ${node.role} "${node.nodeId}" in table ${table}...\n`);
+    process.stdout.write(`Registering ${node.role} "${node.nodeId}"...\n`);
 
-    const { data, error } = await supabase
-        .from(table)
-        .upsert(basePayload, { onConflict: 'node_id' })
-        .select()
-        .single();
-
-    if (error) {
-        process.stderr.write(`Supabase error: ${error.message}\n`);
+    let row;
+    try {
+        row = await client.register(payload);
+    } catch (err) {
+        process.stderr.write(`Register failed: ${err?.message ?? err}\n`);
         return 1;
     }
 
-    // Persist the assigned uuid back to the config for future commands.
     const nextConfig = {
         ...config,
-        node: { ...node, id: data.id }
+        node: {
+            ...node,
+            id: row?.id ?? node.id ?? null,
+            address: noAdvertise ? null : (address ?? node.address ?? null),
+            port: noAdvertise ? null : (Number.isFinite(port) ? port : node.port ?? null)
+        }
     };
     await saveConfig(nextConfig);
 
-    process.stdout.write(`Registered. id=${data.id} node_id=${data.node_id ?? node.nodeId}\n`);
+    process.stdout.write(`Registered. id=${row?.id ?? '(unknown)'} node_id=${row?.node_id ?? node.nodeId}\n`);
     process.stdout.write(`Config updated with assigned uuid at ${configPath}\n`);
     return 0;
 }

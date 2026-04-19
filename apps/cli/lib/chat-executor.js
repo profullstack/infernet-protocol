@@ -1,11 +1,13 @@
 /**
  * Stub chat executor for the provider daemon.
  *
- * Reads `job.input_spec.messages` (OpenAI-shaped), emits tokens into
- * `job_events` so the SSE stream can relay them to the web UI, and
- * finally writes the full text into `jobs.result` + marks the job
- * 'completed'. Real llama.cpp / vLLM runtime can slot in later by
- * replacing `generateStub()` with a streaming call.
+ * Reads `job.input_spec.messages` (OpenAI-shaped), emits tokens into the
+ * control plane's `job_events` stream (via signed POSTs — nodes no longer
+ * write to Supabase directly), and returns the full assistant text so the
+ * caller can post it in the completion payload.
+ *
+ * Real llama.cpp / vLLM runtime can slot in later by replacing the token
+ * loop with a streaming call.
  */
 
 const STUB_RESPONSE_TEMPLATE = (input) => [
@@ -14,6 +16,12 @@ const STUB_RESPONSE_TEMPLATE = (input) => [
     `This is a stub response from the provider daemon — no real model is running yet.`,
     `When a real runtime (llama.cpp / vLLM) is wired into the job loop, tokens will stream from actual inference.`
 ].join(' ');
+
+// Flush the event buffer when it hits this many tokens OR when we haven't
+// flushed in this many ms. Batching amortizes the per-request signing cost
+// without killing the streaming UX.
+const EVENT_BATCH_MAX = 16;
+const EVENT_BATCH_FLUSH_MS = 250;
 
 function lastUserMessage(messages) {
     if (!Array.isArray(messages)) return '';
@@ -24,32 +32,53 @@ function lastUserMessage(messages) {
     return '';
 }
 
-async function emitEvent(supabase, jobId, eventType, data) {
-    const { error } = await supabase.from('job_events').insert({
-        job_id: jobId,
-        event_type: eventType,
-        data
-    });
-    if (error) throw error;
-}
-
 function sleep(ms) {
     return new Promise((r) => setTimeout(r, ms));
 }
 
+class EventBuffer {
+    constructor(client, jobId) {
+        this.client = client;
+        this.jobId = jobId;
+        this.events = [];
+        this.lastFlush = Date.now();
+    }
+    async push(event_type, data) {
+        this.events.push({ event_type, data });
+        if (this.events.length >= EVENT_BATCH_MAX ||
+            Date.now() - this.lastFlush >= EVENT_BATCH_FLUSH_MS) {
+            await this.flush();
+        }
+    }
+    async flush() {
+        if (this.events.length === 0) return;
+        const batch = this.events;
+        this.events = [];
+        this.lastFlush = Date.now();
+        try {
+            await this.client.postJobEvents(this.jobId, batch);
+        } catch (err) {
+            // Best-effort: put them back so the next flush retries once.
+            // Still drop after a second failure to avoid unbounded growth.
+            process.stderr.write(`postJobEvents failed: ${err?.message ?? err}\n`);
+        }
+    }
+}
+
 /**
- * Run the stub chat executor. Yields a token every ~40-120ms so the UI
- * gets a responsive typing effect.
+ * Run the stub chat executor.
  *
- * @param {{ supabase: any, job: any, node: any }} ctx
+ * @param {{ client: any, job: any, node: any }} ctx
  * @returns {Promise<string>} the full assistant response text.
  */
-export async function executeChatJob({ supabase, job, node }) {
+export async function executeChatJob({ client, job, node }) {
     const input = job?.input_spec ?? {};
     const messages = input.messages ?? [];
     const userText = lastUserMessage(messages);
 
-    await emitEvent(supabase, job.id, 'meta', {
+    const buffer = new EventBuffer(client, job.id);
+
+    await buffer.push('meta', {
         provider_node_id: node.nodeId,
         provider_name: node.name ?? null,
         model: job.model_name ?? null,
@@ -62,22 +91,23 @@ export async function executeChatJob({ supabase, job, node }) {
     let accumulated = '';
     for (const tok of tokens) {
         accumulated += tok;
-        await emitEvent(supabase, job.id, 'token', { text: tok });
+        await buffer.push('token', { text: tok });
         await sleep(40 + Math.floor(Math.random() * 80));
     }
 
-    await emitEvent(supabase, job.id, 'done', {
+    await buffer.push('done', {
         text: accumulated,
         finished_at: new Date().toISOString()
     });
+    await buffer.flush();
 
     return accumulated;
 }
 
-export async function failChatJob({ supabase, jobId, message }) {
+export async function failChatJob({ client, jobId, message }) {
     try {
-        await emitEvent(supabase, jobId, 'error', { message });
+        await client.postJobEvents(jobId, [{ event_type: 'error', data: { message } }]);
     } catch {
-        // best-effort; the job row still gets marked 'failed' by the caller
+        // Non-fatal; the job row still gets marked 'failed' by the caller.
     }
 }

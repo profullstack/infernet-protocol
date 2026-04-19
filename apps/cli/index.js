@@ -6,10 +6,14 @@
  * to ship with (or alongside) the control-plane app; GPU operators install
  * it on each rented/owned server to register the node, heartbeat, accept
  * jobs, and report earnings.
+ *
+ * Nodes authenticate to the control plane using Nostr-signed HTTP requests.
+ * No database credentials are stored on the node — the signing keypair IS
+ * the credential.
  */
 
 import { loadConfig, getConfigPath } from './lib/config.js';
-import { getSupabaseFromConfig } from './lib/supabase.js';
+import { createNodeClientFromConfig } from './lib/node-client.js';
 
 import help, { USAGE } from './commands/help.js';
 import init from './commands/init.js';
@@ -27,14 +31,6 @@ import payments from './commands/payments.js';
 import gpu from './commands/gpu.js';
 import firewall from './commands/firewall.js';
 
-// ---------------------------------------------------------------------------
-// Minimal argv parser.
-//
-// Converts argv[3..] into:
-//   { positional: string[], flags: Map<string, string | true> }
-// and exposes has(name) / get(name) helpers. Supports both --flag=value and
-// --flag value forms, plus -h / --help as a single-letter alias.
-// ---------------------------------------------------------------------------
 function parseArgs(argv) {
     const positional = [];
     const flags = new Map();
@@ -61,7 +57,6 @@ function parseArgs(argv) {
             }
         } else if (tok.startsWith('-') && tok.length > 1) {
             const body = tok.slice(1);
-            // Treat -h specifically; otherwise bare flag.
             if (body === 'h') {
                 flags.set('help', true);
                 flags.set('h', true);
@@ -76,9 +71,7 @@ function parseArgs(argv) {
     return {
         positional,
         flags,
-        has(name) {
-            return flags.has(name);
-        },
+        has(name) { return flags.has(name); },
         get(name) {
             const v = flags.get(name);
             if (v === undefined) return undefined;
@@ -88,25 +81,16 @@ function parseArgs(argv) {
 }
 
 const COMMANDS = {
-    init,
-    login,
-    register,
-    update,
-    remove,
-    start,
-    status,
-    stop,
-    stats,
-    logs,
-    payout,
-    payments,
-    gpu,
-    firewall,
-    help
+    init, login, register, update, remove,
+    start, status, stop, stats, logs,
+    payout, payments, gpu, firewall, help
 };
 
 // Commands that can run without a loaded config.
 const NO_CONFIG = new Set(['init', 'login', 'help', 'stats', 'logs', 'stop', 'gpu', 'firewall']);
+// Commands that need a config but not a control-plane client (none today
+// — kept as a future escape hatch).
+const NO_CLIENT = new Set();
 
 async function main() {
     const argv = process.argv.slice(2);
@@ -127,9 +111,8 @@ async function main() {
 
     const args = parseArgs(rest);
 
-    let ctx = { config: null, supabase: null, configPath: getConfigPath() };
+    let ctx = { config: null, client: null, configPath: getConfigPath() };
 
-    // Always let per-command --help / -h render without touching config.
     const helpRequested = args.has('help') || args.has('h');
 
     if (!NO_CONFIG.has(sub) && !helpRequested) {
@@ -140,14 +123,16 @@ async function main() {
             );
             process.exit(1);
         }
-        let supabase;
-        try {
-            supabase = getSupabaseFromConfig(config);
-        } catch (err) {
-            process.stderr.write(`${err.message}\n`);
-            process.exit(1);
+        let client = null;
+        if (!NO_CLIENT.has(sub)) {
+            try {
+                client = createNodeClientFromConfig(config);
+            } catch (err) {
+                process.stderr.write(`${err.message}\n`);
+                process.exit(1);
+            }
         }
-        ctx = { config, supabase, configPath: getConfigPath() };
+        ctx = { config, client, configPath: getConfigPath() };
     }
 
     try {

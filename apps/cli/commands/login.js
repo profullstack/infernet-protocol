@@ -1,24 +1,26 @@
 /**
  * `infernet login`
  *
- * Re-prompts for Supabase URL + service-role key (and optionally schema)
- * and overwrites those fields in the existing config. Leaves node identity
- * fields alone.
+ * Re-points this node at a different control-plane URL. With signed-request
+ * auth (Nostr / BIP-340), there is no password or service-role key to ask
+ * for — the node's existing Nostr keypair is the credential. A new control
+ * plane just needs this node's pubkey registered.
  */
 
 import { getConfigPath, loadConfig, saveConfig } from '../lib/config.js';
 import { question } from '../lib/prompt.js';
 
-const HELP = `infernet login — update Supabase credentials
+const HELP = `infernet login — update the control-plane URL
 
 Usage:
   infernet login [flags]
 
 Flags:
-  --supabase-url <url>    Supabase project URL
-  --supabase-key <key>    Supabase service-role key
-  --schema <name>         Supabase schema (default: keep existing, else public)
-  --help                  Show this help
+  --url <url>   Control-plane base URL
+  --help        Show this help
+
+No credentials are collected; the node's Nostr keypair already proves
+ownership on every request.
 `;
 
 export default async function login(args) {
@@ -28,39 +30,21 @@ export default async function login(args) {
     }
 
     const existing = (await loadConfig()) ?? {};
-    const currentSupabase = existing.supabase ?? {};
+    const currentUrl = existing.controlPlane?.url ?? '';
 
-    let url = args.get('supabase-url');
-    let key = args.get('supabase-key');
-    let schema = args.get('schema');
-
+    let url = args.get('url');
     if (!url) {
-        url = await question('Supabase URL', { default: currentSupabase.url });
+        url = await question('Control-plane URL', { default: currentUrl });
     }
-    if (!key) {
-        key = await question('Supabase service-role key', { secret: true });
-        if (!key && currentSupabase.serviceRoleKey) {
-            key = currentSupabase.serviceRoleKey;
-        }
-    }
-    if (!schema) {
-        schema = currentSupabase.schema ?? 'public';
-    }
-
     if (!url) {
-        process.stderr.write('Supabase URL is required.\n');
-        return 1;
-    }
-    if (!key) {
-        process.stderr.write('Supabase service-role key is required.\n');
+        process.stderr.write('Control-plane URL is required.\n');
         return 1;
     }
 
     const next = {
         ...existing,
-        supabase: { url, serviceRoleKey: key, schema }
+        controlPlane: { url }
     };
-    // Ensure a node section exists so downstream commands don't explode.
     if (!next.node) {
         next.node = {
             id: null,
@@ -74,10 +58,9 @@ export default async function login(args) {
 
     const written = await saveConfig(next);
     process.stdout.write(`Updated ${written}\n`);
-    process.stdout.write(`Supabase URL: ${url}\n`);
-    process.stdout.write(`Schema:       ${schema}\n`);
+    process.stdout.write(`Control plane: ${url}\n`);
     if (!existing.node || !existing.node.nodeId) {
-        process.stdout.write(`Next:         run \`infernet init\` to configure node identity, or \`infernet register\`.\n`);
+        process.stdout.write('Next:          run `infernet init` to configure node identity, or `infernet register`.\n');
     }
     return 0;
 }

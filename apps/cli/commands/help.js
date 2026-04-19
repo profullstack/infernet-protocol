@@ -8,16 +8,16 @@ Usage:
   infernet <command> [args]
 
 Node lifecycle:
-  init         Configure this node (Supabase URL, role, identity, P2P port)
-  login        Update Supabase credentials
-  register     Register this node in the control plane
-  update       Push current specs/status to the control plane
-  remove       Deregister this node and wipe local config
+  init         Configure this node (control-plane URL, role, Nostr identity)
+  login        Update the control-plane URL
+  register     Register this node with the control plane (signed)
+  update       Push current capability/status to the control plane (signed)
+  remove       Deregister this node and wipe local config (signed)
 
 Daemon:
   start        Start the node daemon (detached by default)
   stop         Stop the running daemon
-  status       Show this node's current state (Supabase + live daemon)
+  status       Show this node's current state (remote row + live daemon)
   stats        Live in-memory stats from the running daemon (via IPC)
   logs         Show / tail the daemon log (~/.config/infernet/daemon.log)
 

@@ -1,14 +1,11 @@
 /**
  * `infernet remove`
  *
- * Deregisters this node from the control plane and (optionally) wipes the
- * local CLI config. Requires explicit confirmation via `--yes` unless stdin
- * is a TTY (in which case it prompts).
- *
- * Flags:
- *   --yes              Skip the confirmation prompt.
- *   --keep-config      Delete the Supabase row but leave ~/.config/infernet alone.
- *   --keep-remote      Wipe the local config but leave the Supabase row alone.
+ * Deregisters this node via a signed POST to /api/v1/node/remove and
+ * optionally wipes the local CLI config. Flags:
+ *   --yes              Skip confirmation.
+ *   --keep-config      Delete the remote row but leave ~/.config/infernet alone.
+ *   --keep-remote      Wipe the local config but leave the remote row alone.
  */
 
 import fs from 'node:fs/promises';
@@ -24,41 +21,18 @@ Usage:
 Flags:
   --yes            Skip confirmation prompt
   --keep-config    Leave ~/.config/infernet/config.json in place
-  --keep-remote    Leave the Supabase row intact (wipe local only)
+  --keep-remote    Leave the remote row intact (wipe local only)
   --help           Show this help
 `;
 
-function tableFor(role) {
-    switch (role) {
-        case 'provider':
-            return 'providers';
-        case 'aggregator':
-            return 'aggregators';
-        case 'client':
-            return 'clients';
-        default:
-            throw new Error(`Unknown role "${role}"`);
-    }
-}
-
 async function unlinkIfExists(path) {
-    try {
-        await fs.unlink(path);
-        return true;
-    } catch (err) {
-        if (err.code === 'ENOENT') return false;
-        throw err;
-    }
+    try { await fs.unlink(path); return true; }
+    catch (err) { if (err.code === 'ENOENT') return false; throw err; }
 }
 
 async function rmdirIfExists(path) {
-    try {
-        await fs.rm(path, { recursive: true, force: true });
-        return true;
-    } catch (err) {
-        if (err.code === 'ENOENT') return false;
-        throw err;
-    }
+    try { await fs.rm(path, { recursive: true, force: true }); return true; }
+    catch (err) { if (err.code === 'ENOENT') return false; throw err; }
 }
 
 export default async function remove(args, ctx) {
@@ -67,7 +41,7 @@ export default async function remove(args, ctx) {
         return 0;
     }
 
-    const { config, supabase } = ctx;
+    const { config, client } = ctx;
     const node = config.node ?? {};
     const keepConfig = args.has('keep-config');
     const keepRemote = args.has('keep-remote');
@@ -82,7 +56,7 @@ export default async function remove(args, ctx) {
 
     const summary = [];
     if (!keepRemote && node.nodeId) {
-        summary.push(`  - delete ${node.role} row where node_id="${node.nodeId}" from Supabase`);
+        summary.push(`  - deregister ${node.role} "${node.nodeId}" from ${config.controlPlane?.url}`);
     }
     if (!keepConfig) {
         summary.push(`  - delete local config at ${getConfigPath()}`);
@@ -103,18 +77,16 @@ export default async function remove(args, ctx) {
         }
     }
 
-    // Deregister from Supabase first.
     if (!keepRemote && node.nodeId) {
-        const table = tableFor(node.role);
-        const { error } = await supabase.from(table).delete().eq('node_id', node.nodeId);
-        if (error) {
-            process.stderr.write(`Supabase error: ${error.message}\n`);
+        try {
+            await client.remove();
+            process.stdout.write(`Deregistered ${node.role} "${node.nodeId}"\n`);
+        } catch (err) {
+            process.stderr.write(`Remote deregister failed: ${err?.message ?? err}\n`);
             return 1;
         }
-        process.stdout.write(`Deregistered ${node.role} "${node.nodeId}"\n`);
     }
 
-    // Then wipe local state.
     if (!keepConfig) {
         await unlinkIfExists(getDaemonPidPath());
         await rmdirIfExists(getConfigDir());

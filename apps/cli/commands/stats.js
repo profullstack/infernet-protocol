@@ -15,7 +15,7 @@ Flags:
   --help    Show this help
 
 Requires a running daemon (\`infernet start\`). For the persisted
-per-node state from Supabase, use \`infernet status\` instead.
+per-node state from the control plane, use \`infernet status\` instead.
 `;
 
 function fmtUptime(ms) {
@@ -57,7 +57,7 @@ export default async function stats(args) {
     process.stdout.write(`Started at:    ${d.startedAt}\n`);
     process.stdout.write(`Uptime:        ${fmtUptime(d.uptimeMs)}\n`);
     process.stdout.write(`Node:          ${d.node.nodeId} (${d.node.role})\n`);
-    process.stdout.write(`Supabase:      ${d.supabaseUrl}\n`);
+    process.stdout.write(`Control plane: ${d.controlPlaneUrl ?? d.supabaseUrl ?? '(not set)'}\n`);
     process.stdout.write(`Intervals:     heartbeat=${d.intervals.heartbeatMs}ms poll=${d.intervals.pollMs}ms\n`);
 
     if (d.p2p?.enabled) {

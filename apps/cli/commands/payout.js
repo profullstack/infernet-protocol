@@ -1,5 +1,6 @@
 /**
- * `infernet payout` — manage this provider's payout coin/address.
+ * `infernet payout` — manage this provider's payout coin/address via the
+ * signed node API.
  *
  * Subcommands:
  *   infernet payout set <coin> <address> [--network <name>]
@@ -30,34 +31,27 @@ function pickNetwork(coin, requestedNetwork) {
 }
 
 async function runList(args, ctx) {
-    const { config, supabase } = ctx;
+    const { config, client } = ctx;
     const node = config.node ?? {};
     if (node.role !== 'provider') {
         process.stderr.write('Payouts are only configurable for providers.\n');
         return 1;
     }
-    if (!node.id) {
-        process.stderr.write('Node has no Supabase uuid yet. Run `infernet register` first.\n');
-        return 1;
-    }
 
-    const { data, error } = await supabase
-        .from('provider_payouts')
-        .select('*')
-        .eq('provider_id', node.id)
-        .order('is_default', { ascending: false })
-        .order('created_at', { ascending: true });
-    if (error) {
-        process.stderr.write(`Supabase error: ${error.message}\n`);
+    let result;
+    try {
+        result = await client.listPayouts();
+    } catch (err) {
+        process.stderr.write(`payout list failed: ${err?.message ?? err}\n`);
         return 1;
     }
-    if (!data || data.length === 0) {
+    const rows = result?.rows ?? [];
+    if (!rows.length) {
         process.stdout.write('(no payout addresses configured)\n');
         process.stdout.write('Use `infernet payout set <coin> <address>` to add one.\n');
         return 0;
     }
-
-    for (const row of data) {
+    for (const row of rows) {
         const marker = row.is_default ? '* ' : '  ';
         const net = row.network ? ` (${row.network})` : '';
         process.stdout.write(`${marker}${row.coin}${net}  ${row.address}\n`);
@@ -87,47 +81,18 @@ async function runSet(args, ctx, positional) {
         return 1;
     }
 
-    const { config, supabase } = ctx;
-    const node = config.node ?? {};
-    if (node.role !== 'provider') {
+    const { config, client } = ctx;
+    if ((config.node?.role) !== 'provider') {
         process.stderr.write('Payouts are only configurable for providers.\n');
         return 1;
     }
-    if (!node.id) {
-        process.stderr.write('Node has no Supabase uuid yet. Run `infernet register` first.\n');
+
+    try {
+        await client.setPayout({ coin, network, address: addressArg });
+    } catch (err) {
+        process.stderr.write(`payout set failed: ${err?.message ?? err}\n`);
         return 1;
     }
-
-    // Flip existing defaults off.
-    const demote = await supabase
-        .from('provider_payouts')
-        .update({ is_default: false })
-        .eq('provider_id', node.id)
-        .eq('is_default', true);
-    if (demote.error) {
-        process.stderr.write(`failed to reset previous default: ${demote.error.message}\n`);
-        return 1;
-    }
-
-    const upsert = await supabase
-        .from('provider_payouts')
-        .upsert(
-            {
-                provider_id: node.id,
-                coin,
-                network,
-                address: addressArg,
-                is_default: true
-            },
-            { onConflict: 'provider_id,coin,address' }
-        )
-        .select()
-        .single();
-    if (upsert.error) {
-        process.stderr.write(`Supabase error: ${upsert.error.message}\n`);
-        return 1;
-    }
-
     process.stdout.write(`Set default payout: ${coin} (${network}) ${addressArg}\n`);
     return 0;
 }

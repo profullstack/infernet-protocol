@@ -29,9 +29,6 @@ importers:
       '@infernetprotocol/gpu':
         specifier: workspace:*
         version: link:../../packages/gpu
-      '@supabase/supabase-js':
-        specifier: ^2.49.8
-        version: 2.103.3
       dotenv:
         specifier: ^16.4.7
         version: 16.6.1

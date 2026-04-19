@@ -26,7 +26,6 @@
     "@infernetprotocol/auth": "workspace:*",
     "@infernetprotocol/config": "workspace:*",
     "@infernetprotocol/gpu": "workspace:*",
-    "@supabase/supabase-js": "^2.49.8",
     "dotenv": "^16.4.7"
   },
   "repository": {

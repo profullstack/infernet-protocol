@@ -1,8 +1,8 @@
 /**
  * `infernet payments list [--limit N]`
  *
- * Prints the last N payment_transactions rows involving this node.
- * For providers, filters on provider_id; for clients, on client_id.
+ * Prints the last N payment_transactions rows involving this node, fetched
+ * via signed POST to /api/v1/node/payments/list.
  */
 
 const HELP = `infernet payments — show recent payment transactions
@@ -45,41 +45,28 @@ function tableRows(rows) {
 }
 
 async function runList(args, ctx) {
-    const { config, supabase } = ctx;
+    const { config, client } = ctx;
     const node = config.node ?? {};
-    if (!node.id) {
-        process.stderr.write('Node has no Supabase uuid yet. Run `infernet register` first.\n');
-        return 1;
-    }
-
-    const limit = Math.max(1, Number.parseInt(args.get('limit') ?? '20', 10) || 20);
-
-    let query = supabase
-        .from('payment_transactions')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit);
-
-    if (node.role === 'provider') {
-        query = query.eq('provider_id', node.id);
-    } else if (node.role === 'client') {
-        query = query.eq('client_id', node.id);
-    } else {
+    if (node.role !== 'provider' && node.role !== 'client') {
         process.stderr.write('Only provider/client nodes have payment transactions.\n');
         return 1;
     }
 
-    const { data, error } = await query;
-    if (error) {
-        process.stderr.write(`Supabase error: ${error.message}\n`);
+    const limit = Math.max(1, Number.parseInt(args.get('limit') ?? '20', 10) || 20);
+    let result;
+    try {
+        result = await client.listPayments(limit);
+    } catch (err) {
+        process.stderr.write(`payments list failed: ${err?.message ?? err}\n`);
         return 1;
     }
-    if (!data || data.length === 0) {
+
+    const rows = result?.rows ?? [];
+    if (!rows.length) {
         process.stdout.write('(no payment transactions)\n');
         return 0;
     }
-
-    process.stdout.write(tableRows(data) + '\n');
+    process.stdout.write(tableRows(rows) + '\n');
     return 0;
 }
 

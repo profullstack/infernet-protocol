@@ -8,15 +8,19 @@
  * the foreground).
  *
  * The running daemon:
- *   - Heartbeats every 30s (UPDATE <table> SET last_seen = now(), status = 'available')
- *   - Polls `jobs` every 15s (providers only): picks up `status='assigned'`
- *     rows assigned to this node, stub-executes, marks completed, records
- *     an outbound payment_transactions row.
+ *   - Heartbeats every 30s via signed POST /api/v1/node/heartbeat
+ *   - Polls /api/v1/node/jobs/poll every 15s (providers only), processes
+ *     any returned jobs, emits streaming events via signed
+ *     POST /api/v1/node/jobs/:id/events, and closes the loop with
+ *     POST /api/v1/node/jobs/:id/complete.
  *   - Exposes a Unix-domain IPC socket at `~/.config/infernet/daemon.sock`
  *     so `infernet status`, `infernet stats`, `infernet stop`, etc. can ask
  *     the live process what it's doing.
- *   - Handles SIGINT / SIGTERM: sets `status='offline'`, removes pid/sock
- *     files, exits 0.
+ *   - Handles SIGINT / SIGTERM: sends a final heartbeat with status=offline,
+ *     removes pid/sock files, exits 0.
+ *
+ * The daemon never holds a database credential. Every request to the
+ * control plane is signed with the node's Nostr privkey.
  */
 
 import fs from 'node:fs/promises';
@@ -26,7 +30,6 @@ import { chmodSync, unlinkSync } from 'node:fs';
 import {
     getDaemonPidPath,
     getDaemonSocketPath,
-    getDaemonLogPath,
     saveConfig
 } from '../lib/config.js';
 import { spawnDetachedDaemon } from '../lib/daemonize.js';
@@ -45,25 +48,16 @@ Flags:
   --poll-interval <ms>       Override job poll cadence (default 15000)
   --p2p-port <n>             TCP port for peer connections (default 46337)
   --no-p2p                   Don't bind the P2P TCP listener
+  --no-advertise             Don't send address/port in heartbeats
   --once                     Run one heartbeat + one poll and exit (debug)
   --help                     Show this help
 
-By default, \`infernet start\` detaches into the background, logs to
-\`~/.config/infernet/daemon.log\`, and exposes an IPC socket for live
-queries (see \`infernet status\`, \`infernet stats\`, \`infernet logs\`).
+Daemon logs to \`~/.config/infernet/daemon.log\`, exposes an IPC socket for
+live queries (see \`infernet status\`, \`infernet stats\`, \`infernet logs\`).
 `;
 
 const DEFAULT_HEARTBEAT_MS = 30_000;
 const DEFAULT_POLL_MS = 15_000;
-
-function tableFor(role) {
-    switch (role) {
-        case 'provider':   return 'providers';
-        case 'aggregator': return 'aggregators';
-        case 'client':     return 'clients';
-        default: throw new Error(`Unknown role "${role}"`);
-    }
-}
 
 async function writePidFile(pid) {
     const p = getDaemonPidPath();
@@ -95,16 +89,12 @@ export default async function start(args, ctx) {
     return runDaemon(args, ctx);
 }
 
-// ---------------------------------------------------------------------------
-// Detached-spawn path.
-// ---------------------------------------------------------------------------
 async function spawnAndReturn(args) {
     const alreadyAlive = await isDaemonAlive();
     if (alreadyAlive) {
         process.stderr.write('A daemon is already running (socket responsive). Run `infernet stop` first.\n');
         return 1;
     }
-    // Stale socket? Remove so the child can bind.
     removeSocketFile();
 
     const passthrough = [];
@@ -115,6 +105,7 @@ async function spawnAndReturn(args) {
     const p2pPort = args.get('p2p-port');
     if (p2pPort) passthrough.push('--p2p-port', p2pPort);
     if (args.has('no-p2p')) passthrough.push('--no-p2p');
+    if (args.has('no-advertise')) passthrough.push('--no-advertise');
     if (args.has('once')) passthrough.push('--once');
 
     const { pid, logPath } = spawnDetachedDaemon(passthrough);
@@ -125,33 +116,12 @@ async function spawnAndReturn(args) {
     return 0;
 }
 
-// ---------------------------------------------------------------------------
-// Foreground-daemon path.
-// ---------------------------------------------------------------------------
 async function runDaemon(args, ctx) {
-    const { config, supabase, configPath } = ctx;
+    const { config, client, configPath } = ctx;
     const node = config.node ?? {};
     if (!node.role || !node.nodeId) {
         process.stderr.write('Config is missing node.role/node.nodeId. Run `infernet init` first.\n');
         return 1;
-    }
-
-    const table = tableFor(node.role);
-
-    // Resolve uuid if missing.
-    if (!node.id) {
-        const { data, error } = await supabase
-            .from(table).select('id').eq('node_id', node.nodeId).maybeSingle();
-        if (error) {
-            process.stderr.write(`lookup error: ${error.message}\n`);
-            return 1;
-        }
-        if (!data) {
-            process.stderr.write('This node has no row in Supabase yet. Run `infernet register` first.\n');
-            return 1;
-        }
-        node.id = data.id;
-        await saveConfig({ ...config, node });
     }
 
     const heartbeatMs = Number.parseInt(args.get('heartbeat-interval') ?? '', 10) || DEFAULT_HEARTBEAT_MS;
@@ -159,10 +129,10 @@ async function runDaemon(args, ctx) {
     const once       = args.has('once');
 
     const p2pDisabled = args.has('no-p2p');
+    const noAdvertise = args.has('no-advertise') || node.address === null;
     const p2pPort = Number.parseInt(args.get('p2p-port') ?? '', 10) || resolveP2pPort(config);
-    const advertisedAddress = config.node?.address ?? detectLocalAddress();
+    const advertisedAddress = noAdvertise ? null : (node.address ?? detectLocalAddress());
 
-    // In-memory state exposed via IPC.
     const startedAt = new Date();
     const stats = {
         heartbeatsOk: 0,
@@ -181,13 +151,12 @@ async function runDaemon(args, ctx) {
 
     const pidPath = await writePidFile(process.pid);
     const socketPath = getDaemonSocketPath();
-    removeSocketFile(); // clear any stale
+    removeSocketFile();
 
     process.stdout.write('infernet daemon starting\n');
     process.stdout.write(`  node_id:   ${node.nodeId}\n`);
-    process.stdout.write(`  uuid:      ${node.id}\n`);
     process.stdout.write(`  role:      ${node.role}\n`);
-    process.stdout.write(`  supabase:  ${config.supabase.url}\n`);
+    process.stdout.write(`  control:   ${config.controlPlane?.url ?? '(not set)'}\n`);
     process.stdout.write(`  pid:       ${process.pid}\n`);
     process.stdout.write(`  pidfile:   ${pidPath}\n`);
     process.stdout.write(`  socket:    ${socketPath}\n`);
@@ -195,10 +164,11 @@ async function runDaemon(args, ctx) {
     process.stdout.write(`  heartbeat: ${heartbeatMs}ms\n`);
     process.stdout.write(`  poll:      ${pollMs}ms\n`);
     if (!p2pDisabled) {
-        process.stdout.write(`  p2p:       ${formatEndpoint(advertisedAddress, p2pPort)}\n`);
+        process.stdout.write(`  p2p:       ${formatEndpoint(advertisedAddress ?? '-', p2pPort)}\n`);
     } else {
         process.stdout.write('  p2p:       disabled\n');
     }
+    if (noAdvertise) process.stdout.write('  advertise: off (outbound-only)\n');
 
     let heartbeatTimer = null;
     let pollTimer = null;
@@ -208,28 +178,22 @@ async function runDaemon(args, ctx) {
     let p2pConnections = 0;
     let p2pLastConnectionAt = null;
 
-    // -----------------------------------------------------------------------
-    // Heartbeat + job loop
-    // -----------------------------------------------------------------------
     async function heartbeat() {
-        const patch = { last_seen: new Date().toISOString(), status: 'available' };
-        if (!p2pDisabled) {
-            if (advertisedAddress) patch.address = advertisedAddress;
-            patch.port = p2pPort;
+        const payload = { status: 'available' };
+        if (!noAdvertise) {
+            if (advertisedAddress) payload.address = advertisedAddress;
+            if (!p2pDisabled) payload.port = p2pPort;
         }
-        const { error } = await supabase
-            .from(table)
-            .update(patch)
-            .eq('id', node.id);
-        if (error) {
-            stats.heartbeatsFailed += 1;
-            stats.lastHeartbeatError = error.message;
-            process.stderr.write(`heartbeat error: ${error.message}\n`);
-        } else {
+        try {
+            await client.heartbeat(payload);
             stats.heartbeatsOk += 1;
             stats.lastHeartbeatAt = new Date().toISOString();
             stats.lastHeartbeatError = null;
             process.stdout.write(`[${stats.lastHeartbeatAt}] heartbeat ok\n`);
+        } catch (err) {
+            stats.heartbeatsFailed += 1;
+            stats.lastHeartbeatError = err?.message ?? String(err);
+            process.stderr.write(`heartbeat error: ${stats.lastHeartbeatError}\n`);
         }
     }
 
@@ -240,109 +204,51 @@ async function runDaemon(args, ctx) {
         stats.lastJobAt = t0;
         process.stdout.write(`[${t0}] picking up job ${job.id} type=${job.type ?? 'inference'} (${job.title ?? 'untitled'})\n`);
 
-        const markRunning = await supabase
-            .from('jobs')
-            .update({ status: 'running', updated_at: t0 })
-            .eq('id', job.id);
-        if (markRunning.error) {
-            stats.jobsFailed += 1;
-            stats.activeJobIds.delete(job.id);
-            process.stderr.write(`failed to mark job ${job.id} running: ${markRunning.error.message}\n`);
-            return;
-        }
-
-        let resultPayload;
         try {
+            let resultPayload;
             if (job.type === 'chat') {
-                const text = await executeChatJob({ supabase, job, node });
+                const text = await executeChatJob({ client, job, node });
                 resultPayload = { type: 'chat', text, completed_by: node.nodeId };
             } else {
-                // Generic inference stub — briefly sleep to simulate compute.
                 await new Promise((resolve) => setTimeout(resolve, 500));
                 resultPayload = { stub: true, completed_by: node.nodeId };
             }
+            await client.completeJob(job.id, { status: 'completed', result: resultPayload });
+            stats.jobsCompleted += 1;
+            stats.activeJobIds.delete(job.id);
+            process.stdout.write(`[${new Date().toISOString()}] completed job ${job.id} type=${job.type ?? 'inference'}\n`);
         } catch (err) {
             stats.jobsFailed += 1;
             stats.activeJobIds.delete(job.id);
             const msg = err?.message ?? String(err);
-            process.stderr.write(`job ${job.id} threw during execution: ${msg}\n`);
+            process.stderr.write(`job ${job.id} failed: ${msg}\n`);
             if (job.type === 'chat') {
-                await failChatJob({ supabase, jobId: job.id, message: msg });
+                await failChatJob({ client, jobId: job.id, message: msg });
             }
-            const failedAt = new Date().toISOString();
-            await supabase
-                .from('jobs')
-                .update({ status: 'failed', error: msg, updated_at: failedAt, completed_at: failedAt })
-                .eq('id', job.id);
-            return;
-        }
-
-        const completedAt = new Date().toISOString();
-        const markDone = await supabase
-            .from('jobs')
-            .update({
-                status: 'completed',
-                updated_at: completedAt,
-                completed_at: completedAt,
-                result: resultPayload
-            })
-            .eq('id', job.id);
-        if (markDone.error) {
-            stats.jobsFailed += 1;
-            stats.activeJobIds.delete(job.id);
-            process.stderr.write(`failed to mark job ${job.id} completed: ${markDone.error.message}\n`);
-            return;
-        }
-
-        const amount = Number.parseFloat(job.payment_offer ?? 0) || 0;
-        if (amount > 0) {
-            const coin = job.payment_coin ?? 'USDC';
-            const payTx = await supabase.from('payment_transactions').insert({
-                direction: 'outbound',
-                job_id: job.id,
-                provider_id: node.id,
-                coin,
-                amount,
-                amount_usd: amount,
-                address: 'pending-payout',
-                status: 'pending',
-                metadata: { stub: true, node_id: node.nodeId }
-            });
-            if (payTx.error) {
-                process.stderr.write(`failed to record payment_transactions for job ${job.id}: ${payTx.error.message}\n`);
+            try {
+                await client.failJob(job.id, msg);
+            } catch (markErr) {
+                process.stderr.write(`failJob failed: ${markErr?.message ?? markErr}\n`);
             }
         }
-
-        stats.jobsCompleted += 1;
-        stats.activeJobIds.delete(job.id);
-        process.stdout.write(`[${completedAt}] completed job ${job.id} type=${job.type ?? 'inference'}\n`);
     }
 
     async function pollJobs() {
         stats.lastPollAt = new Date().toISOString();
-        if (node.role !== 'provider' || !node.id) {
+        if (node.role !== 'provider') {
             stats.pollsOk += 1;
             return;
         }
-        const { data, error } = await supabase
-            .from('jobs')
-            .select('*')
-            .eq('provider_id', node.id)
-            .in('status', ['assigned'])
-            .order('created_at', { ascending: true })
-            .limit(5);
-        if (error) {
+        try {
+            const result = await client.pollJobs({ limit: 5 });
+            stats.pollsOk += 1;
+            for (const job of result?.jobs ?? []) await processJob(job);
+        } catch (err) {
             stats.pollsFailed += 1;
-            process.stderr.write(`job poll error: ${error.message}\n`);
-            return;
+            process.stderr.write(`job poll error: ${err?.message ?? err}\n`);
         }
-        stats.pollsOk += 1;
-        for (const job of data ?? []) await processJob(job);
     }
 
-    // -----------------------------------------------------------------------
-    // IPC server
-    // -----------------------------------------------------------------------
     function snapshot() {
         return {
             pid: process.pid,
@@ -354,7 +260,7 @@ async function runDaemon(args, ctx) {
                 role: node.role,
                 name: node.name ?? null
             },
-            supabaseUrl: config.supabase.url,
+            controlPlaneUrl: config.controlPlane?.url ?? null,
             intervals: { heartbeatMs, pollMs },
             stats: {
                 heartbeatsOk: stats.heartbeatsOk,
@@ -375,7 +281,7 @@ async function runDaemon(args, ctx) {
                 enabled: true,
                 port: p2pPort,
                 address: advertisedAddress,
-                endpoint: formatEndpoint(advertisedAddress, p2pPort),
+                endpoint: formatEndpoint(advertisedAddress ?? '-', p2pPort),
                 connectionsTotal: p2pConnections,
                 lastConnectionAt: p2pLastConnectionAt
             }
@@ -389,7 +295,6 @@ async function runDaemon(args, ctx) {
                 sock.setEncoding('utf8');
                 sock.on('data', async (chunk) => {
                     buf += chunk;
-                    // Process all complete lines.
                     for (;;) {
                         const nl = buf.indexOf('\n');
                         if (nl < 0) break;
@@ -405,9 +310,8 @@ async function runDaemon(args, ctx) {
                         try { sock.write(JSON.stringify(reply) + '\n'); } catch { /* ignore */ }
                     }
                 });
-                sock.on('error', () => { /* ignore client disconnects */ });
+                sock.on('error', () => {});
             });
-
             server.once('error', reject);
             server.listen(socketPath, () => {
                 try { chmodSync(socketPath, 0o600); } catch { /* ignore */ }
@@ -419,11 +323,9 @@ async function runDaemon(args, ctx) {
     async function handleIpc(msg) {
         const cmd = msg?.cmd;
         switch (cmd) {
-            case 'ping':
-                return { ok: true, data: { pong: Date.now() } };
+            case 'ping':    return { ok: true, data: { pong: Date.now() } };
             case 'status':
-            case 'stats':
-                return { ok: true, data: snapshot() };
+            case 'stats':   return { ok: true, data: snapshot() };
             case 'shutdown':
                 setImmediate(() => shutdown('ipc-shutdown'));
                 return { ok: true, data: { shuttingDown: true } };
@@ -432,9 +334,6 @@ async function runDaemon(args, ctx) {
         }
     }
 
-    // -----------------------------------------------------------------------
-    // P2P TCP listener (newline-JSON protocol, same as IPC)
-    // -----------------------------------------------------------------------
     function startP2pServer() {
         return new Promise((resolve, reject) => {
             const server = net.createServer((sock) => {
@@ -455,8 +354,6 @@ async function runDaemon(args, ctx) {
                             try { sock.write(JSON.stringify({ ok: false, error: 'bad-json', cause: err?.message ?? String(err) }) + '\n'); } catch { /* ignore */ }
                             continue;
                         }
-                        // Peer-facing surface is intentionally narrower than
-                        // the local IPC (no shutdown allowed remotely).
                         let reply;
                         switch (msg?.cmd) {
                             case 'ping':
@@ -473,23 +370,18 @@ async function runDaemon(args, ctx) {
                             default:
                                 reply = { ok: false, error: `unknown-cmd: ${msg?.cmd ?? '(none)'}` };
                         }
-                        try { sock.write(JSON.stringify(reply) + '\n'); } catch { /* ignore */ }
+                        try { sock.write(JSON.stringify(reply) + '\n'); } catch {}
                     }
                 });
-                sock.on('error', () => { /* ignore peer disconnects */ });
+                sock.on('error', () => {});
             });
-
             server.once('error', reject);
-            // Bind to `::` so we accept both IPv6 and IPv4 (dual-stack).
             server.listen({ port: p2pPort, host: '::', ipv6Only: false }, () => {
                 resolve(server);
             });
         });
     }
 
-    // -----------------------------------------------------------------------
-    // Shutdown
-    // -----------------------------------------------------------------------
     const shutdown = async (signal) => {
         if (shuttingDown) return;
         shuttingDown = true;
@@ -497,21 +389,12 @@ async function runDaemon(args, ctx) {
         if (heartbeatTimer) clearInterval(heartbeatTimer);
         if (pollTimer) clearInterval(pollTimer);
         try {
-            const { error } = await supabase
-                .from(table)
-                .update({ status: 'offline', last_seen: new Date().toISOString() })
-                .eq('id', node.id);
-            if (error) process.stderr.write(`offline update failed: ${error.message}\n`);
+            await client.heartbeat({ status: 'offline' });
         } catch (err) {
-            process.stderr.write(`offline update threw: ${err?.message ?? err}\n`);
+            process.stderr.write(`offline heartbeat failed: ${err?.message ?? err}\n`);
         }
-        try { await supabase.removeAllChannels(); } catch { /* ignore */ }
-        if (ipcServer) {
-            try { ipcServer.close(); } catch { /* ignore */ }
-        }
-        if (p2pServer) {
-            try { p2pServer.close(); } catch { /* ignore */ }
-        }
+        if (ipcServer) { try { ipcServer.close(); } catch {} }
+        if (p2pServer) { try { p2pServer.close(); } catch {} }
         removeSocketFile();
         await removePidFile();
         process.stdout.write('bye\n');
@@ -521,20 +404,17 @@ async function runDaemon(args, ctx) {
     process.on('SIGINT',  () => { shutdown('SIGINT');  });
     process.on('SIGTERM', () => { shutdown('SIGTERM'); });
 
-    // Bring up the IPC server before the first heartbeat so callers can
-    // query the daemon as soon as it appears alive.
     try {
         ipcServer = await startIpcServer();
         process.stdout.write(`IPC listening on ${socketPath}\n`);
     } catch (err) {
         process.stderr.write(`Failed to bind IPC socket at ${socketPath}: ${err?.message ?? err}\n`);
-        // Non-fatal — keep running, the CLI will just fall back to Supabase queries.
     }
 
     if (!p2pDisabled) {
         try {
             p2pServer = await startP2pServer();
-            process.stdout.write(`P2P listening on ${formatEndpoint(advertisedAddress, p2pPort)} (dual-stack)\n`);
+            process.stdout.write(`P2P listening on ${formatEndpoint(advertisedAddress ?? '-', p2pPort)} (dual-stack)\n`);
         } catch (err) {
             const cause = err?.code === 'EADDRINUSE'
                 ? ` (port ${p2pPort} is already in use — pick another with --p2p-port)`
@@ -550,8 +430,8 @@ async function runDaemon(args, ctx) {
     await pollJobs();
 
     if (once) {
-        if (ipcServer) { try { ipcServer.close(); } catch { /* ignore */ } }
-        if (p2pServer) { try { p2pServer.close(); } catch { /* ignore */ } }
+        if (ipcServer) { try { ipcServer.close(); } catch {} }
+        if (p2pServer) { try { p2pServer.close(); } catch {} }
         removeSocketFile();
         await removePidFile();
         return 0;
@@ -564,7 +444,7 @@ async function runDaemon(args, ctx) {
         pollJobs().catch((err) => process.stderr.write(`poll threw: ${err?.message ?? err}\n`));
     }, pollMs);
 
-    await new Promise(() => {}); // keep the event loop alive
+    await new Promise(() => {});
     return 0;
 }
 

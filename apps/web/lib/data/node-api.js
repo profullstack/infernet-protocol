@@ -206,6 +206,173 @@ export async function completeJobForNode({ pubkey, jobId, body }) {
     return { id: job.id, status: patch.status };
 }
 
+export async function removeNode({ role, pubkey }) {
+    const table = tableForRole(role);
+    if (!table) throw withStatus(`invalid role: ${role}`, 400);
+
+    const supabase = getSupabaseServerClient();
+    const { data: existing, error: lookupErr } = await supabase
+        .from(table)
+        .select("id, public_key")
+        .eq("public_key", pubkey)
+        .maybeSingle();
+
+    if (lookupErr) throw withStatus(lookupErr.message, 500);
+    if (!existing) return { deleted: false };
+
+    const { error } = await supabase.from(table).delete().eq("id", existing.id);
+    if (error) throw withStatus(error.message, 500);
+    return { deleted: true, id: existing.id };
+}
+
+export async function getSelfRow({ role, pubkey }) {
+    const table = tableForRole(role);
+    if (!table) throw withStatus(`invalid role: ${role}`, 400);
+
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase
+        .from(table)
+        .select("*")
+        .eq("public_key", pubkey)
+        .maybeSingle();
+    if (error) throw withStatus(error.message, 500);
+    return { row: data ?? null };
+}
+
+const EVENT_BATCH_MAX = 200;
+const EVENT_TYPES = new Set(["meta", "token", "done", "error"]);
+
+export async function emitJobEvents({ pubkey, jobId, events }) {
+    if (!jobId) throw withStatus("jobId is required", 400);
+    if (!Array.isArray(events) || events.length === 0) {
+        throw withStatus("events must be a non-empty array", 400);
+    }
+    if (events.length > EVENT_BATCH_MAX) {
+        throw withStatus(`too many events (max ${EVENT_BATCH_MAX})`, 400);
+    }
+
+    const supabase = getSupabaseServerClient();
+    const { data: provider, error: provErr } = await supabase
+        .from("providers")
+        .select("id")
+        .eq("public_key", pubkey)
+        .maybeSingle();
+    if (provErr) throw withStatus(provErr.message, 500);
+    if (!provider) throw withStatus("no provider row for this pubkey", 404);
+
+    const { data: job, error: jobErr } = await supabase
+        .from("jobs")
+        .select("id, provider_id")
+        .eq("id", jobId)
+        .maybeSingle();
+    if (jobErr) throw withStatus(jobErr.message, 500);
+    if (!job) throw withStatus("job not found", 404);
+    if (job.provider_id !== provider.id) {
+        throw withStatus("job not assigned to this provider", 403);
+    }
+
+    const rows = events.map((e) => {
+        if (!e || typeof e !== "object" || !EVENT_TYPES.has(e.event_type)) {
+            throw withStatus(`invalid event_type (must be one of ${[...EVENT_TYPES].join(", ")})`, 400);
+        }
+        return {
+            job_id: jobId,
+            event_type: e.event_type,
+            data: e.data ?? {}
+        };
+    });
+
+    const { error } = await supabase.from("job_events").insert(rows);
+    if (error) throw withStatus(error.message, 500);
+    return { inserted: rows.length };
+}
+
+export async function listPaymentsForNode({ role, pubkey, limit = 20 }) {
+    const table = tableForRole(role);
+    if (!table) throw withStatus(`invalid role: ${role}`, 400);
+    if (role === "aggregator") {
+        return { rows: [] };
+    }
+
+    const supabase = getSupabaseServerClient();
+    const { data: row, error: rowErr } = await supabase
+        .from(table)
+        .select("id")
+        .eq("public_key", pubkey)
+        .maybeSingle();
+    if (rowErr) throw withStatus(rowErr.message, 500);
+    if (!row) throw withStatus("no row for this pubkey", 404);
+
+    const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    const column = role === "provider" ? "provider_id" : "client_id";
+    const { data, error } = await supabase
+        .from("payment_transactions")
+        .select("*")
+        .eq(column, row.id)
+        .order("created_at", { ascending: false })
+        .limit(safeLimit);
+    if (error) throw withStatus(error.message, 500);
+    return { rows: data ?? [] };
+}
+
+export async function listPayoutsForNode({ pubkey }) {
+    const supabase = getSupabaseServerClient();
+    const { data: provider, error: provErr } = await supabase
+        .from("providers")
+        .select("id")
+        .eq("public_key", pubkey)
+        .maybeSingle();
+    if (provErr) throw withStatus(provErr.message, 500);
+    if (!provider) throw withStatus("no provider row for this pubkey", 404);
+
+    const { data, error } = await supabase
+        .from("provider_payouts")
+        .select("*")
+        .eq("provider_id", provider.id)
+        .order("is_default", { ascending: false })
+        .order("created_at", { ascending: true });
+    if (error) throw withStatus(error.message, 500);
+    return { rows: data ?? [] };
+}
+
+export async function setPayoutForNode({ pubkey, coin, network, address }) {
+    if (!coin || !network || !address) {
+        throw withStatus("coin, network, and address are required", 400);
+    }
+    const supabase = getSupabaseServerClient();
+    const { data: provider, error: provErr } = await supabase
+        .from("providers")
+        .select("id")
+        .eq("public_key", pubkey)
+        .maybeSingle();
+    if (provErr) throw withStatus(provErr.message, 500);
+    if (!provider) throw withStatus("no provider row for this pubkey", 404);
+
+    const { error: demoteErr } = await supabase
+        .from("provider_payouts")
+        .update({ is_default: false })
+        .eq("provider_id", provider.id)
+        .eq("is_default", true);
+    if (demoteErr) throw withStatus(demoteErr.message, 500);
+
+    const { data, error } = await supabase
+        .from("provider_payouts")
+        .upsert(
+            {
+                provider_id: provider.id,
+                coin,
+                network,
+                address,
+                is_default: true
+            },
+            { onConflict: "provider_id,coin,address" }
+        )
+        .select()
+        .single();
+    if (error) throw withStatus(error.message, 500);
+    return { row: data };
+}
+
 function withStatus(message, status) {
     const err = new Error(message);
     err.status = status;

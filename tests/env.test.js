@@ -25,11 +25,14 @@ describe("getEnv", () => {
     });
   });
 
-  it("throws when required env is missing", () => {
+  it("throws when the service-role key is missing", () => {
     process.env = { ...ORIGINAL_ENV };
     delete process.env.SUPABASE_URL;
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    expect(() => getEnv()).toThrow(/SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY/);
+    // SUPABASE_URL is optional at the env layer (defaults to the local
+    // Supabase `supabase start` URL for dev). Only the service-role key
+    // is mandatory for the web app's server-side queries.
+    expect(() => getEnv()).toThrow(/SUPABASE_SERVICE_ROLE_KEY/);
   });
 });

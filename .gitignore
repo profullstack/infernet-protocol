@@ -9,8 +9,5 @@ coverage/
 /storage/
 /tmp/
 
-# PocketBase data
-/pb_data/
-
 # Logs
 /logs/

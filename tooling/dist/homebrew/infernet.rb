@@ -1,7 +1,7 @@
 # Homebrew formula for the Infernet CLI.
 #
 # Distribution pipeline:
-#   1. Release @infernet/cli to npm (via the workspace at apps/cli).
+#   1. Release @infernetprotocol/cli to npm (via the workspace at apps/cli).
 #   2. Run tooling/dist/homebrew/update-formula.mjs <version> which
 #      downloads the npm tarball, hashes it, and rewrites the url +
 #      sha256 + version fields in this file.
@@ -13,7 +13,7 @@
 class Infernet < Formula
   desc "GPU node control plane for the Infernet Protocol"
   homepage "https://github.com/profullstack/infernet-protocol"
-  url "https://registry.npmjs.org/@infernet/cli/-/cli-0.0.0.tgz"
+  url "https://registry.npmjs.org/@infernetprotocol/cli/-/cli-0.0.0.tgz"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   version "0.0.0"
   license "MIT"

@@ -3,7 +3,7 @@
  * Demonstrates the use of the Supabase-backed database layer.
  */
 
-import db from '@infernet/db';
+import db from '@infernetprotocol/db';
 import config from '../lib/runtime-config.js';
 
 /**

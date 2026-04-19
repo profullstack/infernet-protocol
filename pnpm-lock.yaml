@@ -8,7 +8,7 @@ importers:
 
   .:
     devDependencies:
-      '@infernet/cli':
+      '@infernetprotocol/cli':
         specifier: workspace:*
         version: link:apps/cli
       vitest:
@@ -17,10 +17,10 @@ importers:
 
   apps/cli:
     dependencies:
-      '@infernet/config':
+      '@infernetprotocol/config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@infernet/gpu':
+      '@infernetprotocol/gpu':
         specifier: workspace:*
         version: link:../../packages/gpu
       '@supabase/supabase-js':
@@ -110,13 +110,13 @@ importers:
 
   apps/web:
     dependencies:
-      '@infernet/config':
+      '@infernetprotocol/config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@infernet/deploy-providers':
+      '@infernetprotocol/deploy-providers':
         specifier: workspace:*
         version: link:../../packages/deploy-providers
-      '@infernet/payments':
+      '@infernetprotocol/payments':
         specifier: workspace:*
         version: link:../../packages/payments
       '@supabase/supabase-js':
@@ -159,7 +159,7 @@ importers:
 
   packages/db:
     dependencies:
-      '@infernet/logger':
+      '@infernetprotocol/logger':
         specifier: workspace:*
         version: link:../logger
       '@supabase/supabase-js':
@@ -180,7 +180,7 @@ importers:
 
   packages/payments:
     dependencies:
-      '@infernet/config':
+      '@infernetprotocol/config':
         specifier: workspace:*
         version: link:../config
 

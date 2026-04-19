@@ -1,5 +1,5 @@
 {
-  "name": "@infernet/sdk",
+  "name": "@infernetprotocol/sdk",
   "version": "0.1.0",
   "description": "JavaScript/TypeScript SDK for the Infernet Protocol REST + SSE API.",
   "license": "MIT",

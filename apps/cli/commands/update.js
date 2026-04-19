@@ -10,7 +10,7 @@
 import os from 'node:os';
 
 import { resolveP2pPort, detectLocalAddress } from '../lib/network.js';
-import { detectGpus } from '@infernet/gpu';
+import { detectGpus } from '@infernetprotocol/gpu';
 
 const HELP = `infernet update — push current node state to the control plane
 

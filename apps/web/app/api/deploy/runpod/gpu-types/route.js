@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { runpod } from "@infernet/deploy-providers";
+import { runpod } from "@infernetprotocol/deploy-providers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -1,5 +1,5 @@
 /**
- * @infernet/api-schema — OpenAPI 3.1 document for the Infernet control-plane API.
+ * @infernetprotocol/api-schema — OpenAPI 3.1 document for the Infernet control-plane API.
  *
  * We ship the YAML alongside the JS module so SDK generators, Swagger UI,
  * and humans can all consume the same source of truth. Bundlers that

@@ -4,9 +4,9 @@ Homebrew formula for the `infernet` CLI. The formula itself lives in [`infernet.
 
 ## Release flow
 
-1. Publish `@infernet/cli` to npm from the monorepo.
+1. Publish `@infernetprotocol/cli` to npm from the monorepo.
    ```bash
-   pnpm --filter @infernet/cli publish --access public
+   pnpm --filter @infernetprotocol/cli publish --access public
    ```
 2. Run the updater with the version you just published:
    ```bash

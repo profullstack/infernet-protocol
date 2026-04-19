@@ -6,7 +6,7 @@
  *   infernet payout list
  */
 
-import { PAYMENT_COINS, PAYMENT_COIN_CODES } from '@infernet/config/payment-coins';
+import { PAYMENT_COINS, PAYMENT_COIN_CODES } from '@infernetprotocol/config/payment-coins';
 
 const HELP = `infernet payout — manage payout coin/address
 

@@ -18,7 +18,7 @@
  * migrated.
  */
 
-import { createLogger } from '@infernet/logger';
+import { createLogger } from '@infernetprotocol/logger';
 
 const logger = createLogger('model:job');
 const TABLE = 'jobs';

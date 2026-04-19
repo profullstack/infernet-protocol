@@ -6,7 +6,7 @@
  *   json   Print raw JSON array (useful for debugging / scripting).
  */
 
-import { detectGpus, formatGpuLine } from '@infernet/gpu';
+import { detectGpus, formatGpuLine } from '@infernetprotocol/gpu';
 
 const HELP = `infernet gpu — inspect local GPUs
 

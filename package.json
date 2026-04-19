@@ -5,10 +5,10 @@
   "description": "Infernet Protocol monorepo",
   "packageManager": "pnpm@10.6.5",
   "scripts": {
-    "dev": "pnpm --filter @infernet/web dev",
-    "build": "pnpm --filter @infernet/web build",
-    "start": "pnpm --filter @infernet/web start",
-    "cli": "pnpm --filter @infernet/cli exec infernet",
+    "dev": "pnpm --filter @infernetprotocol/web dev",
+    "build": "pnpm --filter @infernetprotocol/web build",
+    "start": "pnpm --filter @infernetprotocol/web start",
+    "cli": "pnpm --filter @infernetprotocol/cli exec infernet",
     "test": "pnpm -r --parallel test",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
@@ -18,7 +18,7 @@
     "supabase:db:push": "supabase db push"
   },
   "devDependencies": {
-    "@infernet/cli": "workspace:*",
+    "@infernetprotocol/cli": "workspace:*",
     "vitest": "^3.0.8"
   }
 }

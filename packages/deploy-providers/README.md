@@ -1,10 +1,10 @@
-# @infernet/deploy-providers
+# @infernetprotocol/deploy-providers
 
 Adapters for one-click deploying an Infernet provider node to cloud GPU services. Currently supports **RunPod**; more to come.
 
 ## Why
 
-The canonical Infernet flow is "rent a GPU, install the CLI, start earning." The friction of SSH-ing into a rented box and running `pnpm install -g @infernet/cli` keeps that flow from ever being one click. This package wraps the cloud service APIs so the web dashboard can launch a pod running a pre-built Infernet provider image in a single POST.
+The canonical Infernet flow is "rent a GPU, install the CLI, start earning." The friction of SSH-ing into a rented box and running `pnpm install -g @infernetprotocol/cli` keeps that flow from ever being one click. This package wraps the cloud service APIs so the web dashboard can launch a pod running a pre-built Infernet provider image in a single POST.
 
 ## Design
 
@@ -12,7 +12,7 @@ Each adapter is **stateless**. It receives the user's cloud API key in-band with
 
 ## Adapters
 
-- `@infernet/deploy-providers/runpod` — RunPod's GraphQL API. Deploys a pod running the `ghcr.io/profullstack/infernet-provider` image.
+- `@infernetprotocol/deploy-providers/runpod` — RunPod's GraphQL API. Deploys a pod running the `ghcr.io/profullstack/infernet-provider` image.
 
 Every adapter exports:
 - `listGpuTypes(apiKey)` → `Array<{ id, name, vramMb, pricePerHour, region? }>`

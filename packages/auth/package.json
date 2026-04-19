@@ -1,5 +1,5 @@
 {
-  "name": "@infernet/auth",
+  "name": "@infernetprotocol/auth",
   "version": "0.1.0",
   "description": "Nostr-based authentication helpers for the Infernet Protocol.",
   "license": "MIT",

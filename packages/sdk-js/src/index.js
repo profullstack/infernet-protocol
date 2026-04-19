@@ -7,7 +7,7 @@
  * Works in Node.js 18+ and modern browsers — uses native `fetch` and
  * stream readers; no runtime dependencies.
  *
- *   import { InfernetClient } from "@infernet/sdk";
+ *   import { InfernetClient } from "@infernetprotocol/sdk";
  *   const client = new InfernetClient({ baseUrl: "https://infernet.tech" });
  *
  *   const overview = await client.getOverview();

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { runpod } from "@infernet/deploy-providers";
+import { runpod } from "@infernetprotocol/deploy-providers";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";

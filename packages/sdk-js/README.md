@@ -1,4 +1,4 @@
-# @infernet/sdk
+# @infernetprotocol/sdk
 
 Official JavaScript/TypeScript SDK for the [Infernet Protocol](https://github.com/profullstack/infernet-protocol) — a peer-to-peer GPU inference marketplace.
 
@@ -7,15 +7,15 @@ Works in Node.js 18+ and modern browsers. Zero runtime dependencies (uses native
 ## Install
 
 ```bash
-pnpm add @infernet/sdk
+pnpm add @infernetprotocol/sdk
 # or
-npm install @infernet/sdk
+npm install @infernetprotocol/sdk
 ```
 
 ## Quick start
 
 ```js
-import { InfernetClient } from "@infernet/sdk";
+import { InfernetClient } from "@infernetprotocol/sdk";
 
 const client = new InfernetClient({
   baseUrl: "https://infernet.tech"      // or your self-hosted control plane

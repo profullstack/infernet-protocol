@@ -1,5 +1,5 @@
 {
-  "name": "@infernet/cli",
+  "name": "@infernetprotocol/cli",
   "version": "0.1.0",
   "description": "GPU-node CLI / daemon for the Infernet Protocol — register a GPU server with a Supabase control plane and start earning.",
   "license": "MIT",
@@ -23,8 +23,8 @@
     "start": "node ./index.js"
   },
   "dependencies": {
-    "@infernet/config": "workspace:*",
-    "@infernet/gpu": "workspace:*",
+    "@infernetprotocol/config": "workspace:*",
+    "@infernetprotocol/gpu": "workspace:*",
     "@supabase/supabase-js": "^2.49.8",
     "dotenv": "^16.4.7"
   },

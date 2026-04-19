@@ -16,7 +16,7 @@ import os from 'node:os';
 
 import { saveConfig } from '../lib/config.js';
 import { resolveP2pPort, detectLocalAddress } from '../lib/network.js';
-import { detectGpus } from '@infernet/gpu';
+import { detectGpus } from '@infernetprotocol/gpu';
 
 const HELP = `infernet register — announce this node to the control plane
 

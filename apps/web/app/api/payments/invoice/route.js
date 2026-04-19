@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { findCoin } from "@infernet/config/payment-coins";
-import { createInvoice } from "@infernet/payments";
+import { findCoin } from "@infernetprotocol/config/payment-coins";
+import { createInvoice } from "@infernetprotocol/payments";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

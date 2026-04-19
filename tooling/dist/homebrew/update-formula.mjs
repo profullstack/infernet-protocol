@@ -4,7 +4,7 @@
  *
  *   node tooling/dist/homebrew/update-formula.mjs 1.2.3
  *
- * Downloads the tarball for `@infernet/cli@<version>` from the npm
+ * Downloads the tarball for `@infernetprotocol/cli@<version>` from the npm
  * registry, computes its sha256, and patches the `url`, `sha256`, and
  * `version` fields in the Ruby formula. Uses only Node built-ins so the
  * release machine doesn't need any extra tooling installed.
@@ -19,7 +19,7 @@ import { Readable } from "node:stream";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FORMULA_PATH = path.join(__dirname, "infernet.rb");
-const PACKAGE = "@infernet/cli";
+const PACKAGE = "@infernetprotocol/cli";
 
 function fail(message) {
     process.stderr.write(`update-formula: ${message}\n`);

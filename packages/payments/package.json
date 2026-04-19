@@ -1,5 +1,5 @@
 {
-  "name": "@infernet/payments",
+  "name": "@infernetprotocol/payments",
   "version": "0.1.0",
   "description": "CoinPayPortal payment gateway integration for the Infernet Protocol.",
   "license": "MIT",
@@ -12,7 +12,7 @@
   "files": ["src/**/*.js", "README.md"],
   "engines": { "node": ">=18" },
   "dependencies": {
-    "@infernet/config": "workspace:*"
+    "@infernetprotocol/config": "workspace:*"
   },
   "repository": {
     "type": "git",

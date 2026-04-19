@@ -1,14 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: [
-    "@infernet/config",
-    "@infernet/payments",
-    "@infernet/deploy-providers",
-    "@infernet/db",
-    "@infernet/gpu",
-    "@infernet/auth",
-    "@infernet/logger",
-    "@infernet/inference"
+    "@infernetprotocol/config",
+    "@infernetprotocol/payments",
+    "@infernetprotocol/deploy-providers",
+    "@infernetprotocol/db",
+    "@infernetprotocol/gpu",
+    "@infernetprotocol/auth",
+    "@infernetprotocol/logger",
+    "@infernetprotocol/inference"
   ],
   experimental: {
     typedRoutes: false

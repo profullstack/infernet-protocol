@@ -1,5 +1,5 @@
 {
-  "name": "@infernet/daemon",
+  "name": "@infernetprotocol/daemon",
   "version": "0.1.0",
   "private": true,
   "description": "Placeholder for future standalone Infernet service daemons",

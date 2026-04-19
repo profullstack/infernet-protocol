@@ -189,8 +189,8 @@ Consumers can pay for jobs and providers can be paid out in any of these coin/ne
 
 BTC, BCH, ETH, SOL, POL, BNB, XRP, ADA, DOGE; plus USDT on ETH/Polygon/Solana; plus USDC on ETH/Polygon/Solana/Base.
 
-- Canonical list: [`config/payment-coins.js`](./config/payment-coins.js)
-- Platform deposit addresses: [`config/deposit-addresses.js`](./config/deposit-addresses.js) — also seeded into the `platform_wallets` table.
+- Canonical list: [`packages/config/payment-coins.js`](./packages/config/payment-coins.js)
+- Platform deposit addresses: [`packages/config/deposit-addresses.js`](./packages/config/deposit-addresses.js) — also seeded into the `platform_wallets` table.
 - Gateway: CoinPayPortal ([`src/payments/coinpayportal.js`](./src/payments/coinpayportal.js)). Set `COINPAYPORTAL_API_KEY`, `COINPAYPORTAL_WEBHOOK_SECRET` in `.env.local`.
 - Invoice: `POST /api/payments/invoice` with `{ jobId, coin }`.
 - Webhook: `POST /api/payments/webhook` — HMAC-verified, updates `payment_transactions` + `jobs.payment_status`.
@@ -244,13 +244,13 @@ All server-only. The Supabase service-role client is never imported into browser
 
 ## Developer surfaces
 
-- **`@infernet/sdk`** ([packages/sdk-js](./packages/sdk-js)) — JS/TS SDK with an `InfernetClient` and an async-iterator `chat()` helper for the SSE stream.
-- **`@infernet/api-schema`** ([packages/api-schema](./packages/api-schema)) — OpenAPI 3.1 spec; feed to any generator for Python/Go/Rust clients.
-- **`@infernet/deploy-providers`** ([packages/deploy-providers](./packages/deploy-providers)) — cloud-GPU adapters (RunPod today) powering the one-click `/deploy` page.
+- **`@infernetprotocol/sdk`** ([packages/sdk-js](./packages/sdk-js)) — JS/TS SDK with an `InfernetClient` and an async-iterator `chat()` helper for the SSE stream.
+- **`@infernetprotocol/api-schema`** ([packages/api-schema](./packages/api-schema)) — OpenAPI 3.1 spec; feed to any generator for Python/Go/Rust clients.
+- **`@infernetprotocol/deploy-providers`** ([packages/deploy-providers](./packages/deploy-providers)) — cloud-GPU adapters (RunPod today) powering the one-click `/deploy` page.
 
 ## Distribution
 
-- **npm** — every public `@infernet/*` workspace package (CLI, SDK, deploy-providers, api-schema, payments, config, db, gpu, auth, logger, inference) is published on tag push.
+- **npm** — every public `@infernetprotocol/*` workspace package (CLI, SDK, deploy-providers, api-schema, payments, config, db, gpu, auth, logger, inference) is published on tag push.
 - **Docker** ([tooling/docker/provider](./tooling/docker/provider)) — `ghcr.io/profullstack/infernet-provider:<version>` / `:latest` / `:edge` images. Basis for the one-click deploy flow.
 - **Homebrew** ([tooling/dist/homebrew](./tooling/dist/homebrew)) — formula + updater script. On release, the generated `infernet.rb` is attached to the GitHub Release; sync into the `profullstack/homebrew-infernet` tap.
 

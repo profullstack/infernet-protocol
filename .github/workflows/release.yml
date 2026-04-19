@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # npm — bump every publishable @infernet/* workspace package to the tag's
+  # npm — bump every publishable @infernetprotocol/* workspace package to the tag's
   # version and publish to npmjs.org with provenance. Internal workspace:*
   # deps are rewritten to the concrete version by `pnpm publish`.
   # ---------------------------------------------------------------------------
@@ -52,23 +52,23 @@ jobs:
             exec npm version "${{ steps.version.outputs.version }}" \
             --no-git-tag-version --allow-same-version
 
-      - name: Publish public @infernet/* packages
+      - name: Publish public @infernetprotocol/* packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
         run: |
           pnpm publish \
-            --filter "@infernet/cli" \
-            --filter "@infernet/sdk" \
-            --filter "@infernet/api-schema" \
-            --filter "@infernet/deploy-providers" \
-            --filter "@infernet/auth" \
-            --filter "@infernet/config" \
-            --filter "@infernet/db" \
-            --filter "@infernet/gpu" \
-            --filter "@infernet/inference" \
-            --filter "@infernet/logger" \
-            --filter "@infernet/payments" \
+            --filter "@infernetprotocol/cli" \
+            --filter "@infernetprotocol/sdk" \
+            --filter "@infernetprotocol/api-schema" \
+            --filter "@infernetprotocol/deploy-providers" \
+            --filter "@infernetprotocol/auth" \
+            --filter "@infernetprotocol/config" \
+            --filter "@infernetprotocol/db" \
+            --filter "@infernetprotocol/gpu" \
+            --filter "@infernetprotocol/inference" \
+            --filter "@infernetprotocol/logger" \
+            --filter "@infernetprotocol/payments" \
             --access public \
             --no-git-checks \
             --tag latest
@@ -100,11 +100,11 @@ jobs:
         run: |
           set -e
           for i in $(seq 1 30); do
-            if npm view "@infernet/cli@${{ needs.npm.outputs.version }}" version >/dev/null 2>&1; then
+            if npm view "@infernetprotocol/cli@${{ needs.npm.outputs.version }}" version >/dev/null 2>&1; then
               echo "npm: version ${{ needs.npm.outputs.version }} is live"
               exit 0
             fi
-            echo "waiting for @infernet/cli@${{ needs.npm.outputs.version }} on npm... ($i/30)"
+            echo "waiting for @infernetprotocol/cli@${{ needs.npm.outputs.version }} on npm... ($i/30)"
             sleep 5
           done
           echo "timed out waiting for npm propagation"
@@ -146,7 +146,7 @@ jobs:
         run: |
           set -e
           for i in $(seq 1 30); do
-            if npm view "@infernet/cli@${{ needs.npm.outputs.version }}" version >/dev/null 2>&1; then
+            if npm view "@infernetprotocol/cli@${{ needs.npm.outputs.version }}" version >/dev/null 2>&1; then
               exit 0
             fi
             sleep 5
@@ -165,6 +165,6 @@ jobs:
             ## Infernet ${{ needs.npm.outputs.version }}
 
             Published artifacts:
-            - npm: `@infernet/cli@${{ needs.npm.outputs.version }}` + the rest of the `@infernet/*` workspace packages
+            - npm: `@infernetprotocol/cli@${{ needs.npm.outputs.version }}` + the rest of the `@infernetprotocol/*` workspace packages
             - Docker: `ghcr.io/${{ github.repository_owner }}/infernet-provider:${{ needs.npm.outputs.version }}`
             - Homebrew: `infernet.rb` attached below — copy into the `profullstack/homebrew-infernet` tap repo and push.

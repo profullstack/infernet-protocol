@@ -23,7 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # template-based services will pull this image and run it; keeping
 # the install bake-time keeps cold-start latency low.
 ARG INFERNET_CLI_VERSION=latest
-RUN npm install -g "@infernet/cli@${INFERNET_CLI_VERSION}"
+RUN npm install -g "@infernetprotocol/cli@${INFERNET_CLI_VERSION}"
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

@@ -4,7 +4,7 @@ import {
   verifyWebhookSignature,
   parseWebhookPayload,
   WEBHOOK_SIGNATURE_HEADER
-} from "@infernet/payments";
+} from "@infernetprotocol/payments";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

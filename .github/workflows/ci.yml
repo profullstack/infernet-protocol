@@ -40,4 +40,4 @@ jobs:
           exit $fail
 
       - name: Smoke-test CLI
-        run: pnpm --filter @infernet/cli exec infernet help
+        run: pnpm --filter @infernetprotocol/cli exec infernet help

@@ -1,4 +1,4 @@
 /**
- * @infernet/auth — re-exports Nostr authentication helpers.
+ * @infernetprotocol/auth — re-exports Nostr authentication helpers.
  */
 export * from "./nostr.js";

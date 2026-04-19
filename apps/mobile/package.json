@@ -1,5 +1,5 @@
 {
-  "name": "@infernet/mobile",
+  "name": "@infernetprotocol/mobile",
   "version": "0.1.0",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {

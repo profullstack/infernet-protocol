@@ -1,5 +1,5 @@
 /**
- * @infernet/logger — structured logging helper for Infernet packages.
+ * @infernetprotocol/logger — structured logging helper for Infernet packages.
  *
  * Reads its configuration from process.env so it can be used from any
  * context (CLI, daemon, Next.js server routes) without depending on a

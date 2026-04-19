@@ -36,7 +36,7 @@ import { question } from '../lib/prompt.js';
 import { generateNostrKeyPair, isHex64 } from '../lib/identity.js';
 import { DEFAULT_P2P_PORT, detectLocalAddress } from '../lib/network.js';
 import { printFirewallHint } from '../lib/firewall.js';
-import { detectGpus, formatGpuLine } from '@infernet/gpu';
+import { detectGpus, formatGpuLine } from '@infernetprotocol/gpu';
 
 const HELP = `infernet init — configure this node
 

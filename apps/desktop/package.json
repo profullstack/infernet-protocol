@@ -1,5 +1,5 @@
 {
-  "name": "@infernet/desktop",
+  "name": "@infernetprotocol/desktop",
   "version": "2.0.0",
   "description": "Infernet Protocol Electron desktop application",
   "main": "electron/main.js",

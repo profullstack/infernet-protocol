@@ -8,7 +8,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { EventEmitter } from 'events';
 
-import { createLogger } from '@infernet/logger';
+import { createLogger } from '@infernetprotocol/logger';
 
 import Provider from './models/provider.js';
 import Client from './models/client.js';

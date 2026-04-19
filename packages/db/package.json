@@ -1,5 +1,5 @@
 {
-  "name": "@infernet/db",
+  "name": "@infernetprotocol/db",
   "version": "0.1.0",
   "description": "Supabase-backed model layer for the Infernet Protocol (Provider, Client, Job, Aggregator).",
   "license": "MIT",
@@ -17,7 +17,7 @@
   "files": ["src/**/*.js", "README.md"],
   "engines": { "node": ">=18" },
   "dependencies": {
-    "@infernet/logger": "workspace:*",
+    "@infernetprotocol/logger": "workspace:*",
     "@supabase/supabase-js": "^2.49.8"
   },
   "repository": {

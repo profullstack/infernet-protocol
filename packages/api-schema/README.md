@@ -1,11 +1,11 @@
-# @infernet/api-schema
+# @infernetprotocol/api-schema
 
 OpenAPI 3.1 specification for the Infernet Protocol control-plane API.
 
 The authoritative document is [`openapi.yaml`](./openapi.yaml). The JS module re-exports the raw YAML so SDK generators can consume it programmatically:
 
 ```js
-import { openapiYaml, openapiYamlPath } from "@infernet/api-schema";
+import { openapiYaml, openapiYamlPath } from "@infernetprotocol/api-schema";
 ```
 
 ## Usage

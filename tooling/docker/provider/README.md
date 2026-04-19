@@ -2,7 +2,7 @@
 
 Pre-built container that boots the `infernet` CLI as a provider node. Used by:
 
-- The **one-click deploy** flow in the web dashboard (via `@infernet/deploy-providers/runpod`).
+- The **one-click deploy** flow in the web dashboard (via `@infernetprotocol/deploy-providers/runpod`).
 - Anyone who wants to run a provider via `docker run` or `docker-compose` without managing Node.js installs.
 
 ## Build

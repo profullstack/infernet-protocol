@@ -11,6 +11,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@infernetprotocol/auth": "workspace:*",
     "@infernetprotocol/config": "workspace:*",
     "@infernetprotocol/deploy-providers": "workspace:*",
     "@infernetprotocol/nim-adapter": "workspace:*",

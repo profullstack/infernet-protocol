@@ -116,6 +116,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@infernetprotocol/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@infernetprotocol/config':
         specifier: workspace:*
         version: link:../../packages/config

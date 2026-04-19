@@ -7,7 +7,8 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   resolve: {
     alias: {
-      "@": path.join(rootDir, "apps/web")
+      "@": path.join(rootDir, "apps/web"),
+      "server-only": path.join(rootDir, "tests/.server-only-stub.js")
     }
   },
   test: {

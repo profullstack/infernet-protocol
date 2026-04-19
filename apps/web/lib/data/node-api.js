@@ -1,0 +1,213 @@
+import "server-only";
+
+import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { tableForRole } from "@/lib/auth/verify-signed-request";
+
+const MAX_SPECS_GPUS = 16;
+
+/**
+ * Scrub an incoming specs object to the coarse, privacy-preserving shape we
+ * accept. Nodes used to send hostname/platform/arch/cpu/ram — we drop all of
+ * that and only persist a redacted GPU summary. Vendor + VRAM tier is enough
+ * to route jobs; anything finer is deanonymization bait.
+ */
+export function sanitizeSpecs(input) {
+    if (!input || typeof input !== "object") return null;
+    const gpus = Array.isArray(input.gpus) ? input.gpus.slice(0, MAX_SPECS_GPUS) : [];
+    return {
+        gpus: gpus.map(sanitizeGpu).filter(Boolean),
+        gpu_count: gpus.length
+    };
+}
+
+function sanitizeGpu(gpu) {
+    if (!gpu || typeof gpu !== "object") return null;
+    const vendor = typeof gpu.vendor === "string" ? gpu.vendor.toLowerCase() : null;
+    const vramMb = Number.isFinite(gpu.vram_mb) ? Number(gpu.vram_mb) : null;
+    return {
+        vendor: vendor && ["nvidia", "amd", "apple", "intel"].includes(vendor) ? vendor : "unknown",
+        vram_tier: vramTier(vramMb),
+        model: typeof gpu.model === "string" ? gpu.model.slice(0, 64) : null
+    };
+}
+
+function vramTier(vramMb) {
+    if (!Number.isFinite(vramMb) || vramMb <= 0) return "unknown";
+    if (vramMb < 8 * 1024) return "<8gb";
+    if (vramMb < 16 * 1024) return "8-16gb";
+    if (vramMb < 24 * 1024) return "16-24gb";
+    if (vramMb < 48 * 1024) return "24-48gb";
+    return ">=48gb";
+}
+
+/**
+ * Upsert a provider/aggregator/client row keyed on node_id. The caller has
+ * already verified the request signature and matched pubkey→resource.
+ */
+export async function registerNode({ role, pubkey, body }) {
+    const table = tableForRole(role);
+    if (!table) throw withStatus(`invalid role: ${role}`, 400);
+
+    const nodeId = body.node_id;
+    if (!nodeId || typeof nodeId !== "string") {
+        throw withStatus("node_id is required", 400);
+    }
+
+    const supabase = getSupabaseServerClient();
+    const { data: existing } = await supabase
+        .from(table)
+        .select("id, public_key")
+        .eq("node_id", nodeId)
+        .maybeSingle();
+
+    if (existing && existing.public_key && existing.public_key !== pubkey) {
+        throw withStatus("node_id is registered to a different pubkey", 403);
+    }
+
+    const payload = {
+        node_id: nodeId,
+        public_key: pubkey,
+        name: typeof body.name === "string" ? body.name : nodeId,
+        status: body.status === "offline" ? "offline" : "available",
+        last_seen: new Date().toISOString()
+    };
+
+    if (typeof body.address === "string") payload.address = body.address;
+    if (Number.isFinite(body.port)) payload.port = Number(body.port);
+
+    if (role === "provider") {
+        if (typeof body.gpu_model === "string") payload.gpu_model = body.gpu_model.slice(0, 64);
+        if (Number.isFinite(body.price)) payload.price = Number(body.price);
+        const specs = sanitizeSpecs(body.specs);
+        if (specs) payload.specs = specs;
+    }
+
+    if (role === "client") {
+        delete payload.status;
+    }
+
+    const { data, error } = await supabase
+        .from(table)
+        .upsert(payload, { onConflict: "node_id" })
+        .select("id, node_id")
+        .single();
+
+    if (error) throw withStatus(error.message, 500);
+    return { id: data.id, node_id: data.node_id };
+}
+
+/**
+ * Update last_seen + optional address/port/status. Returns the new row id.
+ */
+export async function heartbeatNode({ role, pubkey, body }) {
+    const table = tableForRole(role);
+    if (!table) throw withStatus(`invalid role: ${role}`, 400);
+
+    const supabase = getSupabaseServerClient();
+    const { data: existing, error: lookupErr } = await supabase
+        .from(table)
+        .select("id, public_key")
+        .eq("public_key", pubkey)
+        .maybeSingle();
+
+    if (lookupErr) throw withStatus(lookupErr.message, 500);
+    if (!existing) throw withStatus("no row for this pubkey — call /register first", 404);
+
+    const patch = { last_seen: new Date().toISOString() };
+    if (role !== "client") {
+        patch.status = body.status === "offline" ? "offline" : "available";
+    }
+    if (typeof body.address === "string") patch.address = body.address;
+    if (Number.isFinite(body.port)) patch.port = Number(body.port);
+
+    const { error } = await supabase.from(table).update(patch).eq("id", existing.id);
+    if (error) throw withStatus(error.message, 500);
+    return { id: existing.id };
+}
+
+export async function pollJobsForNode({ pubkey, limit = 5 }) {
+    const supabase = getSupabaseServerClient();
+    const { data: provider, error: provErr } = await supabase
+        .from("providers")
+        .select("id")
+        .eq("public_key", pubkey)
+        .maybeSingle();
+    if (provErr) throw withStatus(provErr.message, 500);
+    if (!provider) throw withStatus("no provider row for this pubkey", 404);
+
+    const { data, error } = await supabase
+        .from("jobs")
+        .select("id, title, type, status, payment_offer, payment_coin, model_name, payload, created_at")
+        .eq("provider_id", provider.id)
+        .in("status", ["assigned"])
+        .order("created_at", { ascending: true })
+        .limit(Math.min(Math.max(Number(limit) || 5, 1), 25));
+
+    if (error) throw withStatus(error.message, 500);
+    return { provider_id: provider.id, jobs: data ?? [] };
+}
+
+export async function completeJobForNode({ pubkey, jobId, body }) {
+    if (!jobId) throw withStatus("jobId is required", 400);
+    const supabase = getSupabaseServerClient();
+
+    const { data: provider, error: provErr } = await supabase
+        .from("providers")
+        .select("id")
+        .eq("public_key", pubkey)
+        .maybeSingle();
+    if (provErr) throw withStatus(provErr.message, 500);
+    if (!provider) throw withStatus("no provider row for this pubkey", 404);
+
+    const { data: job, error: jobErr } = await supabase
+        .from("jobs")
+        .select("id, provider_id, payment_offer, payment_coin, status")
+        .eq("id", jobId)
+        .maybeSingle();
+    if (jobErr) throw withStatus(jobErr.message, 500);
+    if (!job) throw withStatus("job not found", 404);
+    if (job.provider_id !== provider.id) throw withStatus("job not assigned to this provider", 403);
+
+    const completedAt = new Date().toISOString();
+    const failed = body.status === "failed";
+    const patch = {
+        status: failed ? "failed" : "completed",
+        updated_at: completedAt,
+        completed_at: completedAt
+    };
+    if (!failed && body.result !== undefined) patch.result = body.result;
+    if (failed && typeof body.error === "string") patch.error = body.error.slice(0, 1024);
+
+    const { error: markErr } = await supabase.from("jobs").update(patch).eq("id", job.id);
+    if (markErr) throw withStatus(markErr.message, 500);
+
+    if (!failed) {
+        const amount = Number.parseFloat(job.payment_offer ?? 0) || 0;
+        if (amount > 0) {
+            const coin = job.payment_coin ?? "USDC";
+            const { error: payErr } = await supabase.from("payment_transactions").insert({
+                direction: "outbound",
+                job_id: job.id,
+                provider_id: provider.id,
+                coin,
+                amount,
+                amount_usd: amount,
+                address: "pending-payout",
+                status: "pending",
+                metadata: { via: "node-api" }
+            });
+            if (payErr) {
+                // Non-fatal — payment accounting is follow-up work.
+                console.warn(`payment_transactions insert failed: ${payErr.message}`);
+            }
+        }
+    }
+
+    return { id: job.id, status: patch.status };
+}
+
+function withStatus(message, status) {
+    const err = new Error(message);
+    err.status = status;
+    return err;
+}

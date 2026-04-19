@@ -11,7 +11,7 @@ This document explains how to use the Infernet Protocol as a resource consumer t
 1. **Client Interface**: Desktop app, PWA, mobile app, or API for programmatic access
 2. **Provider Network**: Distributed network of GPU/CPU resources
 3. **P2P Network**: Decentralized infrastructure connecting consumers and providers
-4. **Local Supabase**: Self-hosted database for job management and history
+4. **Supabase**: Postgres-backed database for job management and history. Consumers can use the hosted Infernet cloud offering or self-host Supabase. Accessed only from the Next.js server.
 
 ## Getting Started
 

@@ -11,7 +11,7 @@ This document explains how to use the Infernet Protocol as a resource provider t
 1. **Control Interface**: Desktop app, PWA, or mobile app running on your personal device
 2. **Provider Nodes**: Docker containers running on machines with GPUs/CPUs
 3. **P2P Network**: Decentralized network connecting all nodes
-4. **Local Supabase**: Self-hosted metadata store for configuration and management
+4. **Supabase**: Postgres-backed control plane for configuration, job metadata, and management. Providers can either self-host Supabase or point their node at the Infernet cloud offering — the CLI only needs a Supabase URL and service-role key. Accessed only from the Next.js server.
 
 ## Setup Process
 

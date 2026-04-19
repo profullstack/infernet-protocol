@@ -14,10 +14,11 @@
 ## Frontend Technologies
 
 ### Web & Desktop
-- **Next.js**: For the primary web application
+- **Next.js 16.x**: App Router for the primary web application (React 19)
+- **React**: Server and client components
 - **Tailwind CSS**: For application styling
 - **Electron**: For the desktop shell over the Next.js app
-- **Next.js route handlers**: For server APIs over the local Supabase stack
+- **Next.js route handlers**: For server APIs that talk to Supabase Cloud
 
 ### Mobile
 - **React Native**: With Expo.dev for cross-platform mobile development
@@ -26,10 +27,10 @@
 ## Backend Technologies
 
 ### Database
-- **Local open-source Supabase**: For application data, job metadata, and dashboard state
-  - Run locally via the Supabase CLI
-  - Access through server-side Next.js modules only
-  - Do not call Supabase directly from browser bundles
+- **Supabase** (self-hosted or cloud): Postgres + Auth + Realtime for application data, job metadata, and dashboard state
+  - Self-hosted via the Supabase CLI (`supabase start`) or cloud-hosted at [supabase.com](https://supabase.com); operators choose per deployment
+  - Accessed only from server-side Next.js modules (route handlers, server components) using the service-role key
+  - Never imported into client components or shipped in the browser bundle
 
 ### Communication
 - **WebSockets**: For real-time, bidirectional communication

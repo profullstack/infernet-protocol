@@ -4,6 +4,7 @@ const nextConfig = {
     "@infernetprotocol/config",
     "@infernetprotocol/payments",
     "@infernetprotocol/deploy-providers",
+    "@infernetprotocol/nim-adapter",
     "@infernetprotocol/db",
     "@infernetprotocol/gpu",
     "@infernetprotocol/auth",

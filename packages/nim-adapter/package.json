@@ -1,0 +1,19 @@
+{
+  "name": "@infernetprotocol/nim-adapter",
+  "version": "0.1.0",
+  "description": "NVIDIA NIM / build.nvidia.com adapter for the Infernet Protocol — treats NIM's OpenAI-compatible endpoint as a fallback inference provider.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": ["src/**/*.js", "README.md"],
+  "engines": { "node": ">=18" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/profullstack/infernet-protocol.git",
+    "directory": "packages/nim-adapter"
+  },
+  "homepage": "https://github.com/profullstack/infernet-protocol#readme"
+}

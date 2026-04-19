@@ -42,12 +42,18 @@ export async function POST(request) {
   }
 
   try {
-    const { job, provider } = await createChatJob({ messages, modelName, maxTokens, temperature });
+    const { job, provider, source } = await createChatJob({ messages, modelName, maxTokens, temperature });
+    if (source === "none") {
+      return err(503, "The Infernet network has no live providers and the NVIDIA NIM fallback is not configured.", {
+        hint: "Set NVIDIA_NIM_API_KEY on the control plane or wait for a provider to come online."
+      });
+    }
     return NextResponse.json({
       jobId: job.id,
       status: job.status,
+      source,
       provider: provider
-        ? { id: provider.id, name: provider.name, nodeId: provider.node_id, gpuModel: provider.gpu_model }
+        ? { id: provider.id, name: provider.name, nodeId: provider.node_id, gpuModel: provider.gpu_model, model: provider.model ?? null }
         : null,
       streamUrl: `/api/chat/stream/${job.id}`
     });

@@ -13,6 +13,7 @@
   "dependencies": {
     "@infernetprotocol/config": "workspace:*",
     "@infernetprotocol/deploy-providers": "workspace:*",
+    "@infernetprotocol/nim-adapter": "workspace:*",
     "@infernetprotocol/payments": "workspace:*",
     "@supabase/supabase-js": "^2.49.8",
     "clsx": "^2.1.1",

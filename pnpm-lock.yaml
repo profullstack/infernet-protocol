@@ -116,6 +116,9 @@ importers:
       '@infernetprotocol/deploy-providers':
         specifier: workspace:*
         version: link:../../packages/deploy-providers
+      '@infernetprotocol/nim-adapter':
+        specifier: workspace:*
+        version: link:../../packages/nim-adapter
       '@infernetprotocol/payments':
         specifier: workspace:*
         version: link:../../packages/payments
@@ -177,6 +180,8 @@ importers:
         version: 8.20.0
 
   packages/logger: {}
+
+  packages/nim-adapter: {}
 
   packages/payments:
     dependencies:

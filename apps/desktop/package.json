@@ -1,0 +1,50 @@
+{
+  "name": "@infernet/desktop",
+  "version": "2.0.0",
+  "description": "Infernet Protocol Electron desktop application",
+  "main": "electron/main.js",
+  "type": "module",
+  "scripts": {
+    "electron": "electron .",
+    "electron:dev": "concurrently \"cd ../.. && pnpm dev\" \"wait-on http://127.0.0.1:3000 && cross-env NODE_ENV=development NEXT_DESKTOP_URL=http://127.0.0.1:3000 electron .\"",
+    "electron:build": "cd ../.. && pnpm build",
+    "electron:start": "cross-env NODE_ENV=production NEXT_DESKTOP_URL=http://127.0.0.1:3000 electron ."
+  },
+  "keywords": [
+    "infernet",
+    "protocol",
+    "ai",
+    "inference",
+    "desktop"
+  ],
+  "author": "Infernet Protocol Team",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^35.1.2",
+    "electron-builder": "^24.13.3",
+    "wait-on": "^8.0.3"
+  },
+  "dependencies": {},
+  "build": {
+    "appId": "com.infernet.protocol.desktop",
+    "productName": "Infernet Protocol",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Development"
+    }
+  }
+}

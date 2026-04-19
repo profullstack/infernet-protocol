@@ -1,0 +1,17 @@
+{
+  "name": "@infernet/inference",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./distributed": "./src/distributed/index.js",
+    "./coordinator": "./src/distributed/coordinator.js",
+    "./worker": "./src/distributed/worker.js",
+    "./protocol": "./src/distributed/protocol.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

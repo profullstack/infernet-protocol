@@ -8,18 +8,23 @@
 
 # Infernet Protocol
 
-A decentralized GPU inference marketplace. Install the `infernet` CLI on any GPU server, point it at a Supabase control plane, and start earning crypto for inference jobs.
+A decentralized GPU inference marketplace. Rent a GPU anywhere, run one `docker` command, start earning crypto. The control plane is a Next.js + Supabase dashboard you can self-host or use at infernet.tech. Scales horizontally — every new provider on the network is real, additional capacity; there is no shared data-center bottleneck.
+
+[![Docker image](https://img.shields.io/badge/ghcr.io-infernet--provider-blue?logo=docker)](https://github.com/profullstack/infernet-protocol/pkgs/container/infernet-provider)
+[![Release](https://img.shields.io/github/v/release/profullstack/infernet-protocol)](https://github.com/profullstack/infernet-protocol/releases)
 
 ---
 
 ## What you get
 
-- **Next.js 16 + React 19** web dashboard (works as a PWA, and is also the Electron desktop app).
-- **Supabase** backend — self-hosted or cloud; the code is identical either way.
-- **`infernet` CLI** — one binary per GPU server. Registers the node, heartbeats, accepts jobs, reports earnings.
+- **Next.js 16 + React 19** web dashboard. Also ships as the Electron desktop app (same app, Electron wrapper).
+- **Public chat playground** at `/chat` — streams tokens via Server-Sent Events. Uses live P2P providers if any are online; otherwise falls back to **NVIDIA NIM** ([build.nvidia.com](https://build.nvidia.com/)) so the demo never breaks.
+- **One-click GPU deploy** at `/deploy` — paste a RunPod API key, pick a GPU, the image boots and registers with your control plane automatically.
+- **`infernet` CLI** — one binary per GPU server. 14 subcommands: `init`, `login`, `register`, `update`, `remove`, `start`, `stop`, `status`, `stats`, `logs`, `payout`, `payments`, `gpu`, `firewall`. Daemon has a local IPC socket for live queries + a **public P2P TCP port 46337** (dual-stack IPv4/IPv6) for direct peer communication.
+- **Supabase** backend — Postgres + Auth + Realtime. Self-hosted or cloud; identical code either way.
 - **Multi-coin payments** via CoinPayPortal — BTC, BCH, ETH, SOL, POL, BNB, XRP, ADA, DOGE, plus USDT/USDC on ETH/Polygon/Solana/Base.
 - **Nostr-based identity** for node authentication.
-- **P2P port** (default 46337) so nodes can reach each other directly, not just via Supabase.
+- **GPU auto-detect** — nvidia-smi, rocm-smi, Apple Silicon; stashed in `providers.specs.gpus` for control-plane job matching.
 
 ## Deployment modes
 
@@ -35,27 +40,28 @@ Operators can run **many GPU nodes against the same Supabase project** — they 
 ## Architecture (one page)
 
 ```
-            ┌───────────────────────────────────────┐
-            │   Next.js dashboard (self-hosted or   │
-            │   cloud) — reads/writes Supabase      │
-            └───────────────────┬───────────────────┘
-                                │  REST + Realtime
-                                ▼
-            ┌───────────────────────────────────────┐
-            │              Supabase                 │
-            │  providers/clients/aggregators/jobs   │
-            │  users/settings/node_roles            │
-            │  platform_wallets/provider_payouts    │
-            │  payment_transactions                 │
-            └──────┬─────────────────────┬──────────┘
-                   │ service role        │ anon
-                   │ (CLI daemon)        │ (mobile)
-          ┌────────▼──────┐     ┌────────▼───────┐
-          │ infernet CLI  │ ... │ React Native   │
-          │  heartbeat    │     │ (Expo)         │
-          │  P2P:46337    │     │                │
-          │  IPC socket   │     └────────────────┘
-          └───────────────┘
+       ┌────────────────────────────────────────────────┐
+       │   Next.js dashboard (self-hosted OR cloud)     │
+       │   /chat · /deploy · /api/* · SSE streaming     │
+       └───────────────────────┬────────────────────────┘
+                               │  REST + Realtime
+                               ▼
+       ┌────────────────────────────────────────────────┐
+       │                  Supabase                      │
+       │  providers · clients · aggregators · jobs      │
+       │  users · settings · node_roles · job_events    │
+       │  platform_wallets · provider_payouts           │
+       │  payment_transactions · distributed_jobs       │
+       └──┬──────────────┬─────────────────┬────────────┘
+          │ service role │ anon            │ service role (web)
+          │ (CLI daemon) │ (mobile)        │
+          ▼              ▼                 ▼
+   ┌────────────┐   ┌──────────┐   ┌─────────────────┐
+   │ infernet   │…  │ Expo app │   │ NVIDIA NIM      │
+   │ CLI daemon │   │          │   │ (fallback only) │
+   │ P2P:46337  │   └──────────┘   └─────────────────┘
+   │ IPC sock   │
+   └────────────┘
 ```
 
 Full detail: [INFERNET-ARCHITECTURE.md](./INFERNET-ARCHITECTURE.md).
@@ -64,12 +70,13 @@ Full detail: [INFERNET-ARCHITECTURE.md](./INFERNET-ARCHITECTURE.md).
 
 ## Stack
 
-- Node.js 18+, ESM only
+- Node.js 18+, ESM only, **pnpm workspaces** monorepo (5 apps, 11 shared packages)
 - Next.js 16.x (App Router), React 19, Tailwind CSS
 - Supabase (`@supabase/supabase-js`)
 - Vitest for tests
 - Electron for the desktop shell
 - React Native + Expo for mobile
+- Docker + GitHub Actions CI/CD (multi-arch images: `linux/amd64` + `linux/arm64`)
 
 ---
 
@@ -196,6 +203,18 @@ Detected GPUs land in `providers.specs.gpus` (jsonb), which powers job matching 
 
 ---
 
+## NVIDIA NIM fallback
+
+When the P2P network has no live providers, the chat playground transparently falls back to [build.nvidia.com](https://build.nvidia.com/)'s OpenAI-compatible endpoint so the UX never breaks while the network is bootstrapping. Controlled by three env vars (all optional; leave blank to disable):
+
+```bash
+NVIDIA_NIM_API_KEY=             # from https://build.nvidia.com/
+NVIDIA_NIM_API_URL=https://integrate.api.nvidia.com/v1
+NVIDIA_NIM_DEFAULT_MODEL=meta/llama-3.3-70b-instruct
+```
+
+Same SSE contract as the P2P path — tokens are mirrored into `job_events` so the audit trail is identical. The chat UI badges fallback responses "NVIDIA NIM (fallback)" for transparency. Adapter: [`packages/nim-adapter`](./packages/nim-adapter).
+
 ## Payments
 
 Consumers can pay for jobs and providers can be paid out in any of these coin/network combinations:
@@ -212,24 +231,34 @@ Provider earnings flow into the outbound direction of `payment_transactions`. Co
 
 ---
 
-## Project layout
+## Project layout (monorepo)
 
 ```
-app/                     Next.js pages and route handlers
-components/              React UI building blocks
-lib/                     Next.js server-only env, Supabase client, data helpers
-cli/                     The `infernet` binary (commands + lib)
-config/                  Payment-coin list + canonical deposit addresses
-desktop/                 Electron shell wrapping the Next.js app
-mobile/                  React Native + Expo app
-src/
-  ├ db/                  Supabase-backed model layer for the CLI
-  ├ payments/            CoinPayPortal integration
-  ├ gpu/                 GPU detection (NVIDIA/AMD/Apple)
-  ├ inference/           Distributed inference coordinator / worker
-  ├ auth/                Nostr auth helpers
-  └ ...
-supabase/migrations/     SQL schema
+apps/
+  web/                   Next.js dashboard + /chat + /deploy + REST/SSE API
+  cli/                   The `infernet` binary (commands + daemon + IPC)
+  desktop/               Electron shell wrapping the Next.js app
+  mobile/                React Native + Expo app
+  daemon/                Placeholder for future standalone service daemons
+
+packages/
+  config/                Payment-coin list + canonical deposit addresses
+  auth/                  Nostr auth helpers
+  db/                    Supabase-backed model layer
+  gpu/                   GPU detection (NVIDIA / AMD / Apple Silicon)
+  inference/             Distributed inference coordinator / worker
+  payments/              CoinPayPortal gateway
+  logger/                Structured logger
+  sdk-js/                @infernetprotocol/sdk — REST + SSE client
+  api-schema/            OpenAPI 3.1 spec for the control-plane API
+  deploy-providers/      Cloud-GPU deploy adapters (RunPod today)
+  nim-adapter/           NVIDIA NIM fallback inference adapter
+
+tooling/
+  docker/provider/       Dockerfile + entrypoint for ghcr.io/.../infernet-provider
+  dist/homebrew/         Homebrew formula + release-time updater
+
+supabase/migrations/     SQL schema (applied via supabase CLI)
 tests/                   Vitest suite
 ```
 
@@ -245,15 +274,15 @@ GET   /api/providers
 GET   /api/aggregators
 GET   /api/clients
 GET   /api/models
-POST  /api/chat                            Chat playground — creates a job, returns streamUrl
-GET   /api/chat/stream/[jobId]             SSE: tokens from the assigned provider
+POST  /api/chat                            Chat playground — picks P2P provider OR NIM fallback, returns streamUrl
+GET   /api/chat/stream/[jobId]             SSE: tokens streamed live (job|meta|token|done|error)
 POST  /api/payments/invoice                CoinPayPortal invoice mint
-POST  /api/payments/webhook                CoinPayPortal webhook sink (HMAC)
-GET   /api/deploy/runpod/gpu-types         RunPod GPU catalog (proxied via user API key)
+POST  /api/payments/webhook                CoinPayPortal webhook sink (HMAC-verified)
+GET   /api/deploy/runpod/gpu-types         RunPod GPU catalog (proxied via user API key; not stored)
 POST  /api/deploy/runpod                   One-click launch an Infernet provider pod
 ```
 
-All server-only. The Supabase service-role client is never imported into browser bundles. OpenAPI 3.1 spec lives at [`packages/api-schema/openapi.yaml`](./packages/api-schema/openapi.yaml).
+All server-only. The Supabase service-role client is never imported into browser bundles. OpenAPI 3.1 spec ships as [`@infernetprotocol/api-schema`](./packages/api-schema) (raw YAML at `packages/api-schema/openapi.yaml`).
 
 ## Developer surfaces
 
@@ -263,9 +292,11 @@ All server-only. The Supabase service-role client is never imported into browser
 
 ## Distribution
 
-- **Docker** ([tooling/docker/provider](./tooling/docker/provider)) — `ghcr.io/profullstack/infernet-provider:<version>` + `:latest`, multi-arch. The only supported install path today — tag a `v*.*.*` and `.github/workflows/release.yml` builds + pushes.
-- **npm** — `@infernetprotocol/*` packages are wired up (all 11 publishable) but **not shipping yet**. Scaffolding under [packages/](./packages) + [apps/cli](./apps/cli); re-enable publishing in release.yml once the npm account dance is sorted.
-- **Homebrew** ([tooling/dist/homebrew](./tooling/dist/homebrew)) — formula + updater script scaffolded, also waiting on npm (the formula currently installs via npm tarball).
+- **Docker** (LIVE) — `ghcr.io/profullstack/infernet-provider:0.1.0` and `:latest`, multi-arch `linux/amd64` + `linux/arm64`. One command boots a provider; see the Quick start above.
+- **npm** (scaffolded, unblock pending) — 11 publishable `@infernetprotocol/*` packages (`cli`, `sdk`, `api-schema`, `deploy-providers`, `nim-adapter`, `auth`, `config`, `db`, `gpu`, `inference`, `logger`, `payments`). Release workflow + dry-run publish are ready; waiting on an npm Automation token.
+- **Homebrew** (scaffolded) — formula + updater script at [`tooling/dist/homebrew`](./tooling/dist/homebrew). Tap repo at [`profullstack/homebrew-infernet`](https://github.com/profullstack/homebrew-infernet). Activates as soon as npm ships.
+
+Tag a `v*.*.*` and [`.github/workflows/release.yml`](./.github/workflows/release.yml) builds the Docker image and creates a GitHub Release. See [`docs/RELEASING.md`](./docs/RELEASING.md) for the full flow.
 
 ## One-click GPU deploy
 

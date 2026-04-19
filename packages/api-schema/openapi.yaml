@@ -1,0 +1,227 @@
+openapi: 3.1.0
+info:
+  title: Infernet Protocol API
+  description: |
+    REST + SSE control-plane API for the Infernet Protocol, a peer-to-peer
+    GPU inference marketplace. The API is served by the Next.js app at
+    `apps/web/` and is backed by Supabase (self-hosted or cloud).
+
+    Authentication is optional for the public dashboard endpoints; the
+    `/api/payments/invoice` and `/api/payments/webhook` routes are always
+    server-side (the webhook is authenticated via HMAC, not a bearer).
+  version: 0.1.0
+  license:
+    name: MIT
+servers:
+  - url: https://infernet.tech
+    description: Infernet hosted cloud control plane
+  - url: http://localhost:3000
+    description: Local development
+
+tags:
+  - name: dashboard
+  - name: chat
+  - name: payments
+
+paths:
+  /api/overview:
+    get:
+      tags: [dashboard]
+      summary: Network-wide counts and summary stats
+      responses:
+        '200': { description: OK }
+
+  /api/nodes:
+    get:
+      tags: [dashboard]
+      summary: List nodes
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: OK }
+
+  /api/providers:
+    get:
+      tags: [dashboard]
+      summary: List providers
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: OK }
+
+  /api/aggregators:
+    get:
+      tags: [dashboard]
+      summary: List aggregators
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: OK }
+
+  /api/clients:
+    get:
+      tags: [dashboard]
+      summary: List clients
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: OK }
+
+  /api/models:
+    get:
+      tags: [dashboard]
+      summary: List models
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: OK }
+
+  /api/jobs:
+    get:
+      tags: [dashboard]
+      summary: List jobs
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: OK }
+
+  /api/chat:
+    post:
+      tags: [chat]
+      summary: Submit a chat job to the P2P network
+      description: |
+        Picks a live provider, creates a `type='chat'` job assigned to it,
+        and returns the streamUrl you should connect to for token streaming.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messages]
+              properties:
+                messages:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ChatMessage'
+                modelName: { type: string, nullable: true }
+                maxTokens: { type: integer, minimum: 1, default: 512 }
+                temperature: { type: number, minimum: 0, maximum: 2, default: 0.7 }
+      responses:
+        '200':
+          description: Job created and assigned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId: { type: string }
+                  status: { type: string }
+                  provider:
+                    $ref: '#/components/schemas/ChatProvider'
+                  streamUrl: { type: string }
+        '400': { description: Validation error }
+        '429': { description: Rate limited }
+
+  /api/chat/stream/{jobId}:
+    get:
+      tags: [chat]
+      summary: Server-Sent Events stream for a chat job
+      description: |
+        text/event-stream. Events fired in order:
+          - `job`   — initial job row snapshot
+          - `meta`  — provider info, started_at
+          - `token` — incremental text chunks
+          - `done`  — full text + finished_at
+          - `error` — error message, terminal
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '404': { description: Job not found }
+
+  /api/payments/invoice:
+    post:
+      tags: [payments]
+      summary: Mint a CoinPayPortal invoice for a job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jobId, coin]
+              properties:
+                jobId: { type: string, format: uuid }
+                coin: { type: string, example: USDC }
+                network: { type: string, example: base, nullable: true }
+      responses:
+        '200':
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '400': { description: Invalid coin or missing fields }
+        '404': { description: Job not found }
+        '502': { description: Gateway error from CoinPayPortal }
+
+  /api/payments/webhook:
+    post:
+      tags: [payments]
+      summary: CoinPayPortal webhook sink (HMAC-verified)
+      description: |
+        The gateway POSTs invoice status updates here. Payload is opaque to
+        clients — signature verification happens on the server before any
+        database write. Do not call this endpoint directly.
+      responses:
+        '200': { description: OK }
+        '401': { description: Signature mismatch }
+
+components:
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+
+  schemas:
+    ChatMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+
+    ChatProvider:
+      type: object
+      nullable: true
+      properties:
+        id:       { type: string, format: uuid }
+        name:     { type: string, nullable: true }
+        nodeId:   { type: string, nullable: true }
+        gpuModel: { type: string, nullable: true }
+
+    Invoice:
+      type: object
+      properties:
+        invoiceId:  { type: string }
+        payAddress: { type: string }
+        amount:
+          oneOf:
+            - { type: number }
+            - { type: string }
+        coin:      { type: string }
+        network:   { type: string }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        hostedUrl: { type: string, format: uri, nullable: true }

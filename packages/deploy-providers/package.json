@@ -1,0 +1,24 @@
+{
+  "name": "@infernet/deploy-providers",
+  "version": "0.1.0",
+  "description": "Adapters for deploying Infernet provider nodes to cloud GPU services (RunPod, vast.ai, Lambda, etc.).",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./runpod": "./src/runpod.js"
+  },
+  "files": [
+    "src/**/*.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/profullstack/infernet-protocol.git",
+    "directory": "packages/deploy-providers"
+  }
+}

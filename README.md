@@ -225,18 +225,37 @@ tests/                   Vitest suite
 ## API routes
 
 ```
-GET  /api/overview
-GET  /api/nodes
-GET  /api/jobs
-GET  /api/providers
-GET  /api/aggregators
-GET  /api/clients
-GET  /api/models
-POST /api/payments/invoice
-POST /api/payments/webhook
+GET   /api/overview
+GET   /api/nodes
+GET   /api/jobs
+GET   /api/providers
+GET   /api/aggregators
+GET   /api/clients
+GET   /api/models
+POST  /api/chat                            Chat playground — creates a job, returns streamUrl
+GET   /api/chat/stream/[jobId]             SSE: tokens from the assigned provider
+POST  /api/payments/invoice                CoinPayPortal invoice mint
+POST  /api/payments/webhook                CoinPayPortal webhook sink (HMAC)
+GET   /api/deploy/runpod/gpu-types         RunPod GPU catalog (proxied via user API key)
+POST  /api/deploy/runpod                   One-click launch an Infernet provider pod
 ```
 
-All server-only. The Supabase service-role client is never imported into browser bundles.
+All server-only. The Supabase service-role client is never imported into browser bundles. OpenAPI 3.1 spec lives at [`packages/api-schema/openapi.yaml`](./packages/api-schema/openapi.yaml).
+
+## Developer surfaces
+
+- **`@infernet/sdk`** ([packages/sdk-js](./packages/sdk-js)) — JS/TS SDK with an `InfernetClient` and an async-iterator `chat()` helper for the SSE stream.
+- **`@infernet/api-schema`** ([packages/api-schema](./packages/api-schema)) — OpenAPI 3.1 spec; feed to any generator for Python/Go/Rust clients.
+- **`@infernet/deploy-providers`** ([packages/deploy-providers](./packages/deploy-providers)) — cloud-GPU adapters (RunPod today) powering the one-click `/deploy` page.
+
+## Distribution
+
+- **Homebrew** ([tooling/dist/homebrew](./tooling/dist/homebrew)) — formula + updater script; releases of `@infernet/cli` on npm get pinned into the formula and pushed to the Infernet tap.
+- **Docker** ([tooling/docker/provider](./tooling/docker/provider)) — `ghcr.io/profullstack/infernet-provider` image, the basis for the one-click deploy flow.
+
+## One-click GPU deploy
+
+The `/deploy` page (backed by `POST /api/deploy/runpod`) spins up an Infernet provider node on RunPod using a user-supplied API key. The server proxies the RunPod API call and immediately drops the key — nothing is persisted. The pod boots the `infernet-provider` image, registers with the supplied Supabase control plane, and starts heartbeating.
 
 ---
 

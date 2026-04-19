@@ -3,6 +3,7 @@ const nextConfig = {
   transpilePackages: [
     "@infernet/config",
     "@infernet/payments",
+    "@infernet/deploy-providers",
     "@infernet/db",
     "@infernet/gpu",
     "@infernet/auth",

@@ -1,0 +1,45 @@
+{
+  "name": "@infernet/sdk",
+  "version": "0.1.0",
+  "description": "JavaScript/TypeScript SDK for the Infernet Protocol REST + SSE API.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js"
+    },
+    "./chat": {
+      "types": "./src/chat.d.ts",
+      "import": "./src/chat.js"
+    },
+    "./payments": {
+      "types": "./src/payments.d.ts",
+      "import": "./src/payments.js"
+    }
+  },
+  "files": [
+    "src/**/*.js",
+    "src/**/*.d.ts",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "infernet",
+    "gpu",
+    "inference",
+    "sdk",
+    "p2p",
+    "supabase"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/profullstack/infernet-protocol.git",
+    "directory": "packages/sdk-js"
+  },
+  "homepage": "https://github.com/profullstack/infernet-protocol#readme"
+}

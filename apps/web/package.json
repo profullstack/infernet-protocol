@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@infernet/config": "workspace:*",
+    "@infernet/deploy-providers": "workspace:*",
     "@infernet/payments": "workspace:*",
     "@supabase/supabase-js": "^2.49.8",
     "clsx": "^2.1.1",

@@ -18,6 +18,7 @@
     "supabase:db:push": "supabase db push"
   },
   "devDependencies": {
+    "@infernetprotocol/auth": "workspace:*",
     "@infernetprotocol/cli": "workspace:*",
     "vitest": "^3.0.8"
   }

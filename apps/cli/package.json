@@ -23,6 +23,7 @@
     "start": "node ./index.js"
   },
   "dependencies": {
+    "@infernetprotocol/auth": "workspace:*",
     "@infernetprotocol/config": "workspace:*",
     "@infernetprotocol/gpu": "workspace:*",
     "@supabase/supabase-js": "^2.49.8",

@@ -9,12 +9,21 @@
     ".": "./src/index.js",
     "./nostr": "./src/nostr.js"
   },
-  "files": ["src/**/*.js", "README.md"],
-  "engines": { "node": ">=18" },
+  "files": [
+    "src/**/*.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/profullstack/infernet-protocol.git",
     "directory": "packages/auth"
   },
-  "homepage": "https://github.com/profullstack/infernet-protocol#readme"
+  "homepage": "https://github.com/profullstack/infernet-protocol#readme",
+  "dependencies": {
+    "@noble/curves": "^2.2.0",
+    "@noble/hashes": "^2.2.0"
+  }
 }

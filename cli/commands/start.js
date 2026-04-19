@@ -32,6 +32,7 @@ import {
 import { spawnDetachedDaemon } from '../lib/daemonize.js';
 import { isDaemonAlive } from '../lib/ipc.js';
 import { resolveP2pPort, detectLocalAddress, formatEndpoint } from '../lib/network.js';
+import { executeChatJob, failChatJob } from '../lib/chat-executor.js';
 
 const HELP = `infernet start — run the node daemon
 
@@ -237,7 +238,7 @@ async function runDaemon(args, ctx) {
         stats.jobsPicked += 1;
         stats.activeJobIds.add(job.id);
         stats.lastJobAt = t0;
-        process.stdout.write(`[${t0}] picking up job ${job.id} (${job.title ?? 'untitled'})\n`);
+        process.stdout.write(`[${t0}] picking up job ${job.id} type=${job.type ?? 'inference'} (${job.title ?? 'untitled'})\n`);
 
         const markRunning = await supabase
             .from('jobs')
@@ -250,7 +251,31 @@ async function runDaemon(args, ctx) {
             return;
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 500)); // stub compute
+        let resultPayload;
+        try {
+            if (job.type === 'chat') {
+                const text = await executeChatJob({ supabase, job, node });
+                resultPayload = { type: 'chat', text, completed_by: node.nodeId };
+            } else {
+                // Generic inference stub — briefly sleep to simulate compute.
+                await new Promise((resolve) => setTimeout(resolve, 500));
+                resultPayload = { stub: true, completed_by: node.nodeId };
+            }
+        } catch (err) {
+            stats.jobsFailed += 1;
+            stats.activeJobIds.delete(job.id);
+            const msg = err?.message ?? String(err);
+            process.stderr.write(`job ${job.id} threw during execution: ${msg}\n`);
+            if (job.type === 'chat') {
+                await failChatJob({ supabase, jobId: job.id, message: msg });
+            }
+            const failedAt = new Date().toISOString();
+            await supabase
+                .from('jobs')
+                .update({ status: 'failed', error: msg, updated_at: failedAt, completed_at: failedAt })
+                .eq('id', job.id);
+            return;
+        }
 
         const completedAt = new Date().toISOString();
         const markDone = await supabase
@@ -259,7 +284,7 @@ async function runDaemon(args, ctx) {
                 status: 'completed',
                 updated_at: completedAt,
                 completed_at: completedAt,
-                result: { stub: true, completed_by: node.nodeId }
+                result: resultPayload
             })
             .eq('id', job.id);
         if (markDone.error) {
@@ -270,25 +295,27 @@ async function runDaemon(args, ctx) {
         }
 
         const amount = Number.parseFloat(job.payment_offer ?? 0) || 0;
-        const coin = job.payment_coin ?? 'USDC';
-        const payTx = await supabase.from('payment_transactions').insert({
-            direction: 'outbound',
-            job_id: job.id,
-            provider_id: node.id,
-            coin,
-            amount,
-            amount_usd: amount,
-            address: 'pending-payout',
-            status: 'pending',
-            metadata: { stub: true, node_id: node.nodeId }
-        });
-        if (payTx.error) {
-            process.stderr.write(`failed to record payment_transactions for job ${job.id}: ${payTx.error.message}\n`);
+        if (amount > 0) {
+            const coin = job.payment_coin ?? 'USDC';
+            const payTx = await supabase.from('payment_transactions').insert({
+                direction: 'outbound',
+                job_id: job.id,
+                provider_id: node.id,
+                coin,
+                amount,
+                amount_usd: amount,
+                address: 'pending-payout',
+                status: 'pending',
+                metadata: { stub: true, node_id: node.nodeId }
+            });
+            if (payTx.error) {
+                process.stderr.write(`failed to record payment_transactions for job ${job.id}: ${payTx.error.message}\n`);
+            }
         }
 
         stats.jobsCompleted += 1;
         stats.activeJobIds.delete(job.id);
-        process.stdout.write(`[${completedAt}] completed job ${job.id} (amount=${amount} ${coin})\n`);
+        process.stdout.write(`[${completedAt}] completed job ${job.id} type=${job.type ?? 'inference'}\n`);
     }
 
     async function pollJobs() {
@@ -301,7 +328,7 @@ async function runDaemon(args, ctx) {
             .from('jobs')
             .select('*')
             .eq('provider_id', node.id)
-            .eq('status', 'assigned')
+            .in('status', ['assigned'])
             .order('created_at', { ascending: true })
             .limit(5);
         if (error) {

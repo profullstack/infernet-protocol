@@ -5,6 +5,9 @@
   "description": "Infernet Protocol control plane rebuilt on Next.js and Supabase",
   "type": "module",
   "packageManager": "pnpm@10.6.5",
+  "bin": {
+    "infernet": "./cli/index.js"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,6 +15,9 @@
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "supabase:db:reset": "supabase db reset",
+    "supabase:login": "supabase login",
+    "supabase:link": "supabase link",
+    "supabase:db:push": "supabase db push",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -19,7 +25,7 @@
     "@supabase/supabase-js": "^2.49.8",
     "clsx": "^2.1.1",
     "dotenv": "^16.4.7",
-    "next": "^15.2.2",
+    "next": "^16.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "server-only": "^0.0.1"

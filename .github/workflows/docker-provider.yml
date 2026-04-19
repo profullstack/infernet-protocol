@@ -1,0 +1,39 @@
+name: Docker provider (master)
+
+# Separate workflow that rebuilds ghcr.io/<owner>/infernet-provider:edge on
+# every push to master. The tagged-release workflow in release.yml handles
+# the versioned + :latest tags.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'tooling/docker/provider/**'
+      - '.github/workflows/docker-provider.yml'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: tooling/docker/provider
+          file: tooling/docker/provider/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/infernet-provider:edge
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}

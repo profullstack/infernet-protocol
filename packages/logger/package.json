@@ -1,10 +1,19 @@
 {
   "name": "@infernet/logger",
   "version": "0.1.0",
-  "private": true,
+  "description": "Structured logger used across Infernet Protocol packages.",
+  "license": "MIT",
   "type": "module",
   "main": "./src/index.js",
   "exports": {
     ".": "./src/index.js"
-  }
+  },
+  "files": ["src/**/*.js", "README.md"],
+  "engines": { "node": ">=18" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/profullstack/infernet-protocol.git",
+    "directory": "packages/logger"
+  },
+  "homepage": "https://github.com/profullstack/infernet-protocol#readme"
 }

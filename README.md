@@ -250,8 +250,11 @@ All server-only. The Supabase service-role client is never imported into browser
 
 ## Distribution
 
-- **Homebrew** ([tooling/dist/homebrew](./tooling/dist/homebrew)) — formula + updater script; releases of `@infernet/cli` on npm get pinned into the formula and pushed to the Infernet tap.
-- **Docker** ([tooling/docker/provider](./tooling/docker/provider)) — `ghcr.io/profullstack/infernet-provider` image, the basis for the one-click deploy flow.
+- **npm** — every public `@infernet/*` workspace package (CLI, SDK, deploy-providers, api-schema, payments, config, db, gpu, auth, logger, inference) is published on tag push.
+- **Docker** ([tooling/docker/provider](./tooling/docker/provider)) — `ghcr.io/profullstack/infernet-provider:<version>` / `:latest` / `:edge` images. Basis for the one-click deploy flow.
+- **Homebrew** ([tooling/dist/homebrew](./tooling/dist/homebrew)) — formula + updater script. On release, the generated `infernet.rb` is attached to the GitHub Release; sync into the `profullstack/homebrew-infernet` tap.
+
+The full release pipeline lives at [`.github/workflows/release.yml`](./.github/workflows/release.yml) — tag a `v*.*.*` and it publishes npm, builds + pushes the Docker image, and generates the Homebrew formula. See [docs/RELEASING.md](./docs/RELEASING.md) for secrets setup + rollback notes.
 
 ## One-click GPU deploy
 

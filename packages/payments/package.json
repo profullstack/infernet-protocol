@@ -1,14 +1,23 @@
 {
   "name": "@infernet/payments",
   "version": "0.1.0",
-  "private": true,
+  "description": "CoinPayPortal payment gateway integration for the Infernet Protocol.",
+  "license": "MIT",
   "type": "module",
   "main": "./src/index.js",
   "exports": {
     ".": "./src/index.js",
     "./coinpayportal": "./src/coinpayportal.js"
   },
+  "files": ["src/**/*.js", "README.md"],
+  "engines": { "node": ">=18" },
   "dependencies": {
     "@infernet/config": "workspace:*"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/profullstack/infernet-protocol.git",
+    "directory": "packages/payments"
+  },
+  "homepage": "https://github.com/profullstack/infernet-protocol#readme"
 }

@@ -1,12 +1,21 @@
 {
   "name": "@infernet/config",
   "version": "0.1.0",
-  "private": true,
+  "description": "Shared constants for the Infernet Protocol — supported payment coins and platform deposit addresses.",
+  "license": "MIT",
   "type": "module",
   "main": "./index.js",
   "exports": {
     ".": "./index.js",
     "./payment-coins": "./payment-coins.js",
     "./deposit-addresses": "./deposit-addresses.js"
-  }
+  },
+  "files": ["*.js", "README.md"],
+  "engines": { "node": ">=18" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/profullstack/infernet-protocol.git",
+    "directory": "packages/config"
+  },
+  "homepage": "https://github.com/profullstack/infernet-protocol#readme"
 }

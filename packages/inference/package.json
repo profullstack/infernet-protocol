@@ -1,7 +1,8 @@
 {
   "name": "@infernet/inference",
   "version": "0.1.0",
-  "private": true,
+  "description": "Distributed inference coordinator and worker for the Infernet Protocol.",
+  "license": "MIT",
   "type": "module",
   "main": "./src/index.js",
   "exports": {
@@ -11,7 +12,15 @@
     "./worker": "./src/distributed/worker.js",
     "./protocol": "./src/distributed/protocol.js"
   },
+  "files": ["src/**/*.js", "README.md"],
+  "engines": { "node": ">=18" },
   "dependencies": {
     "ws": "^8.18.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/profullstack/infernet-protocol.git",
+    "directory": "packages/inference"
+  },
+  "homepage": "https://github.com/profullstack/infernet-protocol#readme"
 }

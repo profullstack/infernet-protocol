@@ -1,11 +1,20 @@
 {
   "name": "@infernet/gpu",
   "version": "0.1.0",
-  "private": true,
+  "description": "GPU detection for the Infernet Protocol — NVIDIA (CUDA), AMD (ROCm), and Apple Silicon via native tooling.",
+  "license": "MIT",
   "type": "module",
   "main": "./src/index.js",
   "exports": {
     ".": "./src/index.js",
     "./detect": "./src/detect.js"
-  }
+  },
+  "files": ["src/**/*.js", "README.md"],
+  "engines": { "node": ">=18" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/profullstack/infernet-protocol.git",
+    "directory": "packages/gpu"
+  },
+  "homepage": "https://github.com/profullstack/infernet-protocol#readme"
 }

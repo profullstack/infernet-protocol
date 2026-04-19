@@ -1,7 +1,8 @@
 {
   "name": "@infernet/db",
   "version": "0.1.0",
-  "private": true,
+  "description": "Supabase-backed model layer for the Infernet Protocol (Provider, Client, Job, Aggregator).",
+  "license": "MIT",
   "type": "module",
   "main": "./src/index.js",
   "exports": {
@@ -13,8 +14,16 @@
     "./models/job": "./src/models/job.js",
     "./models/aggregator": "./src/models/aggregator.js"
   },
+  "files": ["src/**/*.js", "README.md"],
+  "engines": { "node": ">=18" },
   "dependencies": {
     "@infernet/logger": "workspace:*",
     "@supabase/supabase-js": "^2.49.8"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/profullstack/infernet-protocol.git",
+    "directory": "packages/db"
+  },
+  "homepage": "https://github.com/profullstack/infernet-protocol#readme"
 }

@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Syntax check all non-JSX JS sources
+        run: |
+          set -e
+          fail=0
+          while IFS= read -r -d '' file; do
+            node --check "$file" || { echo "SYNTAX FAIL: $file"; fail=1; }
+          done < <(find apps packages tooling -type f -name '*.js' \
+                   -not -path '*/node_modules/*' \
+                   -not -path 'apps/web/app/*' \
+                   -not -path 'apps/mobile/*' \
+                   -print0)
+          exit $fail
+
+      - name: Smoke-test CLI
+        run: pnpm --filter @infernet/cli exec infernet help

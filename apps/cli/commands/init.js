@@ -31,7 +31,12 @@ import {
     isHex64
 } from '../lib/identity.js';
 import { DEFAULT_P2P_PORT, detectLocalAddress } from '../lib/network.js';
-import { printFirewallHint } from '../lib/firewall.js';
+import {
+    applyFirewallRule,
+    describeFirewallHowTo,
+    detectFirewall,
+    printFirewallHint
+} from '../lib/firewall.js';
 import { detectGpus, formatGpuLine } from '@infernetprotocol/gpu';
 
 const DEFAULT_CONTROL_PLANE = 'https://infernetprotocol.com';
@@ -206,7 +211,41 @@ export default async function init(args) {
 
     if (!args.has('skip-firewall-hint') && role !== 'client' && !noAdvertise) {
         process.stdout.write('\n');
-        printFirewallHint(port, 'init');
+        const detected = detectFirewall();
+        if (detected.length === 0 || process.platform !== 'linux') {
+            // Print-only: pf / netsh / no-detected — nothing safe to auto-apply.
+            printFirewallHint(port, 'init');
+        } else {
+            const tool = detected[0];
+            const { lines } = describeFirewallHowTo(port);
+            process.stdout.write(`-- firewall (init, port ${port}) --\n`);
+            process.stdout.write(`Detected: ${tool}\n`);
+            for (const line of lines.slice(0, 4)) process.stdout.write(`${line}\n`);
+            const yes =
+                args.has('yes') ||
+                args.has('confirm') ||
+                process.env.INFERNET_NONINTERACTIVE === '1';
+            let proceed = yes;
+            if (!yes) {
+                const ans = await question('Apply firewall rule now (will sudo)?', { default: 'y' });
+                proceed = ans.toLowerCase().startsWith('y');
+            }
+            if (proceed) {
+                try {
+                    const result = await applyFirewallRule(port, { tool });
+                    if (result.applied) {
+                        process.stdout.write(`Firewall:      ✓ rule applied via ${result.tool}\n`);
+                    } else {
+                        process.stdout.write(`Firewall:      ! ${result.reason ?? 'skipped'}\n`);
+                    }
+                } catch (err) {
+                    process.stderr.write(`firewall rule failed: ${err?.message ?? err}\n`);
+                    process.stderr.write('Re-run later or apply the command manually.\n');
+                }
+            } else {
+                process.stdout.write('Firewall:      skipped — run `infernet firewall` to print the commands\n');
+            }
+        }
     }
 
     process.stdout.write('Next:          run `infernet register` to announce this node.\n');

@@ -15,6 +15,47 @@ A decentralized GPU inference marketplace. Rent a GPU anywhere, run one `docker`
 
 ---
 
+## Getting started
+
+One line on Linux or macOS:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/profullstack/infernet-protocol/master/install.sh | sh
+```
+
+This installs the `infernet` CLI to `~/.infernet/source` and drops a
+shim at `~/.local/bin/infernet`. Re-run anytime to update.
+
+Then:
+
+```bash
+infernet setup           # interactive: installs Ollama, pulls a model,
+                         # opens the firewall (sudo), saves config
+infernet chat "hi"       # local inference, no control plane needed
+infernet model list      # see what's pulled
+infernet tui             # live dashboard (q to quit)
+infernet help            # full command list
+```
+
+### Other install paths
+
+| Method | Command | Status |
+| --- | --- | --- |
+| **One-line script** (above) | `curl … \| sh` | ✅ works today |
+| **Docker** | `docker run --rm -it --gpus all ghcr.io/profullstack/infernet-provider:latest` | ✅ works today |
+| **Manual git clone** | `git clone … && pnpm install && node apps/cli/index.js` | ✅ works today |
+| **npm global** | `npm install -g @infernetprotocol/cli` | 🚧 blocked on npm token regen |
+| **Homebrew** | `brew install infernet` | 🚧 unblocks when npm does |
+
+### Uninstall
+
+```bash
+rm -rf ~/.infernet ~/.local/bin/infernet
+rm -rf ~/.config/infernet     # also removes node identity + saved config
+```
+
+---
+
 ## What you get
 
 - **Next.js 16 + React 19** web dashboard. Also ships as the Electron desktop app (same app, Electron wrapper).

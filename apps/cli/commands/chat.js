@@ -29,6 +29,7 @@
  */
 
 import { createEngine, MSG } from "@infernetprotocol/engine";
+import { loadConfig } from "../lib/config.js";
 
 const HELP = `infernet chat — run a single inference locally, no control plane
 
@@ -85,15 +86,25 @@ export default async function chat(args) {
     if (sys) messages.push({ role: "system", content: String(sys) });
     messages.push({ role: "user", content: prompt });
 
-    const backendOpt = args.get("backend");
-    const model = args.get("model") ?? process.env.INFERNET_ENGINE_MODEL ?? null;
-    const host = args.get("host");
+    // Resolution order for engine settings:
+    //   --flag  >  $ENV  >  config.engine.*  >  built-in default
+    // `infernet setup` writes config.engine.{backend,model,ollamaHost};
+    // chat needs to read them so the saved choice actually takes effect.
+    const config = (await loadConfig()) ?? {};
+    const cfgEngine = config.engine ?? {};
+
+    const backendOpt =
+        args.get("backend") ?? process.env.INFERNET_ENGINE_BACKEND ?? cfgEngine.backend ?? null;
+    const model =
+        args.get("model") ?? process.env.INFERNET_ENGINE_MODEL ?? cfgEngine.model ?? null;
+    const host =
+        args.get("host") ?? process.env.OLLAMA_HOST ?? cfgEngine.ollamaHost ?? null;
     const temperatureRaw = args.get("temperature");
     const maxTokensRaw = args.get("max-tokens");
     const jsonMode = args.has("json");
 
     const engineOpts = {};
-    if (backendOpt) engineOpts.backend = String(backendOpt);
+    if (backendOpt && backendOpt !== "auto") engineOpts.backend = String(backendOpt);
     if (host) engineOpts.host = String(host);
     if (model) engineOpts.defaultModel = model;
 

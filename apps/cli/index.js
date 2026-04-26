@@ -33,6 +33,7 @@ import firewall from './commands/firewall.js';
 import chat from './commands/chat.js';
 import setup from './commands/setup.js';
 import model from './commands/model.js';
+import tui from './commands/tui.js';
 
 function parseArgs(argv) {
     const positional = [];
@@ -86,11 +87,11 @@ function parseArgs(argv) {
 const COMMANDS = {
     init, login, register, update, remove,
     start, status, stop, stats, logs,
-    payout, payments, gpu, firewall, chat, setup, model, help
+    payout, payments, gpu, firewall, chat, setup, model, tui, help
 };
 
 // Commands that can run without a loaded config.
-const NO_CONFIG = new Set(['init', 'login', 'help', 'stats', 'logs', 'stop', 'gpu', 'firewall', 'chat', 'setup', 'model']);
+const NO_CONFIG = new Set(['init', 'login', 'help', 'stats', 'logs', 'stop', 'gpu', 'firewall', 'chat', 'setup', 'model', 'tui']);
 // Commands that need a config but not a control-plane client (none today
 // — kept as a future escape hatch).
 const NO_CLIENT = new Set();

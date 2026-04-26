@@ -29,6 +29,7 @@ Diagnostics:
   gpu          Inspect local GPUs (nvidia-smi / rocm-smi / system_profiler)
   firewall     Print commands to open the P2P port on your firewall
   chat         Run a single inference locally (no control plane needed)
+  tui          Live terminal dashboard (system / jobs / engine / peers)
 
 Payments:
   payout       Manage payout coin/address

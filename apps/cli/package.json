@@ -18,7 +18,9 @@
     "examples/**/*.js",
     "README.md"
   ],
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node ./index.js"
   },
@@ -27,7 +29,10 @@
     "@infernetprotocol/config": "workspace:*",
     "@infernetprotocol/engine": "workspace:*",
     "@infernetprotocol/gpu": "workspace:*",
-    "dotenv": "^16.4.7"
+    "blessed": "^0.1.81",
+    "dotenv": "^16.4.7",
+    "react": "^17.0.2",
+    "react-blessed": "^0.7.2"
   },
   "repository": {
     "type": "git",

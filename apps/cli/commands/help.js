@@ -8,7 +8,8 @@ Usage:
   infernet <command> [args]
 
 Setup:
-  setup        Bootstrap environment (Ollama + model + engine config)
+  setup        Bootstrap environment (Ollama + model + firewall + config)
+  model        Manage models (list / pull / remove / use)
 
 Node lifecycle:
   init         Configure this node (control-plane URL, role, Nostr identity)

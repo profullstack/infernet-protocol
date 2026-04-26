@@ -203,6 +203,33 @@ export async function completeJobForNode({ pubkey, jobId, body }) {
         }
     }
 
+    // IPIP-0007 phase 2: emit a CPR Receipt for this job. Non-blocking
+    // by design — CPR being unreachable MUST NOT fail the completion
+    // flow. The queue captures everything; a worker (phase 3) drains
+    // any rows that didn't go through immediately.
+    try {
+        const { buildReceiptBody } = await import("@/lib/cpr/receipts");
+        const { enqueueAndFlush } = await import("@/lib/cpr/queue");
+        const receipt = buildReceiptBody({
+            job: {
+                id: job.id,
+                type: job.type ?? "inference",
+                status: patch.status,
+                payment_offer: job.payment_offer,
+                payment_coin: job.payment_coin,
+                payment_tx_hash: job.payment_tx_hash
+            },
+            provider: { public_key: pubkey, id: provider.id }
+        });
+        // Fire-and-await but suppress all errors — worst case the row
+        // ends up `pending` and the worker handles it.
+        await enqueueAndFlush({ receipt, jobId: job.id }).catch((err) => {
+            console.warn(`CPR enqueueAndFlush failed: ${err?.message ?? err}`);
+        });
+    } catch (err) {
+        console.warn(`CPR receipt emission failed: ${err?.message ?? err}`);
+    }
+
     return { id: job.id, status: patch.status };
 }
 

@@ -17,10 +17,14 @@
 
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { loadConfig, saveConfig, getConfigPath } from "../lib/config.js";
 import { question } from "../lib/prompt.js";
 import { applyFirewallRule, detectFirewall, describeFirewallHowTo } from "../lib/firewall.js";
 import { DEFAULT_P2P_PORT, resolveP2pPort } from "../lib/network.js";
+import { isDaemonAlive } from "../lib/ipc.js";
+import { createNodeClient } from "../lib/node-client.js";
 
 const pExec = promisify(execFile);
 
@@ -37,6 +41,9 @@ Flags:
   --host <url>           Override Ollama host. Default: http://localhost:11434.
   --port <n>             P2P port to open in the firewall. Default: ${DEFAULT_P2P_PORT}.
   --no-firewall          Skip the firewall step entirely.
+  --skip-identity        Don't chain into \`infernet init\` if identity is missing.
+  --skip-register        Don't chain into \`infernet register\` if not registered.
+  --skip-daemon          Don't offer to start the daemon.
   -h, --help             Show this help.
 
 By default, every step that wants to install or change something on
@@ -153,6 +160,46 @@ async function installOllama({ yes }) {
     });
 }
 
+/**
+ * Spawn another `infernet` subcommand as a child process with stdio
+ * inherited, so the user sees the same prompts they'd see if they ran
+ * it themselves. Resolves with the child's exit code.
+ */
+function runSubcommand(subcommand, extraArgs = []) {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const cliEntry = join(here, "..", "index.js");
+    return new Promise((resolve, reject) => {
+        const child = spawn(process.execPath, [cliEntry, subcommand, ...extraArgs], {
+            stdio: "inherit"
+        });
+        child.on("exit", (code) => resolve(code ?? 1));
+        child.on("error", reject);
+    });
+}
+
+/**
+ * Returns true if the control plane has a row for this node's pubkey.
+ * Treats an unauthenticated 4xx as "not registered yet" (which is what
+ * a missing row produces). Network errors → false so we don't block on
+ * a transient outage.
+ */
+async function isRegistered(config) {
+    if (!config?.controlPlane?.url || !config?.node?.publicKey) return false;
+    try {
+        const client = createNodeClient({
+            url: config.controlPlane.url,
+            publicKey: config.node.publicKey,
+            privateKey: config.node.privateKey,
+            role: config.node.role,
+            timeoutMs: 5000
+        });
+        const row = await client.me();
+        return !!row;
+    } catch {
+        return false;
+    }
+}
+
 async function pullModel(name) {
     process.stdout.write(`\n  → pulling ${name} via the ollama CLI (this may take a while)...\n\n`);
     try {
@@ -223,6 +270,9 @@ export default async function setup(args) {
         process.env.INFERNET_NONINTERACTIVE === "1";
     const skipPull = args.has("skip-pull");
     const skipFirewall = args.has("no-firewall");
+    const skipIdentity = args.has("skip-identity");
+    const skipRegister = args.has("skip-register");
+    const skipDaemon = args.has("skip-daemon") || args.has("no-start");
     const backend = String(args.get("backend") ?? "ollama");
     const host = String(args.get("host") ?? process.env.OLLAMA_HOST ?? "http://localhost:11434");
     const preselectedModel = args.get("model") ? String(args.get("model")) : null;
@@ -372,12 +422,102 @@ export default async function setup(args) {
         process.stdout.write(`    engine.model:      ${merged.engine.model}\n`);
     }
 
-    process.stdout.write("\nSetup complete. Try it:\n");
-    if (chosenModel) {
+    // ---- Identity (calls `infernet init` if needed) ----
+    let configAfterId = await loadConfig();
+    if (!skipIdentity) {
+        n += 1;
+        step(n, total, "Identity & control plane");
+        const hasKey = !!(configAfterId?.node?.publicKey && configAfterId?.node?.privateKey);
+        const hasUrl = !!configAfterId?.controlPlane?.url;
+        if (hasKey && hasUrl) {
+            ok(`identity ready: ${configAfterId.node.publicKey.slice(0, 12)}…, role=${configAfterId.node.role ?? "?"}`);
+            ok(`control plane: ${configAfterId.controlPlane.url}`);
+        } else {
+            warn(hasKey || hasUrl ? "partial identity — finishing init" : "no identity yet — running init");
+            const code = await runSubcommand("init", yes ? ["--yes"] : []);
+            if (code !== 0) {
+                fail(`init exited ${code}`);
+                return code;
+            }
+            configAfterId = await loadConfig();
+            ok(`identity: ${configAfterId?.node?.publicKey?.slice(0, 12) ?? "?"}…`);
+        }
+    }
+
+    const role = configAfterId?.node?.role ?? "provider";
+    const isProvider = role === "provider";
+
+    // ---- Registration (calls `infernet register` if needed; providers only) ----
+    if (!skipRegister && isProvider && configAfterId) {
+        n += 1;
+        step(n, total, "Provider registration");
+        const registered = await isRegistered(configAfterId);
+        if (registered) {
+            ok("already registered with the control plane");
+        } else {
+            warn("not registered yet");
+            let proceed = yes;
+            if (!yes) {
+                const ans = await question("  Register now?", { default: "y" });
+                proceed = ans.toLowerCase().startsWith("y");
+            }
+            if (proceed) {
+                const code = await runSubcommand("register", []);
+                if (code !== 0) {
+                    fail(`register exited ${code}`);
+                    warn("  re-run `infernet register` once the control plane is reachable");
+                } else {
+                    ok("registered");
+                }
+            } else {
+                process.stdout.write("  skipped — run `infernet register` later\n");
+            }
+        }
+    }
+
+    // ---- Daemon (offers to start it; providers only) ----
+    if (!skipDaemon && isProvider && configAfterId) {
+        n += 1;
+        step(n, total, "Daemon");
+        const alive = await isDaemonAlive(500);
+        if (alive) {
+            ok("daemon already running");
+        } else {
+            warn("daemon not running");
+            let proceed = yes;
+            if (!yes) {
+                const ans = await question("  Start the daemon now (detached)?", { default: "y" });
+                proceed = ans.toLowerCase().startsWith("y");
+            }
+            if (proceed) {
+                const code = await runSubcommand("start", []);
+                if (code !== 0) {
+                    fail(`start exited ${code}`);
+                    warn("  check `infernet logs` and `infernet status`");
+                } else {
+                    // start detaches; give it a beat then verify.
+                    await new Promise((r) => setTimeout(r, 1500));
+                    const aliveNow = await isDaemonAlive(800);
+                    if (aliveNow) ok("daemon running");
+                    else warn("daemon spawned but not yet responding — check `infernet status`");
+                }
+            } else {
+                process.stdout.write("  skipped — run `infernet start` later\n");
+            }
+        }
+    }
+
+    process.stdout.write("\n");
+    ok("setup complete");
+    process.stdout.write("\nTry it:\n");
+    if (chosenModel && configAfterId?.controlPlane?.url) {
+        process.stdout.write(`  infernet chat "what is 2+2?"            # P2P\n`);
+        process.stdout.write(`  infernet chat --local "what is 2+2?"    # local engine\n`);
+    } else if (chosenModel) {
         process.stdout.write(`  infernet chat "what is 2+2?"\n`);
     } else {
         process.stdout.write(`  infernet chat --backend stub "smoke test"\n`);
     }
-    process.stdout.write(`\nNext: infernet init   (configure node identity + control plane)\n`);
+    process.stdout.write(`  infernet doctor                          # full health check\n`);
     return 0;
 }

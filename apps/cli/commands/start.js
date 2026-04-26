@@ -35,7 +35,7 @@ import {
 import { spawnDetachedDaemon } from '../lib/daemonize.js';
 import { isDaemonAlive } from '../lib/ipc.js';
 import { resolveP2pPort, detectLocalAddress, formatEndpoint } from '../lib/network.js';
-import { executeChatJob, failChatJob } from '../lib/chat-executor.js';
+import { executeChatJob, failChatJob, shutdownEngine } from '../lib/chat-executor.js';
 
 const HELP = `infernet start — run the node daemon
 
@@ -395,6 +395,7 @@ async function runDaemon(args, ctx) {
         }
         if (ipcServer) { try { ipcServer.close(); } catch {} }
         if (p2pServer) { try { p2pServer.close(); } catch {} }
+        try { await shutdownEngine(); } catch {}
         removeSocketFile();
         await removePidFile();
         process.stdout.write('bye\n');

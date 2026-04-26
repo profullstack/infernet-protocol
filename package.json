@@ -20,6 +20,7 @@
   "devDependencies": {
     "@infernetprotocol/auth": "workspace:*",
     "@infernetprotocol/cli": "workspace:*",
+    "@infernetprotocol/engine": "workspace:^",
     "vitest": "^3.0.8"
   }
 }

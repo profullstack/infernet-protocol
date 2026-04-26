@@ -1,40 +1,24 @@
 /**
- * Stub chat executor for the provider daemon.
+ * Chat executor for the provider daemon.
  *
- * Reads `job.input_spec.messages` (OpenAI-shaped), emits tokens into the
- * control plane's `job_events` stream (via signed POSTs — nodes no longer
- * write to Supabase directly), and returns the full assistant text so the
- * caller can post it in the completion payload.
+ * Pulls tokens from `@infernetprotocol/engine` (Mojo+MAX binary or
+ * in-process stub, depending on env) and forwards them to the control
+ * plane's `job_events` stream via signed POSTs. The daemon doesn't know
+ * which engine backend is loaded — that's `createEngine()`'s problem.
  *
- * Real llama.cpp / vLLM runtime can slot in later by replacing the token
- * loop with a streaming call.
+ * Backend selection precedence (set by the operator at daemon start):
+ *   1. INFERNET_ENGINE_BACKEND=mojo|stub
+ *   2. INFERNET_ENGINE_BIN set → mojo
+ *   3. otherwise → stub (canned tokens, daemon still works on a fresh box)
  */
 
-const STUB_RESPONSE_TEMPLATE = (input) => [
-    `Running on the Infernet P2P network.`,
-    `You said: "${String(input).slice(0, 200)}"`,
-    `This is a stub response from the provider daemon — no real model is running yet.`,
-    `When a real runtime (llama.cpp / vLLM) is wired into the job loop, tokens will stream from actual inference.`
-].join(' ');
+import { createEngine, MSG } from "@infernetprotocol/engine";
 
 // Flush the event buffer when it hits this many tokens OR when we haven't
 // flushed in this many ms. Batching amortizes the per-request signing cost
 // without killing the streaming UX.
 const EVENT_BATCH_MAX = 16;
 const EVENT_BATCH_FLUSH_MS = 250;
-
-function lastUserMessage(messages) {
-    if (!Array.isArray(messages)) return '';
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-        const m = messages[i];
-        if (m?.role === 'user' && typeof m.content === 'string') return m.content;
-    }
-    return '';
-}
-
-function sleep(ms) {
-    return new Promise((r) => setTimeout(r, ms));
-}
 
 class EventBuffer {
     constructor(client, jobId) {
@@ -45,8 +29,10 @@ class EventBuffer {
     }
     async push(event_type, data) {
         this.events.push({ event_type, data });
-        if (this.events.length >= EVENT_BATCH_MAX ||
-            Date.now() - this.lastFlush >= EVENT_BATCH_FLUSH_MS) {
+        if (
+            this.events.length >= EVENT_BATCH_MAX ||
+            Date.now() - this.lastFlush >= EVENT_BATCH_FLUSH_MS
+        ) {
             await this.flush();
         }
     }
@@ -58,15 +44,41 @@ class EventBuffer {
         try {
             await this.client.postJobEvents(this.jobId, batch);
         } catch (err) {
-            // Best-effort: put them back so the next flush retries once.
-            // Still drop after a second failure to avoid unbounded growth.
             process.stderr.write(`postJobEvents failed: ${err?.message ?? err}\n`);
         }
     }
 }
 
+// One engine per daemon process — model load happens once. Lazy so the CLI
+// doesn't pay the cost (or pull in the Mojo binary) until the first chat
+// job actually arrives.
+let enginePromise = null;
+function getEngine() {
+    if (!enginePromise) {
+        enginePromise = createEngine().catch((err) => {
+            // Reset so a transient failure doesn't permanently poison the
+            // daemon — next job will retry initialization.
+            enginePromise = null;
+            throw err;
+        });
+    }
+    return enginePromise;
+}
+
+export async function shutdownEngine() {
+    if (!enginePromise) return;
+    try {
+        const engine = await enginePromise;
+        await engine.shutdown();
+    } catch {
+        // best-effort
+    } finally {
+        enginePromise = null;
+    }
+}
+
 /**
- * Run the stub chat executor.
+ * Run the chat executor for one job.
  *
  * @param {{ client: any, job: any, node: any }} ctx
  * @returns {Promise<string>} the full assistant response text.
@@ -74,39 +86,62 @@ class EventBuffer {
 export async function executeChatJob({ client, job, node }) {
     const input = job?.input_spec ?? {};
     const messages = input.messages ?? [];
-    const userText = lastUserMessage(messages);
 
+    const engine = await getEngine();
     const buffer = new EventBuffer(client, job.id);
 
-    await buffer.push('meta', {
-        provider_node_id: node.nodeId,
-        provider_name: node.name ?? null,
+    const generation = engine.generate({
+        messages,
         model: job.model_name ?? null,
-        started_at: new Date().toISOString()
+        max_tokens: input.max_tokens,
+        temperature: input.temperature
     });
 
-    const response = STUB_RESPONSE_TEMPLATE(userText);
-    const tokens = response.split(/(\s+)/).filter(Boolean);
+    let accumulated = "";
 
-    let accumulated = '';
-    for (const tok of tokens) {
-        accumulated += tok;
-        await buffer.push('token', { text: tok });
-        await sleep(40 + Math.floor(Math.random() * 80));
+    for await (const ev of generation.stream) {
+        switch (ev.type) {
+            case MSG.META:
+                await buffer.push("meta", {
+                    provider_node_id: node.nodeId,
+                    provider_name: node.name ?? null,
+                    model: ev.model ?? job.model_name ?? null,
+                    started_at: ev.started_at ?? new Date().toISOString(),
+                    engine: engine.kind
+                });
+                break;
+            case MSG.TOKEN:
+                accumulated += ev.text ?? "";
+                await buffer.push("token", { text: ev.text ?? "" });
+                break;
+            case MSG.DONE:
+                if (typeof ev.text === "string" && ev.text.length > accumulated.length) {
+                    accumulated = ev.text;
+                }
+                await buffer.push("done", {
+                    text: accumulated,
+                    reason: ev.reason ?? "stop",
+                    finished_at: ev.finished_at ?? new Date().toISOString()
+                });
+                break;
+            case MSG.ERROR:
+                await buffer.push("error", { message: ev.message ?? "engine error" });
+                await buffer.flush();
+                throw new Error(ev.message ?? "engine error");
+            default:
+                // forward unknown event types verbatim — useful for backend
+                // extensions (logits, tool_call, etc.) once the protocol grows.
+                await buffer.push(ev.type, ev);
+        }
     }
 
-    await buffer.push('done', {
-        text: accumulated,
-        finished_at: new Date().toISOString()
-    });
     await buffer.flush();
-
     return accumulated;
 }
 
 export async function failChatJob({ client, jobId, message }) {
     try {
-        await client.postJobEvents(jobId, [{ event_type: 'error', data: { message } }]);
+        await client.postJobEvents(jobId, [{ event_type: "error", data: { message } }]);
     } catch {
         // Non-fatal; the job row still gets marked 'failed' by the caller.
     }

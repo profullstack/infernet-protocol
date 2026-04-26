@@ -14,6 +14,9 @@ importers:
       '@infernetprotocol/cli':
         specifier: workspace:*
         version: link:apps/cli
+      '@infernetprotocol/engine':
+        specifier: workspace:^
+        version: link:packages/engine
       vitest:
         specifier: ^3.0.8
         version: 3.2.4(@types/debug@4.1.13)(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(yaml@2.8.3)
@@ -26,6 +29,9 @@ importers:
       '@infernetprotocol/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@infernetprotocol/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
       '@infernetprotocol/gpu':
         specifier: workspace:*
         version: link:../../packages/gpu
@@ -183,6 +189,8 @@ importers:
         version: 2.103.3
 
   packages/deploy-providers: {}
+
+  packages/engine: {}
 
   packages/gpu: {}
 

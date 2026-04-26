@@ -25,6 +25,7 @@
   "dependencies": {
     "@infernetprotocol/auth": "workspace:*",
     "@infernetprotocol/config": "workspace:*",
+    "@infernetprotocol/engine": "workspace:*",
     "@infernetprotocol/gpu": "workspace:*",
     "dotenv": "^16.4.7"
   },

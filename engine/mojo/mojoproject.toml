@@ -1,0 +1,8 @@
+# Mojo project metadata. The pixi.toml in this directory manages the
+# toolchain itself; this file just declares the project to `mojo`.
+
+[project]
+name = "infernet-engine"
+version = "0.1.0"
+authors = ["Infernet Protocol contributors"]
+description = "Mojo+MAX inference engine — speaks NDJSON v1 over stdio."

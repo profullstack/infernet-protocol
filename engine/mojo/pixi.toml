@@ -1,0 +1,24 @@
+# Modular toolchain (Mojo + MAX) managed via pixi.
+# Install pixi: https://pixi.sh
+# Then `pixi install` here to fetch the toolchain into engine/mojo/.pixi/.
+#
+# We pin to the stable Modular channel; switch to `max-nightly` if you need
+# bleeding-edge MAX kernels. The exact package name has shifted over
+# Modular releases — validate against the current install docs at
+# https://docs.modular.com/mojo/manual/install/ when bumping.
+
+[project]
+name = "infernet-engine"
+version = "0.1.0"
+description = "Mojo+MAX inference engine for the Infernet Protocol"
+authors = ["Infernet Protocol contributors"]
+channels = ["https://conda.modular.com/max", "conda-forge"]
+platforms = ["linux-64", "osx-arm64"]
+
+[dependencies]
+max = ">=24.6"
+
+[tasks]
+build  = "mojo build src/main.mojo -o build/infernet-engine"
+run    = "mojo run src/main.mojo"
+format = "mojo format src/"

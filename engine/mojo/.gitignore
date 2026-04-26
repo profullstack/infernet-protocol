@@ -1,0 +1,4 @@
+.pixi/
+build/
+*.mojopkg
+__pycache__/

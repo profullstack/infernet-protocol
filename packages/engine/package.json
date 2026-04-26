@@ -1,0 +1,21 @@
+{
+  "name": "@infernetprotocol/engine",
+  "version": "0.1.0",
+  "description": "Inference engine abstraction for Infernet — pluggable backends (Mojo+MAX, in-process stub) over a stable async-iterator API.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./protocol": "./src/protocol.js",
+    "./engine-process": "./src/engine-process.js"
+  },
+  "files": ["src/**/*.js", "README.md"],
+  "engines": { "node": ">=18" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/profullstack/infernet-protocol.git",
+    "directory": "packages/engine"
+  },
+  "homepage": "https://github.com/profullstack/infernet-protocol#readme"
+}

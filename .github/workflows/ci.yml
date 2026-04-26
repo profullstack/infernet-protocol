@@ -41,3 +41,9 @@ jobs:
 
       - name: Smoke-test CLI
         run: pnpm --filter @infernetprotocol/cli exec infernet help
+
+      - name: IPIP-0005 — no direct DB clients in client/CLI/SDK
+        run: node tooling/lint-no-direct-db.mjs
+
+      - name: Run vitest suite
+        run: pnpm vitest run

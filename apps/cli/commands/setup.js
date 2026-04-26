@@ -15,7 +15,7 @@
  *   infernet setup --skip-pull              # don't pull a model
  */
 
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { loadConfig, saveConfig, getConfigPath } from "../lib/config.js";
 import { question } from "../lib/prompt.js";
@@ -30,7 +30,7 @@ Usage:
   infernet setup [flags]
 
 Flags:
-  --yes                  Non-interactive. Use defaults / passed flags.
+  --confirm, --yes       Auto-confirm every prompt. Use for unattended runs.
   --model <name>         Pre-select model to pull (e.g. qwen2.5:7b).
   --skip-pull            Skip the model-pull step.
   --backend <kind>       Pin engine backend (ollama | mojo | stub). Default: ollama.
@@ -38,6 +38,10 @@ Flags:
   --port <n>             P2P port to open in the firewall. Default: ${DEFAULT_P2P_PORT}.
   --no-firewall          Skip the firewall step entirely.
   -h, --help             Show this help.
+
+By default, every step that wants to install or change something on
+your system asks for confirmation first. Pass --confirm (or --yes) to
+skip the prompts.
 `;
 
 const MODEL_SUGGESTIONS = [
@@ -67,7 +71,7 @@ async function detectNode() {
     return false;
 }
 
-async function detectOllama(host) {
+async function detectOllama(host, { quiet = false } = {}) {
     try {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 2000);
@@ -76,7 +80,9 @@ async function detectOllama(host) {
         if (res.ok) {
             const body = await res.json().catch(() => ({}));
             const count = Array.isArray(body.models) ? body.models.length : 0;
-            ok(`Ollama running at ${host} (${count} model${count === 1 ? "" : "s"} pulled)`);
+            if (!quiet) {
+                ok(`Ollama running at ${host} (${count} model${count === 1 ? "" : "s"} pulled)`);
+            }
             return { running: true, models: body.models ?? [] };
         }
     } catch {
@@ -86,16 +92,65 @@ async function detectOllama(host) {
     // not-installed vs not-running.
     try {
         const { stdout } = await pExec("ollama", ["--version"], { timeout: 2000 });
-        warn(`Ollama installed (${stdout.trim()}) but not reachable at ${host}`);
-        warn("  Try: ollama serve &     (or: systemctl --user start ollama)");
-        return { running: false, models: [] };
+        return { running: false, models: [], version: stdout.trim() };
     } catch {
-        fail("Ollama not installed");
-        process.stdout.write(
-            "    Install: curl -fsSL https://ollama.com/install.sh | sh\n"
-        );
         return { running: false, models: [], notInstalled: true };
     }
+}
+
+/**
+ * Prompt the user to run a command, then run it with inherited stdio
+ * (so sudo prompts and command output appear inline). Skipped if `yes`
+ * is true. Returns true if the command ran and exited 0; false if the
+ * user declined or the command failed.
+ */
+async function confirmRun({ label, command, yes }) {
+    process.stdout.write(`  Will run: ${command}\n`);
+    if (!yes) {
+        const ans = await question(`  ${label}?`, { default: "y" });
+        if (!ans.toLowerCase().startsWith("y")) {
+            process.stdout.write("  skipped\n");
+            return false;
+        }
+    }
+    return new Promise((resolve) => {
+        const child = spawn("sh", ["-c", command], { stdio: "inherit" });
+        child.on("exit", (code) => {
+            if (code === 0) {
+                ok("done");
+                resolve(true);
+            } else {
+                fail(`command exited ${code}`);
+                resolve(false);
+            }
+        });
+        child.on("error", (err) => {
+            fail(`could not run: ${err?.message ?? err}`);
+            resolve(false);
+        });
+    });
+}
+
+async function startOllama({ yes }) {
+    // Linux: usually has the ollama systemd unit from the installer.
+    // macOS: usually opens the Ollama.app. Fall back to `ollama serve &`.
+    const isMac = process.platform === "darwin";
+    const cmd = isMac
+        ? "open -a Ollama || (ollama serve > /tmp/ollama.log 2>&1 &)"
+        : "sudo systemctl start ollama || (ollama serve > /tmp/ollama.log 2>&1 &)";
+    return confirmRun({
+        label: "Start Ollama now",
+        command: cmd,
+        yes
+    });
+}
+
+async function installOllama({ yes }) {
+    return confirmRun({
+        label: "Install Ollama now (will sudo)",
+        command: "curl -fsSL https://ollama.com/install.sh | sh",
+        yes
+    });
 }
 
 async function pullModel(name) {
@@ -148,7 +203,10 @@ export default async function setup(args) {
         return 0;
     }
 
-    const yes = args.has("yes") || process.env.INFERNET_NONINTERACTIVE === "1";
+    const yes =
+        args.has("yes") ||
+        args.has("confirm") ||
+        process.env.INFERNET_NONINTERACTIVE === "1";
     const skipPull = args.has("skip-pull");
     const skipFirewall = args.has("no-firewall");
     const backend = String(args.get("backend") ?? "ollama");
@@ -177,18 +235,41 @@ export default async function setup(args) {
         n += 1;
         step(n, total, `Ollama (${host})`);
         ollamaState = await detectOllama(host);
+
         if (ollamaState.notInstalled) {
-            process.stdout.write(
-                "\n  Install Ollama with the command above, then re-run `infernet setup`.\n"
-            );
-            return 1;
+            warn("Ollama not installed");
+            const installed = await installOllama({ yes });
+            if (!installed) {
+                process.stdout.write(
+                    "\n  Re-run `infernet setup` after Ollama is installed.\n"
+                );
+                return 1;
+            }
+            // Re-probe — the installer usually starts the daemon on Linux,
+            // but not always on macOS.
+            ollamaState = await detectOllama(host, { quiet: true });
         }
+
         if (!ollamaState.running) {
-            process.stdout.write(
-                "\n  Start Ollama (see suggestion above), then re-run `infernet setup`.\n"
+            warn(
+                ollamaState.version
+                    ? `Ollama installed (${ollamaState.version}) but not reachable at ${host}`
+                    : `Ollama installed but not reachable at ${host}`
             );
-            return 1;
+            const started = await startOllama({ yes });
+            if (started) {
+                // Give the daemon a beat to bind, then re-probe.
+                await new Promise((r) => setTimeout(r, 1500));
+                ollamaState = await detectOllama(host, { quiet: true });
+            }
+            if (!ollamaState.running) {
+                process.stdout.write(
+                    "\n  Could not bring Ollama up. Start it manually, then re-run `infernet setup`.\n"
+                );
+                return 1;
+            }
         }
+        ok(`Ollama running at ${host} (${ollamaState.models?.length ?? 0} model${(ollamaState.models?.length ?? 0) === 1 ? "" : "s"} pulled)`);
 
         n += 1;
         step(n, total, "Model");

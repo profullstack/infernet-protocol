@@ -162,7 +162,7 @@ pnpm supabase:db:push    # pushes migrations to the cloud project
 pnpm dev
 ```
 
-Copy `sample.env` → `.env.local` and fill in `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and the CoinPayPortal keys.
+Copy `sample.env` → `.env` and fill in `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and the CoinPayPortal keys.
 
 ### 2. Each GPU server (Docker — the supported install path today)
 
@@ -281,7 +281,7 @@ BTC, BCH, ETH, SOL, POL, BNB, XRP, ADA, DOGE; plus USDT on ETH/Polygon/Solana; p
 
 - Canonical list: [`packages/config/payment-coins.js`](./packages/config/payment-coins.js)
 - Platform deposit addresses: [`packages/config/deposit-addresses.js`](./packages/config/deposit-addresses.js) — also seeded into the `platform_wallets` table.
-- Gateway: CoinPayPortal ([`src/payments/coinpayportal.js`](./src/payments/coinpayportal.js)). Set `COINPAYPORTAL_API_KEY`, `COINPAYPORTAL_WEBHOOK_SECRET` in `.env.local`.
+- Gateway: CoinPayPortal ([`src/payments/coinpayportal.js`](./src/payments/coinpayportal.js)). Set `COINPAYPORTAL_API_KEY`, `COINPAYPORTAL_WEBHOOK_SECRET` in `.env`.
 - Invoice: `POST /api/payments/invoice` with `{ jobId, coin }`.
 - Webhook: `POST /api/payments/webhook` — HMAC-verified, updates `payment_transactions` + `jobs.payment_status`.
 

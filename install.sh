@@ -13,10 +13,21 @@
 #   6. Drops a wrapper script at ~/.local/bin/infernet that exec's the CLI.
 #   7. Prints next steps (`infernet setup`).
 #
-# Override locations:
-#   INFERNET_HOME=/path     (default: ~/.infernet)
-#   INFERNET_BIN=/path/dir  (default: ~/.local/bin)
-#   INFERNET_REF=branch     (default: master) — branch / tag / commit
+# Install strategy:
+#   1. If `npm` is available AND the package is published, run
+#      `npm install -g @infernetprotocol/cli`. Fast, ~5MB.
+#   2. Otherwise fall back to `git clone` + `pnpm install` into
+#      ~/.infernet/source and a wrapper at ~/.local/bin/infernet.
+#
+# The git path stays as a fallback so the installer works even before
+# the npm package is published (e.g. for early-access releases).
+#
+# Override env vars:
+#   INFERNET_HOME=/path           install dir for git fallback (~/.infernet)
+#   INFERNET_BIN=/path/dir        wrapper bin dir (~/.local/bin)
+#   INFERNET_REF=branch           branch/tag/commit for git path (master)
+#   INFERNET_NPM_VERSION=X.Y.Z    pin npm version (latest)
+#   INFERNET_FORCE_GIT=1          skip npm, force git path
 #
 # Re-running this script updates an existing install in place.
 
@@ -25,10 +36,13 @@ set -eu
 REPO_URL="https://github.com/profullstack/infernet-protocol.git"
 REPO_RAW_BASE="https://raw.githubusercontent.com/profullstack/infernet-protocol"
 DEFAULT_REF="master"
+NPM_PACKAGE="@infernetprotocol/cli"
 
 INFERNET_HOME="${INFERNET_HOME:-$HOME/.infernet}"
 INFERNET_BIN="${INFERNET_BIN:-$HOME/.local/bin}"
 INFERNET_REF="${INFERNET_REF:-$DEFAULT_REF}"
+INFERNET_NPM_VERSION="${INFERNET_NPM_VERSION:-latest}"
+INFERNET_FORCE_GIT="${INFERNET_FORCE_GIT:-}"
 SOURCE_DIR="$INFERNET_HOME/source"
 WRAPPER="$INFERNET_BIN/infernet"
 
@@ -182,6 +196,48 @@ EOF
     ok "wrapper installed at $WRAPPER"
 }
 
+# Try installing via npm. Returns 0 on success (binary now on PATH via
+# npm's global prefix), 1 to fall back to the git clone path.
+try_npm_install() {
+    if ! command -v npm >/dev/null 2>&1; then
+        return 1
+    fi
+    info "trying $NPM_PACKAGE@$INFERNET_NPM_VERSION via npm..."
+    NPM_LOG="$(mktemp 2>/dev/null || echo "/tmp/inf-npm.$$.log")"
+    if npm install -g "$NPM_PACKAGE@$INFERNET_NPM_VERSION" >"$NPM_LOG" 2>&1; then
+        ok "installed via npm"
+        rm -f "$NPM_LOG"
+        return 0
+    fi
+    # 404 means the package isn't published yet — expected today, not an
+    # error worth shouting about. Anything else, surface enough to debug.
+    if grep -q "E404" "$NPM_LOG" 2>/dev/null; then
+        warn "$NPM_PACKAGE not on npm yet — falling back to git clone"
+    else
+        warn "npm install failed — falling back to git clone"
+        printf '  hint: %s\n' "$(tail -3 "$NPM_LOG" 2>/dev/null | head -1)"
+        printf '  full log: %s\n' "$NPM_LOG"
+    fi
+    return 1
+}
+
+check_npm_path() {
+    NPM_BIN="$(npm bin -g 2>/dev/null || npm prefix -g 2>/dev/null | sed 's|$|/bin|')"
+    case ":$PATH:" in
+        *":$NPM_BIN:"*)
+            return 0
+            ;;
+    esac
+    warn "$NPM_BIN is not on your PATH"
+    cat <<EOF
+
+  npm installed the binary to $NPM_BIN but that directory isn't on
+  your PATH. Either add it (export PATH="$NPM_BIN:\$PATH") or use the
+  full path: $NPM_BIN/infernet
+
+EOF
+}
+
 check_path() {
     case ":$PATH:" in
         *":$INFERNET_BIN:"*)
@@ -221,12 +277,19 @@ main() {
     ok "OS: $OS"
 
     check_node
-    check_git
-    ensure_pnpm
-    clone_or_update
-    run_install
-    write_wrapper
-    check_path
+
+    if [ -z "$INFERNET_FORCE_GIT" ] && try_npm_install; then
+        check_npm_path
+        used_npm=1
+    else
+        check_git
+        ensure_pnpm
+        clone_or_update
+        run_install
+        write_wrapper
+        check_path
+        used_npm=0
+    fi
 
     printf '\n%sInstall complete.%s\n' "$GREEN" "$RESET"
     printf '\nNext steps:\n'
@@ -234,7 +297,11 @@ main() {
     printf '  2. infernet chat "hi" # try local inference\n'
     printf '  3. infernet help      # full command list\n'
     printf '\nTo update later, just re-run this installer.\n'
-    printf 'To uninstall:    rm -rf %s && rm -f %s\n\n' "$INFERNET_HOME" "$WRAPPER"
+    if [ "$used_npm" = "1" ]; then
+        printf 'To uninstall:    npm uninstall -g %s\n\n' "$NPM_PACKAGE"
+    else
+        printf 'To uninstall:    rm -rf %s && rm -f %s\n\n' "$INFERNET_HOME" "$WRAPPER"
+    fi
 }
 
 main "$@"

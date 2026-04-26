@@ -98,19 +98,42 @@ export default async function register(args, ctx) {
         return 1;
     }
 
+    // The register response can be terse on older deployments
+    // (sometimes just { node_id }, no id). Fetch the canonical row
+    // via the signed `me` endpoint so we always have the server's
+    // truth, regardless of the deployed register handler's shape.
+    let canonical = row;
+    let canonicalId = row?.id ?? null;
+    try {
+        const me = await client.me();
+        if (me && typeof me === "object") {
+            canonical = me;
+            canonicalId = me.id ?? canonicalId;
+        }
+    } catch {
+        // Non-fatal: we'll fall back to whatever register returned.
+    }
+
     const nextConfig = {
         ...config,
         node: {
             ...node,
-            id: row?.id ?? node.id ?? null,
+            id: canonicalId ?? node.id ?? null,
             address: noAdvertise ? null : (address ?? node.address ?? null),
             port: noAdvertise ? null : (Number.isFinite(port) ? port : node.port ?? null)
         }
     };
     await saveConfig(nextConfig);
 
-    process.stdout.write(`Registered. id=${row?.id ?? '(unknown)'} node_id=${row?.node_id ?? node.nodeId}\n`);
-    process.stdout.write(`Config updated with assigned uuid at ${configPath}\n`);
+    const displayId = canonicalId ?? "(server did not return one)";
+    const displayNodeId = canonical?.node_id ?? row?.node_id ?? node.nodeId;
+    process.stdout.write(`Registered. id=${displayId} node_id=${displayNodeId}\n`);
+    if (canonicalId) {
+        process.stdout.write(`Config updated with assigned uuid at ${configPath}\n`);
+    } else {
+        process.stdout.write(`Note: control plane returned no id — likely an older deployment.\n`);
+        process.stdout.write(`      registration succeeded; id will populate after first heartbeat.\n`);
+    }
     return 0;
 }
 

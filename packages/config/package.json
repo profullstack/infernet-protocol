@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/config",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shared constants for the Infernet Protocol — supported payment coins and platform deposit addresses.",
   "license": "MIT",
   "type": "module",

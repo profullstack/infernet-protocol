@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/payments",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CoinPayPortal payment gateway integration for the Infernet Protocol.",
   "license": "MIT",
   "type": "module",

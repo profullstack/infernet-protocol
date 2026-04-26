@@ -140,6 +140,7 @@ to the canonical conversation thread.
 | 0002  | [Operator-to-Operator P2P Chat](./ipip-0002.md) | Standards Track | Draft  |
 | 0003  | [Authentication & Account Model](./ipip-0003.md) | Standards Track | Draft  |
 | 0004  | [Multi-currency Payments via CoinPayPortal](./ipip-0004.md) | Standards Track | Draft  |
+| 0005  | [Data Access Architecture](./ipip-0005.md) | Standards Track | Draft  |
 
 ## Editors
 

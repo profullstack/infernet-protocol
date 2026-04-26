@@ -28,8 +28,9 @@ Daemon:
 Diagnostics:
   gpu          Inspect local GPUs (nvidia-smi / rocm-smi / system_profiler)
   firewall     Print commands to open the P2P port on your firewall
-  chat         Run a single inference locally (no control plane needed)
+  chat         Run an inference (P2P network or --local engine)
   tui          Live terminal dashboard (system / jobs / engine / peers)
+  doctor       End-to-end health check across all three sides
 
 Payments:
   payout       Manage payout coin/address

@@ -154,13 +154,11 @@ async function installOllama({ yes }) {
 }
 
 async function pullModel(name) {
-    process.stdout.write(`    pulling ${name} (this may take a while)...\n`);
+    process.stdout.write(`\n  → pulling ${name} via the ollama CLI (this may take a while)...\n\n`);
     try {
-        // Stream stdout/stderr so the user sees progress.
-        const child = (await import("node:child_process")).spawn(
-            "ollama", ["pull", name],
-            { stdio: ["ignore", "inherit", "inherit"] }
-        );
+        const child = spawn("ollama", ["pull", name], {
+            stdio: ["ignore", "inherit", "inherit"]
+        });
         await new Promise((resolve, reject) => {
             child.on("exit", (code) => {
                 if (code === 0) resolve();
@@ -168,10 +166,26 @@ async function pullModel(name) {
             });
             child.on("error", reject);
         });
-        ok(`pulled ${name}`);
+        process.stdout.write("\n");
+        ok(`ollama pull ${name} completed`);
         return true;
     } catch (err) {
         fail(`pull failed: ${err?.message ?? err}`);
+        return false;
+    }
+}
+
+async function verifyModelPulled(host, name) {
+    try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 3000);
+        const res = await fetch(new URL("/api/tags", host), { signal: ctrl.signal });
+        clearTimeout(t);
+        if (!res.ok) return false;
+        const body = await res.json();
+        const have = (body.models ?? []).some((m) => (m.name ?? m.model) === name);
+        return have;
+    } catch {
         return false;
     }
 }
@@ -283,12 +297,24 @@ export default async function setup(args) {
             ok(`using already-installed ${chosenModel}`);
         } else {
             chosenModel = await chooseModel(installedNames, { yes, preselected: preselectedModel });
-            if (chosenModel && !installedNames.includes(chosenModel)) {
+            if (!chosenModel) {
+                fail("no model selected — aborting");
+                return 1;
+            }
+            ok(`selected model: ${chosenModel}`);
+            if (!installedNames.includes(chosenModel)) {
                 const okPull = await pullModel(chosenModel);
                 if (!okPull) return 1;
-            } else if (chosenModel) {
-                ok(`${chosenModel} already pulled`);
+            } else {
+                ok(`${chosenModel} already pulled — skipping download`);
             }
+            // Always verify, regardless of whether we just pulled or skipped.
+            const ready = await verifyModelPulled(host, chosenModel);
+            if (!ready) {
+                fail(`${chosenModel} not visible to ollama after pull — check \`ollama list\``);
+                return 1;
+            }
+            ok(`verified: ollama can serve ${chosenModel}`);
         }
     }
 

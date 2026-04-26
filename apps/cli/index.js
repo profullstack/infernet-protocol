@@ -30,6 +30,7 @@ import payout from './commands/payout.js';
 import payments from './commands/payments.js';
 import gpu from './commands/gpu.js';
 import firewall from './commands/firewall.js';
+import chat from './commands/chat.js';
 
 function parseArgs(argv) {
     const positional = [];
@@ -83,11 +84,11 @@ function parseArgs(argv) {
 const COMMANDS = {
     init, login, register, update, remove,
     start, status, stop, stats, logs,
-    payout, payments, gpu, firewall, help
+    payout, payments, gpu, firewall, chat, help
 };
 
 // Commands that can run without a loaded config.
-const NO_CONFIG = new Set(['init', 'login', 'help', 'stats', 'logs', 'stop', 'gpu', 'firewall']);
+const NO_CONFIG = new Set(['init', 'login', 'help', 'stats', 'logs', 'stop', 'gpu', 'firewall', 'chat']);
 // Commands that need a config but not a control-plane client (none today
 // — kept as a future escape hatch).
 const NO_CLIENT = new Set();

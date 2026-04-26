@@ -24,6 +24,7 @@ Daemon:
   status       Show this node's current state (remote row + live daemon)
   stats        Live in-memory stats from the running daemon (via IPC)
   logs         Show / tail the daemon log (~/.config/infernet/daemon.log)
+  service      Userland systemd unit (Linux): install / enable / status / logs
 
 Diagnostics:
   gpu          Inspect local GPUs (nvidia-smi / rocm-smi / system_profiler)

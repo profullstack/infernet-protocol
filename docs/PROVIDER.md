@@ -26,7 +26,7 @@ This document explains how to use the Infernet Protocol as a resource provider t
 
 1. **Install the Infernet Protocol**:
    - Desktop: Download and install the desktop application
-   - PWA: Access the web application at your self-hosted URL or https://app.infernet.tech
+   - PWA: Access the web application at your self-hosted URL or https://app.infernetprotocol.com
    - Mobile: Install the mobile app from app stores
 
 2. **Create an Account**:
@@ -223,8 +223,8 @@ You can deploy custom AI models to your nodes:
 ## Resources
 
 - [Infernet Protocol GitHub](https://github.com/profullstack/infernet-protocol)
-- [Documentation](https://docs.infernet.tech)
-- [Community Forum](https://community.infernet.tech)
+- [Documentation](https://docs.infernetprotocol.com)
+- [Community Forum](https://community.infernetprotocol.com)
 
 ---
 

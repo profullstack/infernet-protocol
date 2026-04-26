@@ -31,7 +31,7 @@ export default {
         maxConnections: parseInt(process.env.MAX_CONNECTIONS || '100', 10),
         heartbeatInterval: parseInt(process.env.HEARTBEAT_INTERVAL || '30000', 10), // milliseconds
         enableRemoteSeeding: process.env.ENABLE_REMOTE_SEEDING === 'true' || true, // Enable seeding from remote P2P instance
-        remoteNodeUrl: process.env.REMOTE_NODE_URL || 'https://infernet.tech/nodes' // URL to fetch remote nodes from
+        remoteNodeUrl: process.env.REMOTE_NODE_URL || 'https://infernetprotocol.com/nodes' // URL to fetch remote nodes from
     },
     
     // WebSocket configuration

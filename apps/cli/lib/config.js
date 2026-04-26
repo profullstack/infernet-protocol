@@ -5,7 +5,7 @@
  *
  * Shape (v2 — signed-API era):
  *   {
- *     "controlPlane": { "url": "https://infernet.tech" },
+ *     "controlPlane": { "url": "https://infernetprotocol.com" },
  *     "node": {
  *       "id": "...",         // server-assigned uuid after register
  *       "nodeId": "...",     // human-readable slug e.g. provider-abc123

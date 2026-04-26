@@ -13,7 +13,7 @@ info:
   license:
     name: MIT
 servers:
-  - url: https://infernet.tech
+  - url: https://infernetprotocol.com
     description: Infernet hosted cloud control plane
   - url: http://localhost:3000
     description: Local development

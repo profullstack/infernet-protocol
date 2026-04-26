@@ -2,13 +2,13 @@
  * Infernet Protocol JavaScript SDK.
  *
  * Thin wrapper around the public REST + SSE API exposed by an Infernet
- * control-plane deployment (self-hosted or hosted at infernet.tech).
+ * control-plane deployment (self-hosted or hosted at infernetprotocol.com).
  *
  * Works in Node.js 18+ and modern browsers — uses native `fetch` and
  * stream readers; no runtime dependencies.
  *
  *   import { InfernetClient } from "@infernetprotocol/sdk";
- *   const client = new InfernetClient({ baseUrl: "https://infernet.tech" });
+ *   const client = new InfernetClient({ baseUrl: "https://infernetprotocol.com" });
  *
  *   const overview = await client.getOverview();
  *   const nodes    = await client.listNodes({ limit: 20 });

@@ -25,7 +25,7 @@ This document explains how to use the Infernet Protocol as a resource consumer t
 
 1. **Install the Infernet Protocol Client**:
    - Desktop: Download and install the desktop application
-   - PWA: Access the web application at https://app.infernet.tech
+   - PWA: Access the web application at https://app.infernetprotocol.com
    - Mobile: Install the mobile app from app stores
    - API: Use the REST API or SDK for your programming language
 
@@ -293,9 +293,9 @@ For specialized or proprietary models:
 ## Resources
 
 - [Infernet Protocol GitHub](https://github.com/profullstack/infernet-protocol)
-- [API Documentation](https://docs.infernet.tech/api)
+- [API Documentation](https://docs.infernetprotocol.com/api)
 - [Example Notebooks](https://github.com/profullstack/infernet-protocol/tree/master/examples)
-- [Community Forum](https://community.infernet.tech)
+- [Community Forum](https://community.infernetprotocol.com)
 
 ---
 

@@ -7,7 +7,7 @@
  * plane URL plus a Nostr keypair (generated if the operator doesn't bring one).
  *
  * Supported flags:
- *   --url <url>                    Control-plane base URL (default: https://infernet.tech)
+ *   --url <url>                    Control-plane base URL (default: https://infernetprotocol.com)
  *   --role provider|aggregator|client
  *   --name <human-name>
  *   --nostr-pubkey <hex64>
@@ -34,7 +34,7 @@ import { DEFAULT_P2P_PORT, detectLocalAddress } from '../lib/network.js';
 import { printFirewallHint } from '../lib/firewall.js';
 import { detectGpus, formatGpuLine } from '@infernetprotocol/gpu';
 
-const DEFAULT_CONTROL_PLANE = 'https://infernet.tech';
+const DEFAULT_CONTROL_PLANE = 'https://infernetprotocol.com';
 
 const HELP = `infernet init — configure this node
 

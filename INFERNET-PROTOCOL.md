@@ -124,11 +124,11 @@ GitHub Repository: https://github.com/profullstack/infernet-protocol
 
 ## Domain
 ```markdown
-Visit us at: https://infernet.tech and https://infernetprotocol.com — these domains will soon redirect to the official repository.
+Visit us at: https://infernetprotocol.com — this domain will soon redirect to the official repository.
 ```
 
 ## Contact
 ```markdown
-For collaboration and contributions: protocol@infernet.tech
+For collaboration and contributions: protocol@infernetprotocol.com
 ```
 

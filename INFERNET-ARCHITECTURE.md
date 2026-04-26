@@ -11,7 +11,7 @@ Infernet is a decentralized GPU inference marketplace. Its architecture is delib
 Operators choose one of two deployment modes for the control plane:
 
 1. **Self-hosted** — run Supabase yourself via the Supabase CLI (`supabase start`) for full privacy and control.
-2. **Infernet cloud** — point the CLI at our hosted Supabase project at infernet.tech. Canonical flow: rent a cloud GPU, `npm i -g infernet` or `pnpm dlx infernet init`, set the cloud URL, start earning crypto without standing up infrastructure.
+2. **Infernet cloud** — point the CLI at our hosted Supabase project at infernetprotocol.com. Canonical flow: rent a cloud GPU, `npm i -g infernet` or `pnpm dlx infernet init`, set the cloud URL, start earning crypto without standing up infrastructure.
 
 The code path is identical in both modes; only the `SUPABASE_URL` and keys change.
 
@@ -199,4 +199,4 @@ tests/                   Vitest suite
 
 ## Contact
 
-For technical contributions: protocol@infernet.tech
+For technical contributions: protocol@infernetprotocol.com

@@ -18,7 +18,7 @@ npm install @infernetprotocol/sdk
 import { InfernetClient } from "@infernetprotocol/sdk";
 
 const client = new InfernetClient({
-  baseUrl: "https://infernet.tech"      // or your self-hosted control plane
+  baseUrl: "https://infernetprotocol.com"      // or your self-hosted control plane
 });
 
 // Dashboard queries

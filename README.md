@@ -43,7 +43,7 @@ Design goals: a GPU node should be able to run as an unprivileged user, leak as 
 The control plane runs one of two ways:
 
 1. **Self-hosted** — run Supabase yourself via the Supabase CLI (`supabase start`). Best for privacy and offline development.
-2. **Infernet cloud** — point the CLI at the hosted control plane at `https://infernet.tech`. Rent a GPU anywhere, `infernet init`, start earning.
+2. **Infernet cloud** — point the CLI at the hosted control plane at `https://infernetprotocol.com`. Rent a GPU anywhere, `infernet init`, start earning.
 
 Operators can point **many GPU nodes at the same control plane** — each node has its own Nostr identity and shows up as its own row in the dashboard.
 
@@ -129,7 +129,7 @@ Copy `sample.env` → `.env.local` and fill in `SUPABASE_URL`, `SUPABASE_SERVICE
 docker run --rm -it \
   --gpus all \
   -p 46337:46337 \
-  -e INFERNET_CONTROL_PLANE_URL=https://infernet.tech \
+  -e INFERNET_CONTROL_PLANE_URL=https://infernetprotocol.com \
   -e INFERNET_NODE_NAME=edge-01 \
   ghcr.io/profullstack/infernet-provider:latest
 ```
@@ -151,7 +151,7 @@ npm install (`npm i -g @infernetprotocol/cli`) and Homebrew (`brew install infer
 
 `infernet init` walks through:
 
-- Control-plane URL (default `https://infernet.tech`, or your self-hosted instance)
+- Control-plane URL (default `https://infernetprotocol.com`, or your self-hosted instance)
 - Node role (`provider` / `aggregator` / `client`)
 - Human-readable name
 - Nostr keypair — real secp256k1 / BIP-340 (auto-generated; bring your own with `--nostr-privkey`)

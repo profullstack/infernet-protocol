@@ -1,13 +1,21 @@
 /**
  * Cross-distro firewall hole-punch helpers for the Infernet P2P port.
  *
- * We don't silently edit firewall rules — the Linux tools that manage
- * them (ufw, firewalld, iptables, nftables) touch shared system state
- * and usually require root. Instead we detect what's available and
- * print exact commands the operator can run (with sudo).
+ * Two operating modes:
+ *
+ *   - `printFirewallHint(port)` only prints the commands. Use for
+ *     `infernet firewall` (read-only by design).
+ *   - `applyFirewallRule(port)` actually runs them via sudo. Use from
+ *     `infernet setup` after the operator has opted in. sudo will
+ *     prompt for a password interactively in the same TTY.
+ *
+ * The Linux tools that manage these rules (ufw, firewalld, iptables,
+ * nftables) touch shared system state and require root. We never run
+ * them silently — `applyFirewallRule` is opt-in and prints what it's
+ * about to do before doing it.
  */
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 
 /**
  * Best-effort detection of the available firewall managers. Returns an
@@ -103,4 +111,80 @@ export function printFirewallHint(port, context = '') {
     }
     for (const line of lines) process.stdout.write(`${line}\n`);
     process.stdout.write('\n');
+}
+
+/**
+ * Build the list of [bin, ...args] commands needed to open `port` on a
+ * specific tool. Each command is meant to be invoked under sudo.
+ */
+function buildCommandsFor(tool, port) {
+    switch (tool) {
+        case 'ufw':
+            return [
+                ['ufw', 'allow', `${port}/tcp`],
+                ['ufw', 'reload']
+            ];
+        case 'firewalld':
+            return [
+                ['firewall-cmd', '--permanent', `--add-port=${port}/tcp`],
+                ['firewall-cmd', '--reload']
+            ];
+        case 'nftables':
+            return [
+                ['nft', 'add', 'rule', 'inet', 'filter', 'input',
+                 'tcp', 'dport', String(port), 'accept']
+            ];
+        case 'iptables':
+            return [
+                ['iptables', '-I', 'INPUT', '-p', 'tcp', '--dport', String(port), '-j', 'ACCEPT']
+            ];
+        default:
+            return null;
+    }
+}
+
+function runWithSudo(cmd, args) {
+    return new Promise((resolve, reject) => {
+        const child = spawn('sudo', [cmd, ...args], { stdio: 'inherit' });
+        child.on('exit', (code) => {
+            if (code === 0) resolve();
+            else reject(new Error(`${cmd} exited ${code}`));
+        });
+        child.on('error', reject);
+    });
+}
+
+/**
+ * Apply the right firewall rule(s) to open `port`. Detects the
+ * available tool (ufw → firewalld → nftables → iptables) and runs
+ * each command via sudo, inheriting the TTY so password prompts work.
+ *
+ * Linux only. macOS / Windows return `{ applied: false, reason }`
+ * because pf / netsh need editing config files or admin shells, which
+ * isn't a clean "punch a hole" call.
+ *
+ * @param {number} port
+ * @param {{ tool?: string }} [opts]  pin a specific tool, otherwise auto.
+ * @returns {Promise<{ applied: boolean, tool?: string, reason?: string }>}
+ */
+export async function applyFirewallRule(port, opts = {}) {
+    if (process.platform !== 'linux') {
+        return { applied: false, reason: `not supported on ${process.platform} — see \`infernet firewall\` for manual steps` };
+    }
+
+    const detected = detectFirewall();
+    const tool = opts.tool ?? detected[0];
+    if (!tool) {
+        return { applied: false, reason: 'no firewall manager detected' };
+    }
+
+    const cmds = buildCommandsFor(tool, port);
+    if (!cmds) {
+        return { applied: false, reason: `${tool}: no automated rule builder` };
+    }
+
+    for (const [bin, ...args] of cmds) {
+        await runWithSudo(bin, args);
+    }
+    return { applied: true, tool };
 }

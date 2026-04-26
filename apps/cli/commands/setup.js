@@ -17,8 +17,10 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { loadConfig, saveConfig, getConfigPath, getConfigDir } from "../lib/config.js";
+import { loadConfig, saveConfig, getConfigPath } from "../lib/config.js";
 import { question } from "../lib/prompt.js";
+import { applyFirewallRule, detectFirewall, describeFirewallHowTo } from "../lib/firewall.js";
+import { DEFAULT_P2P_PORT, resolveP2pPort } from "../lib/network.js";
 
 const pExec = promisify(execFile);
 
@@ -33,6 +35,8 @@ Flags:
   --skip-pull            Skip the model-pull step.
   --backend <kind>       Pin engine backend (ollama | mojo | stub). Default: ollama.
   --host <url>           Override Ollama host. Default: http://localhost:11434.
+  --port <n>             P2P port to open in the firewall. Default: ${DEFAULT_P2P_PORT}.
+  --no-firewall          Skip the firewall step entirely.
   -h, --help             Show this help.
 `;
 
@@ -146,13 +150,19 @@ export default async function setup(args) {
 
     const yes = args.has("yes") || process.env.INFERNET_NONINTERACTIVE === "1";
     const skipPull = args.has("skip-pull");
+    const skipFirewall = args.has("no-firewall");
     const backend = String(args.get("backend") ?? "ollama");
     const host = String(args.get("host") ?? process.env.OLLAMA_HOST ?? "http://localhost:11434");
     const preselectedModel = args.get("model") ? String(args.get("model")) : null;
 
+    const existing = (await loadConfig()) ?? {};
+    const portArg = args.get("port");
+    const port = Number.parseInt(portArg ?? "", 10) || resolveP2pPort(existing);
+
     process.stdout.write("\nInfernet setup — checking your environment\n");
 
     let total = backend === "ollama" ? 4 : 3;
+    if (!skipFirewall && process.platform === "linux") total += 1;
     let n = 0;
 
     n += 1;
@@ -201,9 +211,41 @@ export default async function setup(args) {
         }
     }
 
+    if (!skipFirewall && process.platform === "linux") {
+        n += 1;
+        step(n, total, `Firewall (port ${port}/tcp)`);
+        const detected = detectFirewall();
+        if (detected.length === 0) {
+            warn("no firewall manager detected (ufw / firewalld / nftables / iptables)");
+            warn("  if you have one, open the port manually");
+        } else {
+            const tool = detected[0];
+            const { lines } = describeFirewallHowTo(port);
+            process.stdout.write(`  Detected: ${tool}\n`);
+            for (const line of lines.slice(0, 4)) process.stdout.write(`  ${line}\n`);
+
+            let proceed = yes;
+            if (!yes) {
+                const ans = await question(`  Apply now (will sudo)?`, { default: "y" });
+                proceed = ans.toLowerCase().startsWith("y");
+            }
+            if (proceed) {
+                try {
+                    const result = await applyFirewallRule(port, { tool });
+                    if (result.applied) ok(`firewall rule applied via ${result.tool}`);
+                    else warn(result.reason ?? "skipped");
+                } catch (err) {
+                    fail(`firewall rule failed: ${err?.message ?? err}`);
+                    warn("  re-run later or apply the command manually");
+                }
+            } else {
+                process.stdout.write("  skipped — run `infernet firewall` to print the commands\n");
+            }
+        }
+    }
+
     n += 1;
     step(n, total, "Config");
-    const existing = (await loadConfig()) ?? {};
     const merged = {
         ...existing,
         engine: {

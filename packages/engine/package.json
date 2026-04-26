@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/engine",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Inference engine abstraction for Infernet — pluggable backends (Mojo+MAX, in-process stub) over a stable async-iterator API.",
   "license": "MIT",
   "type": "module",

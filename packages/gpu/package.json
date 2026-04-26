@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/gpu",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "GPU detection for the Infernet Protocol — NVIDIA (CUDA), AMD (ROCm), and Apple Silicon via native tooling.",
   "license": "MIT",
   "type": "module",

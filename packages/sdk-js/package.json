@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "JavaScript/TypeScript SDK for the Infernet Protocol REST + SSE API.",
   "license": "MIT",
   "type": "module",

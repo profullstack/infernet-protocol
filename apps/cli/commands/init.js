@@ -72,11 +72,23 @@ export default async function init(args) {
     }
 
     const existing = await loadConfig();
-    if (existing && !args.has('force')) {
+    // A config is "complete" once it has both a Nostr keypair AND a
+    // control-plane URL. If only one of those is set (e.g. `infernet
+    // setup` wrote engine.* but the user hasn't initialized identity
+    // yet), let init finish the setup. Only block on --force when the
+    // user already has a fully-initialized identity to protect.
+    const hasKey = !!(existing?.node?.publicKey && existing?.node?.privateKey);
+    const hasUrl = !!existing?.controlPlane?.url;
+    if (existing && hasKey && hasUrl && !args.has('force')) {
         process.stderr.write(
             `Config already exists at ${getConfigPath()}. Re-run with --force to overwrite.\n`
         );
         return 1;
+    }
+    if (existing && !args.has('force')) {
+        process.stdout.write(
+            `Found partial config at ${getConfigPath()} — finishing initialization.\n`
+        );
     }
 
     let url = args.get('url');
@@ -143,9 +155,15 @@ export default async function init(args) {
     const nodeId = existing?.node?.nodeId ?? makeNodeId(role);
     const id = existing?.node?.id ?? null;
 
+    // Merge with any existing config so engine.*, payment.*, and any
+    // other top-level sections survive re-running init or running it
+    // after `infernet setup`. Only the controlPlane and node fields
+    // that init manages are replaced.
     const config = {
-        controlPlane: { url },
+        ...(existing ?? {}),
+        controlPlane: { ...(existing?.controlPlane ?? {}), url },
         node: {
+            ...(existing?.node ?? {}),
             id,
             nodeId,
             role,

@@ -7,6 +7,9 @@ const USAGE = `infernet — GPU node control plane for the Infernet Protocol
 Usage:
   infernet <command> [args]
 
+Setup:
+  setup        Bootstrap environment (Ollama + model + engine config)
+
 Node lifecycle:
   init         Configure this node (control-plane URL, role, Nostr identity)
   login        Update the control-plane URL

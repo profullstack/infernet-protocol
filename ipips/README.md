@@ -134,9 +134,10 @@ to the canonical conversation thread.
 
 ## Index
 
-| #     | Title                              | Type     | Status |
-| ----- | ---------------------------------- | -------- | ------ |
-| 0001  | [Infernet v1.0 Launch Criteria](./ipip-0001.md) | Process  | Draft  |
+| #     | Title                              | Type            | Status |
+| ----- | ---------------------------------- | --------------- | ------ |
+| 0001  | [Infernet v1.0 Launch Criteria](./ipip-0001.md) | Process         | Draft  |
+| 0002  | [Operator-to-Operator P2P Chat](./ipip-0002.md) | Standards Track | Draft  |
 
 ## Editors
 

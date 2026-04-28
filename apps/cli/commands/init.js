@@ -77,30 +77,45 @@ export default async function init(args) {
     }
 
     const existing = await loadConfig();
+    const yes = args.has('yes');
+    const force = args.has('force');
     // A config is "complete" once it has both a Nostr keypair AND a
-    // control-plane URL. If only one of those is set (e.g. `infernet
-    // setup` wrote engine.* but the user hasn't initialized identity
-    // yet), let init finish the setup. Only block on --force when the
-    // user already has a fully-initialized identity to protect.
+    // control-plane URL.
+    //
+    // Behavior on re-run:
+    //   --force         → wipe + regenerate identity (last resort)
+    //   --yes           → upgrade in place: preserve keys + url + role,
+    //                     regenerate name if it matches a stale auto-
+    //                     generated pattern (so install.sh re-runs
+    //                     refresh the display name without losing keys)
+    //   neither, complete → bail and ask for --force
+    //   neither, partial  → fill in the gaps
     const hasKey = !!(existing?.node?.publicKey && existing?.node?.privateKey);
     const hasUrl = !!existing?.controlPlane?.url;
-    if (existing && hasKey && hasUrl && !args.has('force')) {
+    const upgradeInPlace = existing && hasKey && hasUrl && yes && !force;
+
+    if (existing && hasKey && hasUrl && !force && !yes) {
         process.stderr.write(
-            `Config already exists at ${getConfigPath()}. Re-run with --force to overwrite.\n`
+            `Config already exists at ${getConfigPath()}. Re-run with --force to overwrite, or --yes to upgrade in place.\n`
         );
         return 1;
     }
-    if (existing && !args.has('force')) {
+    if (existing && !force && !upgradeInPlace) {
         process.stdout.write(
             `Found partial config at ${getConfigPath()} — finishing initialization.\n`
         );
     }
+    if (upgradeInPlace) {
+        process.stdout.write(
+            `Upgrading existing config in place at ${getConfigPath()} (keys preserved).\n`
+        );
+    }
 
-    let url = args.get('url');
-    let role = args.get('role');
+    let url = args.get('url') ?? (upgradeInPlace ? existing.controlPlane.url : undefined);
+    let role = args.get('role') ?? (upgradeInPlace ? existing.node.role : undefined);
     let name = args.get('name');
-    let pubkey = args.get('nostr-pubkey');
-    let privkey = args.get('nostr-privkey');
+    let pubkey = args.get('nostr-pubkey') ?? (upgradeInPlace ? existing.node.publicKey : undefined);
+    let privkey = args.get('nostr-privkey') ?? (upgradeInPlace ? existing.node.privateKey : undefined);
     let portArg = args.get('p2p-port');
     let addressArg = args.get('address');
     const noAdvertise = args.has('no-advertise');
@@ -158,18 +173,40 @@ export default async function init(args) {
     const nodeId = existing?.node?.nodeId ?? makeNodeId(role);
     const id = existing?.node?.id ?? null;
 
+    // Compute the default before the existing-name check so we can
+    // also use it for stale-name detection.
+    const userPart = process.env.USER ?? (() => {
+        try { return os.userInfo().username; } catch { return null; }
+    })() ?? role;
+    const slug = nodeId.includes('-') ? nodeId.split('-').slice(1).join('-') : nodeId.slice(0, 8);
+    const hostname = os.hostname();
+    const defaultName = `${userPart}@${hostname}:${slug}`;
+
+    // A name "looks auto-generated" if it matches a pattern produced
+    // by a previous version of this CLI (just hostname; role@hostname
+    // without slug; the makeNodeId form). Operator-chosen names with
+    // their own structure are preserved as-is.
+    const isStaleAutoName = (n) => {
+        if (!n) return true;
+        if (n === hostname) return true;
+        if (n === `${role}@${hostname}`) return true;
+        if (/^(provider|aggregator|client)-[0-9a-f]{8}$/.test(n)) return true;
+        return false;
+    };
+
     if (!name) {
-        // Default to user@host:slug — operators recognize their own
-        // boxes by user@host, and the trailing :slug disambiguates
-        // multiple nodes on the same machine. Slug is the hex tail
-        // of nodeId (e.g. "provider-0f44326c" → "0f44326c").
-        const userPart = process.env.USER ?? (() => {
-            try { return os.userInfo().username; } catch { return null; }
-        })() ?? role;
-        const slug = nodeId.includes('-') ? nodeId.split('-').slice(1).join('-') : nodeId.slice(0, 8);
-        name = await question('Human-readable node name', {
-            default: `${userPart}@${os.hostname()}:${slug}`
-        });
+        if (upgradeInPlace && existing?.node?.name && !isStaleAutoName(existing.node.name)) {
+            // Operator picked this name themselves — keep it.
+            name = existing.node.name;
+        } else {
+            // No name yet, OR existing name is a stale auto-default →
+            // regenerate as user@host:slug. Prompts in interactive mode;
+            // in --yes mode, question() returns the default so this is
+            // a silent self-heal.
+            name = await question('Human-readable node name', {
+                default: defaultName
+            });
+        }
     }
 
     // Merge with any existing config so engine.*, payment.*, and any

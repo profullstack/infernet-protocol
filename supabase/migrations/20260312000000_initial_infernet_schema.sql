@@ -63,43 +63,7 @@ create index if not exists aggregators_status_idx on public.aggregators (status)
 create index if not exists clients_status_idx on public.clients (status);
 create index if not exists jobs_status_idx on public.jobs (status);
 
-insert into public.nodes (name, role, status, location, region, capacity, compute_capacity)
-values
-  ('Edge-West-01', 'provider', 'available', 'San Francisco', 'us-west-1', '4x A100', 400),
-  ('Edge-East-02', 'aggregator', 'available', 'Ashburn', 'us-east-1', '2x H100', 220),
-  ('Batch-EU-03', 'provider', 'busy', 'Frankfurt', 'eu-central-1', '8x L40S', 640)
-on conflict do nothing;
-
-insert into public.providers (name, status, gpu_model, price, reputation)
-values
-  ('Provider Atlas', 'available', 'NVIDIA H100', 4.2500, 92),
-  ('Provider Boreal', 'busy', 'NVIDIA A100', 2.7500, 88),
-  ('Provider Cinder', 'available', 'RTX 4090', 1.2500, 81)
-on conflict do nothing;
-
-insert into public.aggregators (name, status, active_jobs)
-values
-  ('Aggregator Helios', 'available', 3),
-  ('Aggregator Tide', 'available', 1)
-on conflict do nothing;
-
-insert into public.clients (name, status, budget_usd)
-values
-  ('Client Northstar', 'active', 2500),
-  ('Client Meridian', 'active', 725),
-  ('Client Vector', 'paused', 0)
-on conflict do nothing;
-
-insert into public.models (name, family, context_length, visibility)
-values
-  ('llama-3.3-70b', 'llama', 131072, 'public'),
-  ('qwen-2.5-72b', 'qwen', 32768, 'public'),
-  ('infernet-vision-alpha', 'custom', 16384, 'private')
-on conflict do nothing;
-
-insert into public.jobs (title, status, payment_offer, model_name, client_name)
-values
-  ('Fine-tune support classifier', 'pending', 35.5000, 'llama-3.3-70b', 'Client Northstar'),
-  ('Vision batch for defect detection', 'running', 82.0000, 'infernet-vision-alpha', 'Client Meridian'),
-  ('Low-latency inference benchmark', 'completed', 12.7500, 'qwen-2.5-72b', 'Client Vector')
-on conflict do nothing;
+-- No seed data. Tables start empty; rows arrive as real operators
+-- run `infernet register`, real clients submit jobs, and real models
+-- get advertised by providers. Demo rows that used to live here were
+-- removed (and dropped from prod) by 20260428000000_drop_demo_seeds.sql.

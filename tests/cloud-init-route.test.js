@@ -6,7 +6,6 @@ process.env.NEXT_PUBLIC_APP_URL = "https://example.test";
 
 const { GET } = await import("@/app/api/deploy/cloud-init/route");
 const { issueBearer } = await import("@/lib/auth/bearer");
-const { CLOUD_INIT_SCRIPT_BODY } = await import("@/lib/deploy/cloud-init-script");
 
 function fakeReq(url) {
     return { url };
@@ -20,8 +19,10 @@ describe("GET /api/deploy/cloud-init", () => {
         expect(res.headers.get("cache-control")).toBe("no-store");
         const body = await res.text();
         expect(body).toContain("#!/usr/bin/env bash");
-        // The inlined bootstrap body must always be present.
-        expect(body).toContain(CLOUD_INIT_SCRIPT_BODY.slice(0, 64));
+        // The route returns the canonical install.sh body — anchor on
+        // a stable string that lives in install.sh so we catch
+        // accidental drift.
+        expect(body).toContain("Infernet Protocol installer");
     });
 
     it("does NOT inject INFERNET_BEARER when the token is missing", async () => {

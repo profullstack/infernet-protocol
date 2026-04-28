@@ -134,7 +134,26 @@ async function runDaemon(args, ctx) {
 
     const p2pDisabled = args.has('no-p2p');
     const noAdvertise = args.has('no-advertise') || node.address === null;
-    const p2pPort = Number.parseInt(args.get('p2p-port') ?? '', 10) || resolveP2pPort(config);
+    // Bind port (what we listen on, locally) and advertised port (what we
+    // tell the control plane to dial). Same value 99% of the time, but
+    // hosting platforms that NAT the container (RunPod, anything with
+    // dynamic port mapping) need them split — daemon binds to e.g. 46337
+    // inside the container, but the public address:port is something like
+    // 213.173.107.42:21517. The cloud-init detects RunPod env vars and
+    // exports INFERNET_BIND_PORT (internal) + INFERNET_PUBLIC_PORT
+    // (external) separately.
+    const bindPort = Number.parseInt(
+        args.get('bind-port') ?? process.env.INFERNET_BIND_PORT ?? '',
+        10
+    ) || Number.parseInt(args.get('p2p-port') ?? '', 10) || resolveP2pPort(config);
+    const advertisedPort = Number.parseInt(
+        args.get('p2p-port') ?? process.env.INFERNET_PUBLIC_PORT ?? '',
+        10
+    ) || resolveP2pPort(config) || bindPort;
+    // Back-compat: keep the existing variable name pointing at bindPort,
+    // since the rest of the file (P2P listener, formatEndpoint, etc.)
+    // wants the bind value.
+    const p2pPort = bindPort;
     const advertisedAddress = noAdvertise ? null : (node.address ?? detectLocalAddress());
 
     const startedAt = new Date();
@@ -168,7 +187,7 @@ async function runDaemon(args, ctx) {
     process.stdout.write(`  heartbeat: ${heartbeatMs}ms\n`);
     process.stdout.write(`  poll:      ${pollMs}ms\n`);
     if (!p2pDisabled) {
-        process.stdout.write(`  p2p:       ${formatEndpoint(advertisedAddress ?? '-', p2pPort)}\n`);
+        process.stdout.write(`  p2p:       ${formatEndpoint(advertisedAddress ?? '-', advertisedPort)}${bindPort !== advertisedPort ? ` (binds locally :${bindPort})` : ''}\n`);
     } else {
         process.stdout.write('  p2p:       disabled\n');
     }
@@ -240,7 +259,9 @@ async function runDaemon(args, ctx) {
         try {
             const url = new URL("/api/probe", baseUrl);
             url.searchParams.set("host", advertisedAddress);
-            url.searchParams.set("port", String(p2pPort));
+            // Probe the externally-advertised port — that's what we're
+            // claiming is reachable, so that's what we want verified.
+            url.searchParams.set("port", String(advertisedPort));
             const res = await fetch(url, { signal: AbortSignal.timeout?.(7000) });
             if (!res.ok) return null;
             const body = await res.json();
@@ -336,7 +357,10 @@ async function runDaemon(args, ctx) {
         const payload = { status: 'available' };
         if (!noAdvertise) {
             if (advertisedAddress) payload.address = advertisedAddress;
-            if (!p2pDisabled) payload.port = p2pPort;
+            // Heartbeat advertises the EXTERNAL port (what clients should
+            // dial), not the internal bind port. RunPod / NAT'd hosts:
+            // bindPort = 46337 (container), advertisedPort = 21517 (edge).
+            if (!p2pDisabled) payload.port = advertisedPort;
         }
         // Provider role only: include current specs so the control plane
         // sees fresh CPU / GPU / served_models without requiring a manual

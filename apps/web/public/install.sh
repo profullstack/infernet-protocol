@@ -70,9 +70,45 @@ INFERNET_MODEL="${INFERNET_MODEL:-qwen2.5:7b}"
 INFERNET_NODE_ROLE="${INFERNET_NODE_ROLE:-provider}"
 INFERNET_NODE_NAME="${INFERNET_NODE_NAME:-$(hostname 2>/dev/null || echo node)}"
 INFERNET_PUBLIC_PORT="${INFERNET_PUBLIC_PORT:-46337}"
+INFERNET_BIND_PORT="${INFERNET_BIND_PORT:-}"
 INFERNET_BEARER="${INFERNET_BEARER:-}"
 SOURCE_DIR="$INFERNET_HOME/source"
 WRAPPER="$INFERNET_BIN/infernet"
+
+# ---------------------------------------------------------------------------
+# Hosting-platform port-mapping detection.
+#
+# RunPod (and similar GPU clouds) NAT the container — internally the
+# daemon listens on 46337, externally the platform maps that to a
+# random port like :21517 or :43337. Without this block, the daemon
+# would advertise (public_ip, 46337) which nobody can reach. With it,
+# we advertise (public_ip, mapped_port) and bind locally to 46337.
+#
+# Variables consumed downstream:
+#   INFERNET_PUBLIC_PORT  — what we advertise to the control plane
+#   INFERNET_BIND_PORT    — what the daemon listens on locally
+#   INFERNET_PUBLIC_ADDRESS — what we advertise (overrides icanhazip)
+# ---------------------------------------------------------------------------
+detect_hosting_platform_ports() {
+    # RunPod sets RUNPOD_TCP_PORT_<internal>=<external> for every
+    # exposed port, and RUNPOD_PUBLIC_IP for the host's edge IP.
+    if [ -n "${RUNPOD_PUBLIC_IP:-}" ]; then
+        local _bind_port="${INFERNET_PUBLIC_PORT:-46337}"
+        local _mapped_var="RUNPOD_TCP_PORT_${_bind_port}"
+        local _mapped="$(eval "echo \${$_mapped_var:-}")"
+        if [ -n "$_mapped" ]; then
+            : "${INFERNET_BIND_PORT:=$_bind_port}"
+            INFERNET_PUBLIC_PORT="$_mapped"
+            : "${INFERNET_PUBLIC_ADDRESS:=$RUNPOD_PUBLIC_IP}"
+            export INFERNET_BIND_PORT INFERNET_PUBLIC_PORT INFERNET_PUBLIC_ADDRESS
+            printf '  [hosting] RunPod detected — advertising %s:%s, daemon binds :%s\n' \
+                "$INFERNET_PUBLIC_ADDRESS" "$INFERNET_PUBLIC_PORT" "$INFERNET_BIND_PORT"
+        fi
+    fi
+    # Other platforms can be added here as they're encountered. Default
+    # is the no-op case where bind and advertise are the same port.
+}
+detect_hosting_platform_ports || true
 
 # ---------------------------------------------------------------------------
 # pretty output
@@ -99,6 +135,51 @@ detect_os() {
         Darwin) OS=macos ;;
         *)      fail "unsupported OS: $UNAME_S (Linux and macOS only)" ;;
     esac
+}
+
+# ---------------------------------------------------------------------------
+# Sudo + apt-prereq handling
+#
+# Container images (Docker, RunPod, K8s) usually run as root and may
+# not have `sudo` installed; bare-metal / VM operators typically do.
+# Resolve once so every privileged step is idempotent regardless.
+# ---------------------------------------------------------------------------
+if [ "$(id -u 2>/dev/null || echo 0)" = "0" ]; then
+    SUDO=""
+else
+    if command -v sudo >/dev/null 2>&1; then
+        SUDO="sudo"
+    else
+        SUDO=""
+    fi
+fi
+
+# Idempotent: only installs missing packages. Safe to re-run any time.
+ensure_apt_prereqs() {
+    need_pkg() { command -v "$1" >/dev/null 2>&1; }
+    local missing=""
+    need_pkg curl  || missing="$missing curl"
+    need_pkg zstd  || missing="$missing zstd"
+    if [ -z "$missing" ]; then
+        return 0
+    fi
+    info "installing system prereqs:$missing"
+    if command -v apt-get >/dev/null 2>&1; then
+        $SUDO apt-get update -y >/dev/null 2>&1 || true
+        # shellcheck disable=SC2086
+        $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates $missing
+    elif command -v dnf >/dev/null 2>&1; then
+        # shellcheck disable=SC2086
+        $SUDO dnf install -y ca-certificates $missing
+    elif command -v yum >/dev/null 2>&1; then
+        # shellcheck disable=SC2086
+        $SUDO yum install -y ca-certificates $missing
+    elif command -v apk >/dev/null 2>&1; then
+        # shellcheck disable=SC2086
+        $SUDO apk add --no-cache ca-certificates $missing
+    else
+        warn "no apt-get / dnf / yum / apk found — please install$missing manually"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -138,18 +219,56 @@ EOF
     esac
 }
 
+try_install_node_unattended() {
+    # Idempotent: skips if Node 18+ is already installed. Returns
+    # 0 if Node ends up usable, 1 if we couldn't install it (caller
+    # falls back to the manual hint).
+    if command -v node >/dev/null 2>&1; then
+        local v="$(node -v | sed 's/^v//')"
+        local major="$(echo "$v" | cut -d. -f1)"
+        [ "${major:-0}" -ge 18 ] && return 0
+    fi
+    case "$OS" in
+        linux)
+            if command -v apt-get >/dev/null 2>&1; then
+                info "installing Node.js 20 via NodeSource (idempotent — only runs if missing)"
+                curl -fsSL https://deb.nodesource.com/setup_20.x | $SUDO -E bash - >/dev/null 2>&1
+                $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs >/dev/null 2>&1
+                command -v node >/dev/null 2>&1 && return 0
+            elif command -v dnf >/dev/null 2>&1; then
+                $SUDO dnf install -y nodejs >/dev/null 2>&1
+                command -v node >/dev/null 2>&1 && return 0
+            elif command -v apk >/dev/null 2>&1; then
+                $SUDO apk add --no-cache nodejs npm >/dev/null 2>&1
+                command -v node >/dev/null 2>&1 && return 0
+            fi
+            ;;
+        macos)
+            # Don't auto-install Homebrew. Operator deals with it.
+            return 1
+            ;;
+    esac
+    return 1
+}
+
 check_node() {
     if ! command -v node >/dev/null 2>&1; then
-        warn "Node.js not found"
-        need_node_install_hint
-        fail "install Node.js 18+ and re-run this script"
+        info "Node.js not found — attempting unattended install"
+        try_install_node_unattended || {
+            warn "could not install Node.js automatically"
+            need_node_install_hint
+            fail "install Node.js 18+ and re-run this script"
+        }
     fi
     NODE_VER="$(node -v 2>/dev/null | sed 's/^v//')"
     NODE_MAJOR="$(echo "$NODE_VER" | cut -d. -f1)"
     if [ "${NODE_MAJOR:-0}" -lt 18 ]; then
         warn "Node.js $NODE_VER detected — need 18 or later"
-        need_node_install_hint
-        fail "upgrade Node.js and re-run this script"
+        try_install_node_unattended || {
+            need_node_install_hint
+            fail "upgrade Node.js and re-run this script"
+        }
+        NODE_VER="$(node -v 2>/dev/null | sed 's/^v//')"
     fi
     ok "Node.js v$NODE_VER"
 }
@@ -332,6 +451,9 @@ main() {
 
     detect_os
     ok "OS: $OS"
+
+    # Idempotent — only installs missing packages. Cheap to call.
+    ensure_apt_prereqs
 
     check_node
 

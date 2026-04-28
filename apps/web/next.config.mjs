@@ -11,9 +11,8 @@ const nextConfig = {
     "@infernetprotocol/logger",
     "@infernetprotocol/inference"
   ],
-  experimental: {
-    typedRoutes: false
-  }
+  // Next.js 16 moved this out of `experimental` to the top level.
+  typedRoutes: false
 };
 
 export default nextConfig;

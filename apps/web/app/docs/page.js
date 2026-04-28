@@ -87,8 +87,8 @@ export default function DocsPage() {
             {/* QUICK START */}
             <Section id="quick-start" title="Quick start">
                 <p>
-                    On Linux or macOS, one line gets you the <code>infernet</code> CLI
-                    plus everything it needs:
+                    On Linux, macOS, or Windows (WSL2), one line gets you the{" "}
+                    <code>infernet</code> CLI plus everything it needs:
                 </p>
                 <CodeBlock>
 {`curl -fsSL https://infernetprotocol.com/install.sh | sh`}
@@ -112,6 +112,39 @@ echo "summarize: water is wet" | infernet`}
                     <code>infernet chat "..."</code>. Subcommands like <code>setup</code>,{" "}
                     <code>model</code>, <code>tui</code>, etc. take precedence when present.
                 </Aside>
+                <h4 className="mt-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">Windows (WSL2)</h4>
+                <p>
+                    The installer is POSIX shell, so Windows operators run it inside
+                    WSL2 and the daemon picks up the GPU through Microsoft&apos;s WSL CUDA path:
+                </p>
+                <CodeBlock>
+{`# 1. From PowerShell, install WSL + Ubuntu (reboot when prompted)
+wsl --install -d Ubuntu
+
+# 2. Install the Windows NVIDIA driver — gives WSL CUDA without
+#    needing a separate driver inside Ubuntu.
+#    https://www.nvidia.com/Download/index.aspx
+
+# 3. Open Ubuntu, then run the same one-liner:
+curl -fsSL https://infernetprotocol.com/install.sh | sh
+infernet setup`}
+                </CodeBlock>
+                <Aside type="note">
+                    Outbound paths (chat, remote model commands) work out of the box.
+                    Direct P2P inbound on <code>:46337</code> needs a{" "}
+                    <code>netsh interface portproxy</code> rule on the Windows host —
+                    skip it if you only care about earning via routed jobs.
+                </Aside>
+                <h4 className="mt-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">How Node gets installed</h4>
+                <p>
+                    The installer uses{" "}
+                    <a href="https://mise.jdx.dev" target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">mise</a>{" "}
+                    to install Node 20 — single static binary under <code>$HOME/.local/share/mise</code>,
+                    no apt-repo dance, no conflict with whatever Node a base image already shipped
+                    (e.g. RunPod&apos;s vllm-workspace ships Node 12). The wrapper at{" "}
+                    <code>~/.local/bin/infernet</code> prepends mise&apos;s shims dir so the
+                    right Node is picked regardless of whether your shell has activated mise yet.
+                </p>
             </Section>
 
             {/* CLI OVERVIEW */}

@@ -181,6 +181,39 @@ runcmd:
                         <>Deploy. Watch your node appear at <a href="/dashboard" className="text-[var(--accent)] underline">/dashboard</a>.</>
                     ]}
                 />
+                <ProviderCard
+                    title="Bring-your-own (Linux / macOS / WSL2)"
+                    blurb="Got a desktop with an idle GPU? Run a node on the hardware you already own. Works on any Linux box, macOS (Apple Silicon or AMD), or Windows via WSL2."
+                    steps={[
+                        <>
+                            <strong className="text-white">Linux / macOS:</strong> open a terminal and paste the
+                            one-liner from step 2 above.
+                        </>,
+                        <>
+                            <strong className="text-white">Windows:</strong> enable WSL2 + Ubuntu first
+                            (one-time setup), then run the same one-liner inside Ubuntu:
+                        </>,
+                        <div className="relative">
+                            <CopyButton text={`wsl --install -d Ubuntu`} />
+                            <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-[var(--panel-strong)] p-2 pr-20 text-xs leading-5 text-[var(--accent)]">
+{`# From PowerShell — reboot when prompted, then open Ubuntu.
+wsl --install -d Ubuntu`}
+                            </pre>
+                        </div>,
+                        <>
+                            Install the{" "}
+                            <a href="https://www.nvidia.com/Download/index.aspx" target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
+                                Windows NVIDIA driver
+                            </a>{" "}
+                            (gives WSL CUDA — no driver inside Ubuntu needed). Then run the one-liner inside Ubuntu.
+                        </>,
+                        <>
+                            Outbound jobs work as-is. For direct P2P inbound on{" "}
+                            <code>:46337</code>, add a <code>netsh interface portproxy</code>{" "}
+                            rule on the Windows host — optional, only needed for direct peer connections.
+                        </>
+                    ]}
+                />
             </section>
 
             <section className="rounded-[1.5rem] border border-white/10 bg-[var(--panel)] p-6 text-sm text-[var(--muted)]">

@@ -19,7 +19,7 @@ A decentralized GPU compute marketplace for **inference and distributed training
 
 ## Getting started
 
-One line on Linux or macOS:
+One line on Linux, macOS, or Windows (WSL2):
 
 ```bash
 curl -fsSL https://infernetprotocol.com/install.sh | sh
@@ -29,7 +29,24 @@ curl -fsSL https://infernetprotocol.com/install.sh | sh
 `https://raw.githubusercontent.com/profullstack/infernet-protocol/master/install.sh`)
 
 This installs the `infernet` CLI to `~/.infernet/source` and drops a
-shim at `~/.local/bin/infernet`. Re-run anytime to update.
+shim at `~/.local/bin/infernet`. Re-run anytime to update. Node 20 is
+installed automatically via [mise](https://mise.jdx.dev) (single static
+binary under `$HOME` — does not collide with system Node).
+
+### Windows (WSL2)
+
+The CLI itself is POSIX shell, so Windows operators run it inside
+WSL2 and the daemon picks up the GPU through Microsoft's WSL CUDA
+driver path:
+
+1. Enable WSL2 + install Ubuntu — `wsl --install -d Ubuntu` from PowerShell, reboot.
+2. Install the Windows NVIDIA driver (gives WSL CUDA support — no driver inside WSL).
+3. Open Ubuntu and run the same one-liner above.
+
+Outbound poll for chat + remote model commands works as-is. Direct
+P2P inbound on `:46337` requires a `netsh interface portproxy` rule on
+the Windows host (skip it if you only care about earning via routed
+jobs — the control plane handles that path outbound-only).
 
 Then:
 

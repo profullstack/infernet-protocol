@@ -136,9 +136,9 @@ export default function HomePage() {
               Run a node in two commands.
             </h2>
             <p className="text-base leading-7 text-[var(--muted)]">
-              Linux or macOS. Re-run the installer anytime to update. Operators with their own
-              hardware just point Infernet at it and configure payouts; the rest of the stack
-              (Ollama, firewall, daemon) is handled by{" "}
+              Linux, macOS, or Windows (via WSL2). Re-run the installer anytime to update.
+              Operators with their own hardware just point Infernet at it and configure
+              payouts; the rest of the stack (Ollama, firewall, daemon) is handled by{" "}
               <code className="rounded bg-[var(--panel-strong)] px-1.5 py-0.5 text-[var(--accent)]">
                 infernet setup
               </code>
@@ -148,6 +148,7 @@ export default function HomePage() {
               <li>· Install Ollama, pull a model, open the firewall</li>
               <li>· Configure your payout addresses (BYO wallet or generated)</li>
               <li>· Register with the control plane and start the daemon</li>
+              <li>· Windows? <code>wsl --install -d Ubuntu</code>, then run the same one-liner inside it</li>
             </ul>
           </div>
 

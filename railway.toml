@@ -10,7 +10,13 @@ dockerfilePath = "docker/Dockerfile"
 
 [deploy]
 startCommand = "pnpm --filter @infernetprotocol/web start"
-healthcheckPath = "/api/overview"
+
+# /api/health is a dependency-free liveness probe. Earlier configs
+# pointed this at /api/overview, but that route hits Supabase and
+# fails the healthcheck if any SUPABASE_* env var is missing —
+# producing a confusing "build OK but Railway 502s" symptom that
+# masks the actual config problem.
+healthcheckPath = "/api/health"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5

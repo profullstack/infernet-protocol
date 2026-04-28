@@ -51,7 +51,7 @@ export default function DeployView({ signedInAs = null }) {
     }
 
     const fullUrl = cloudInitUrl ?? `${origin}/api/deploy/cloud-init`;
-    const oneLiner = `curl -fsSL '${fullUrl}' | bash`;
+    const oneLiner = `curl -fsSL '${fullUrl}' | sh`;
 
     return (
         <main className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6 lg:px-10">

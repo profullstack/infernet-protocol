@@ -7,7 +7,14 @@
   "main": "./src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./runpod": "./src/runpod.js"
+    "./runpod": "./src/runpod.js",
+    "./digitalocean": "./src/digitalocean.js",
+    "./vast": "./src/vast.js",
+    "./gpu-normalize": "./src/gpu-normalize.js",
+    "./pricing": "./src/pricing.js",
+    "./model-fit": "./src/model-fit.js",
+    "./state": "./src/state.js",
+    "./base": "./src/providers/base.js"
   },
   "files": [
     "src/**/*.js",

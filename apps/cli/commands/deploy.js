@@ -22,10 +22,14 @@
 import { loadConfig, saveConfig } from "../lib/config.js";
 import { question } from "../lib/prompt.js";
 import { getAdapter, adapters, PROVIDER_KEY_URLS } from "@infernetprotocol/deploy-providers";
+import { canonicalize } from "@infernetprotocol/deploy-providers/gpu-normalize";
+import { rankOffers, costBlock, isValidPreset } from "@infernetprotocol/deploy-providers/pricing";
+import { formatFitWarning } from "@infernetprotocol/deploy-providers/model-fit";
 
 const PROVIDERS = Object.keys(adapters);
+const PRESET_NAMES = ["cheap", "balanced", "reliable", "production"];
 
-export const USAGE = `infernet deploy [up|auth] [flags]
+export const USAGE = `infernet deploy [up|auth|cheap|balanced|reliable|production] [flags]
 
 Provision an Infernet node on a cloud provider.
 
@@ -70,6 +74,19 @@ Provision an Infernet node on a cloud provider.
     --bearer <jwt>     CLI bearer for cloud-init (else mints from session)
     --model <name>     auto-pulled model (default: qwen2.5:7b)
     --dry-run          print the API call without sending it
+
+Pricing-aware presets — compare across all configured providers and
+pick the best fit per IPIP-0019 weights. --gpu is required;
+--max-price caps the candidate set.
+
+  infernet deploy cheap      --gpu 4090         --max-price 0.40
+  infernet deploy balanced   --gpu a100-80gb    --max-price 2.00
+  infernet deploy reliable   --gpu h100         --max-price 4.25
+  infernet deploy production --gpu h100         --max-price 5.00
+
+  Add --dry-run to see the comparison table + cost block without spending.
+  Add --model <hf-id> to get a model-fit warning before deploy.
+  Add --strict-model-fit to refuse deploy if the model won't fit.
 `;
 
 export default async function deploy(args) {
@@ -77,6 +94,9 @@ export default async function deploy(args) {
 
     if (sub === "auth") return authSubcommand(args);
     if (sub === "up" || sub === undefined) return upSubcommand(args);
+    // Pricing-aware presets — pick the best provider across all
+    // configured clouds based on weights from IPIP-0019.
+    if (PRESET_NAMES.includes(sub)) return presetSubcommand(sub, args);
     if (sub === "help" || args.has("help")) {
         process.stdout.write(USAGE + "\n");
         return 0;
@@ -280,6 +300,175 @@ async function runRunpodUp(adapter, apiKey, userData, args) {
     });
     process.stdout.write(`✓ RunPod pod created (id=${result.deploymentId}, status=${result.status})\n`);
     return 0;
+}
+
+// ---- pricing-aware preset dispatch (cheap / balanced / reliable / production) ----
+
+async function presetSubcommand(presetName, args) {
+    if (!isValidPreset(presetName)) {
+        process.stderr.write(`Unknown preset: ${presetName}\n`);
+        return 1;
+    }
+
+    const requestedGpu = args.get("gpu");
+    if (!requestedGpu) {
+        process.stderr.write(
+            `--gpu <name> is required for preset deploys.\n` +
+            `Examples: --gpu 4090, --gpu a100-80gb, --gpu h100\n`
+        );
+        return 1;
+    }
+    const canonicalGpu = canonicalize(requestedGpu);
+    if (!canonicalGpu) {
+        process.stderr.write(
+            `Unknown GPU: ${requestedGpu}\n` +
+            `Try a canonical name (4090, a100-80gb, h100, etc.).\n`
+        );
+        return 1;
+    }
+    const maxPrice = args.get("max-price")
+        ? Number.parseFloat(args.get("max-price"))
+        : null;
+
+    process.stdout.write(`Searching providers (preset=${presetName}, gpu=${canonicalGpu}${maxPrice ? `, ≤$${maxPrice}/hr` : ""})...\n\n`);
+
+    // Query each configured provider's offers in parallel.
+    const offers = await collectOffersAcrossProviders({
+        canonicalGpu,
+        maxPrice,
+        request: {
+            gpu: canonicalGpu,
+            gpuCount: Number.parseInt(args.get("gpu-count") ?? "1", 10) || 1,
+            vramMin: args.get("vram-min") ? Number.parseInt(args.get("vram-min"), 10) : null,
+            region: args.get("region") ?? null,
+            maxPricePerHour: maxPrice
+        }
+    });
+
+    if (offers.length === 0) {
+        process.stderr.write(
+            `No matching offers found across configured providers.\n\n` +
+            `Try:\n` +
+            `  - increase --max-price\n` +
+            `  - drop --region\n` +
+            `  - use a different --gpu (try infernet deploy auth list to see configured providers)\n`
+        );
+        return 1;
+    }
+
+    // Rank by preset weights.
+    const ranked = rankOffers(offers, presetName, { maxPricePerHour: maxPrice });
+    if (ranked.length === 0) {
+        process.stderr.write("All offers excluded after applying max-price / availability filters.\n");
+        return 1;
+    }
+
+    // Print comparison table.
+    process.stdout.write("Provider       GPU                  Price        Region    Score\n");
+    process.stdout.write("─────────────  ───────────────────  ───────────  ────────  ─────\n");
+    for (const o of ranked.slice(0, 8)) {
+        const provider = String(o.providerId).padEnd(13);
+        const gpuLabel = `${o.gpu?.name ?? canonicalGpu} ×${o.gpu?.count ?? 1}`.padEnd(19);
+        const price = `$${o.pricePerHour.toFixed(2)}/hr`.padEnd(11);
+        const region = String(o.region ?? "-").padEnd(8);
+        process.stdout.write(`${provider}  ${gpuLabel}  ${price}  ${region}  ${o.score.toFixed(3)}\n`);
+    }
+    process.stdout.write("\n");
+
+    const winner = ranked[0];
+    const cost = costBlock(winner.pricePerHour);
+    process.stdout.write(`Selected: ${winner.providerId} (score=${winner.score.toFixed(3)})\n`);
+    process.stdout.write(`Estimated cost: ${cost.hourly}, ${cost.daily}, ${cost.monthly}\n\n`);
+
+    // Model-fit check before spending money.
+    const model = args.get("model");
+    if (model) {
+        const warning = formatFitWarning({
+            modelId: model,
+            quantization: args.get("quantization") ?? "none",
+            vramGb: winner.gpu?.vramGb ?? 24,
+            gpuCount: winner.gpu?.count ?? 1,
+            gpuName: winner.gpu?.name ?? canonicalGpu
+        });
+        if (warning) {
+            process.stdout.write(warning + "\n\n");
+            if (args.has("strict-model-fit")) {
+                process.stderr.write("--strict-model-fit set — refusing to deploy.\n");
+                return 1;
+            }
+        }
+    }
+
+    if (args.has("dry-run")) {
+        process.stdout.write("Dry run only. No node was created.\n");
+        return 0;
+    }
+
+    if (!args.has("yes")) {
+        const ans = await question(`Continue with deploy on ${winner.providerId}?`, { default: "n" });
+        if (!/^y/i.test(ans)) {
+            process.stdout.write("Aborted.\n");
+            return 0;
+        }
+    }
+
+    // Hand off to the per-provider up-flow with the chosen offer pre-filled.
+    const provArgs = makeProviderArgsFromOffer(winner, args);
+    return upSubcommand(provArgs);
+}
+
+async function collectOffersAcrossProviders({ canonicalGpu, maxPrice, request }) {
+    const config = (await loadConfig()) ?? {};
+    const offers = [];
+    for (const provider of PROVIDERS) {
+        const apiKey = await resolveApiKey(provider);
+        if (!apiKey) continue; // skip unconfigured
+        const adapter = adapters[provider];
+        const fn = adapter?.findOffers ?? adapter?.searchOffers;
+        if (typeof fn !== "function") continue; // adapter doesn't support discovery yet
+        try {
+            const found = await fn({ apiKey, ...request });
+            for (const o of found ?? []) {
+                offers.push({
+                    providerId: provider,
+                    offerId: o.id ?? o.offerId,
+                    gpu: o.gpu ?? { name: o.gpuName ?? canonicalGpu, count: o.numGpus ?? 1, vramGb: o.vramGb ?? 0 },
+                    region: o.region ?? null,
+                    pricePerHour: o.pricePerHour ?? o.dph_total ?? 0,
+                    available: o.available ?? true,
+                    raw: o
+                });
+            }
+        } catch (err) {
+            process.stderr.write(`  (${provider}: ${err?.message ?? err})\n`);
+        }
+    }
+    return offers;
+}
+
+function makeProviderArgsFromOffer(offer, parentArgs) {
+    // Build a minimal "args"-shaped object that upSubcommand consumes.
+    // Forwards relevant flags + injects --provider and --offer-id.
+    const flags = new Map();
+    flags.set("provider", [offer.providerId]);
+    if (offer.offerId) flags.set("offer-id", [String(offer.offerId)]);
+    const passthrough = ["model", "engine", "name", "size", "region", "ssh-key-id", "image", "yes", "dry-run", "max-price", "gpu", "gpu-count"];
+    for (const k of passthrough) {
+        if (parentArgs.has?.(k)) {
+            const v = parentArgs.get(k);
+            flags.set(k, v === undefined ? [true] : [v]);
+        }
+    }
+    return {
+        positional: ["up"],
+        has(k) { return flags.has(k); },
+        get(k) {
+            const v = flags.get(k);
+            if (!v) return undefined;
+            return v[0] === true ? undefined : v[0];
+        },
+        getAll(k) { return (flags.get(k) ?? []).filter((x) => x !== true); }
+    };
 }
 
 // ---- helpers ------------------------------------------------------------

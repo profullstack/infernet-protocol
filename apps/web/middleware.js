@@ -15,14 +15,16 @@ import { createServerClient } from "@supabase/ssr";
 export async function middleware(request) {
     // Canonical host: redirect www.infernetprotocol.com → infernetprotocol.com
     // (and any other www.* host we end up answering for) with a 308 so
-    // the method + body survive. Strip the leading "www." and bounce.
-    const host = request.headers.get("host") ?? "";
+    // the method + body survive. We build the target URL from scratch
+    // because `new URL(request.url)` inherits the container's internal
+    // port (e.g. :8080), which would leak into the Location header and
+    // make the redirect unreachable from the public Internet.
+    const host = (request.headers.get("host") ?? "").split(":")[0];
     if (host.startsWith("www.")) {
-        const target = new URL(request.url);
-        target.host = host.slice(4);
-        // Force https on the redirect — proxies sometimes hand us http.
-        target.protocol = "https:";
-        return NextResponse.redirect(target, 308);
+        const apexHost = host.slice(4);
+        const path = request.nextUrl.pathname || "/";
+        const search = request.nextUrl.search || "";
+        return NextResponse.redirect(`https://${apexHost}${path}${search}`, 308);
     }
 
     const response = NextResponse.next({ request });

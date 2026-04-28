@@ -1,9 +1,9 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Infernet Protocol — Decentralized GPU inference",
+  title: "Infernet Protocol — Decentralized GPU compute",
   description:
-    "A peer-to-peer GPU inference marketplace. Operators run one CLI command and start earning crypto. Clients pay in any supported coin. No native token, no rent extraction."
+    "A peer-to-peer GPU compute marketplace for inference and distributed training. Operators run one CLI command and start earning crypto. Clients pay in any supported coin. No native token, no rent extraction."
 };
 
 const INSTALL_ONE_LINER =
@@ -24,9 +24,9 @@ export default function HomePage() {
             We&apos;re doing to AI what Bitcoin did to money.
           </h1>
           <p className="max-w-2xl text-lg leading-8 text-[var(--muted)] sm:text-xl">
-            A peer-to-peer GPU inference marketplace. Run one CLI command, point it at any model
-            you have hardware for, and start earning crypto. No native token, no rent extraction,
-            no permission required.
+            A peer-to-peer GPU compute marketplace — inference <em className="not-italic text-white">and</em> distributed training.
+            Run one CLI command, point it at the hardware you have, and start earning crypto. No native token,
+            no rent extraction, no permission required.
           </p>
 
           <div className="flex flex-wrap items-center gap-3 pt-2">

@@ -8,7 +8,7 @@
 
 # Infernet Protocol
 
-A decentralized GPU inference marketplace. Rent a GPU anywhere, run one `docker` command, start earning crypto. The control plane is a Next.js dashboard; GPU nodes authenticate with **Nostr-signed HTTP requests** — they never hold a database credential, run as an unprivileged user, and can operate outbound-only. Scales horizontally — every new provider on the network is real, additional capacity.
+A decentralized GPU compute marketplace for **inference and distributed training**. Rent a GPU anywhere, run one `docker` command, start earning crypto. The control plane is a Next.js dashboard; GPU nodes authenticate with **Nostr-signed HTTP requests** — they never hold a database credential, run as an unprivileged user, and can operate outbound-only. Scales horizontally — every new provider on the network is real, additional capacity.
 
 [![Docker image](https://img.shields.io/badge/ghcr.io-infernet--provider-blue?logo=docker)](https://github.com/profullstack/infernet-protocol/pkgs/container/infernet-provider)
 [![Release](https://img.shields.io/github/v/release/profullstack/infernet-protocol)](https://github.com/profullstack/infernet-protocol/releases)

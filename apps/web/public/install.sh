@@ -470,6 +470,24 @@ try_install_node_unattended() {
     "$_mise_bin" install node@20 >/dev/null 2>&1 || warn "mise install node@20 failed"
     "$_mise_bin" use --global node@20 >/dev/null 2>&1 || warn "mise use --global node@20 failed"
 
+    # Trust the config we just wrote. mise refuses to read untrusted
+    # config.toml files (security feature), and `mise use --global`
+    # writes a fresh one — without this, every subsequent `node` /
+    # `npm` invocation that goes through mise's shim layer prints
+    # noisy "Config files are not trusted" errors and exits non-zero,
+    # which in turn breaks pnpm install's subprocess scripts.
+    _mise_global_cfg="$HOME/.config/mise/config.toml"
+    if [ -f "$_mise_global_cfg" ]; then
+        "$_mise_bin" trust "$_mise_global_cfg" >/dev/null 2>&1 || true
+    fi
+    # Belt-and-suspenders: also allowlist the parent dir via env var
+    # so future invocations (the wrapper, `infernet setup`, etc.)
+    # don't re-trip the trust prompt. Set globally for this script's
+    # remaining lifetime; the wrapper sets it independently at runtime.
+    MISE_TRUSTED_CONFIG_PATHS="$HOME/.config/mise"
+    export MISE_TRUSTED_CONFIG_PATHS
+    unset _mise_global_cfg
+
     # Now expose the shims so plain `node` / `npm` works for the rest
     # of the script and for the wrapper at runtime.
     _mise_data="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}"
@@ -559,8 +577,22 @@ clone_or_update() {
 
 run_install() {
     info "running pnpm install (this may take a minute)"
-    (cd "$SOURCE_DIR" && pnpm install --silent --prefer-offline 2>&1) | tail -5
-    ok "dependencies installed"
+    # Run pnpm install and capture exit code via temp file (POSIX sh
+    # can't propagate exit through a pipe without `set -o pipefail`).
+    _pnpm_log="$(mktemp 2>/dev/null || echo "/tmp/inf-pnpm.$$.log")"
+    if (cd "$SOURCE_DIR" && pnpm install --prefer-offline) >"$_pnpm_log" 2>&1; then
+        # Print last few lines of summary on success for context.
+        tail -5 "$_pnpm_log" 2>/dev/null || true
+        rm -f "$_pnpm_log"
+        ok "dependencies installed"
+        unset _pnpm_log
+        return 0
+    fi
+    # Failure — print the tail so the operator can see what broke.
+    warn "pnpm install failed — last 30 lines below:"
+    tail -30 "$_pnpm_log" 2>/dev/null >&2 || true
+    printf '  full log: %s\n' "$_pnpm_log" >&2
+    fail "pnpm install failed (see log above)"
 }
 
 # ---------------------------------------------------------------------------
@@ -576,6 +608,11 @@ write_wrapper() {
 # config has activated mise yet (containers, fresh logins, cron).
 _mise_data="\${MISE_DATA_DIR:-\${XDG_DATA_HOME:-\$HOME/.local/share}/mise}"
 [ -d "\$_mise_data/shims" ] && PATH="\$_mise_data/shims:\$PATH"
+# mise refuses to read untrusted config.toml files. install.sh ran
+# 'mise trust' on it once, but allowlist the parent dir as well so
+# fresh shells, containers, or rebuilt mise caches don't re-prompt.
+: "\${MISE_TRUSTED_CONFIG_PATHS:=\$HOME/.config/mise}"
+export MISE_TRUSTED_CONFIG_PATHS
 exec node "$SOURCE_DIR/apps/cli/index.js" "\$@"
 EOF
     chmod +x "$WRAPPER"

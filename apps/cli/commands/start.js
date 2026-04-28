@@ -26,6 +26,7 @@
 import fs from 'node:fs/promises';
 import net from 'node:net';
 import http from 'node:http';
+import { spawn } from 'node:child_process';
 import { chmodSync, unlinkSync } from 'node:fs';
 
 import {
@@ -414,6 +415,76 @@ async function runDaemon(args, ctx) {
         }
     }
 
+    /**
+     * Owner-issued node commands (model_install / model_remove). Same
+     * outbound-poll pattern as jobs — no inbound connectivity needed.
+     * Auth at the server side: only owners (verified via pubkey_links)
+     * can write to node_commands; the daemon's signed poll restricts
+     * which rows it sees by pubkey match. So a compromised dashboard
+     * account can only push commands to nodes that account already
+     * owns; a compromised daemon key can only execute commands
+     * targeting itself.
+     */
+    async function pollNodeCommands() {
+        if (node.role !== 'provider') return;
+        let result;
+        try {
+            result = await client.pollCommands(5);
+        } catch (err) {
+            process.stderr.write(`command poll error: ${err?.message ?? err}\n`);
+            return;
+        }
+        for (const cmd of result?.commands ?? []) {
+            await runNodeCommand(cmd);
+        }
+    }
+
+    async function runNodeCommand(cmd) {
+        const { id, command, args } = cmd;
+        const t0 = new Date().toISOString();
+        process.stdout.write(`[${t0}] running command ${id}: ${command} ${JSON.stringify(args)}\n`);
+        try {
+            let result;
+            if (command === 'model_install') {
+                result = await ollamaSpawn(['pull', String(args?.model)]);
+            } else if (command === 'model_remove') {
+                result = await ollamaSpawn(['rm', String(args?.model)]);
+            } else {
+                throw new Error(`unknown command verb: ${command}`);
+            }
+            await client.completeCommand(id, { status: 'completed', result });
+            process.stdout.write(`[${new Date().toISOString()}] completed command ${id}\n`);
+        } catch (err) {
+            const msg = err?.message ?? String(err);
+            process.stderr.write(`command ${id} failed: ${msg}\n`);
+            try {
+                await client.completeCommand(id, { status: 'failed', error: msg });
+            } catch (markErr) {
+                process.stderr.write(`completeCommand failed: ${markErr?.message ?? markErr}\n`);
+            }
+        }
+    }
+
+    /**
+     * Run an `ollama` subcommand non-interactively, capturing stdout
+     * and stderr. Returns { stdout, stderr, code } on success; throws
+     * on non-zero exit so the command queue records a failure.
+     */
+    function ollamaSpawn(args) {
+        return new Promise((resolve, reject) => {
+            const child = spawn('ollama', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+            let out = '';
+            let err = '';
+            child.stdout.on('data', (b) => { out += b.toString(); });
+            child.stderr.on('data', (b) => { err += b.toString(); });
+            child.on('error', (e) => reject(new Error(`ollama spawn error: ${e?.message ?? e}`)));
+            child.on('exit', (code) => {
+                if (code === 0) resolve({ stdout: out.slice(-4096), stderr: err.slice(-4096), code });
+                else reject(new Error(`ollama exited ${code}: ${(err || out).slice(-512)}`));
+            });
+        });
+    }
+
     function snapshot() {
         return {
             pid: process.pid,
@@ -641,6 +712,7 @@ async function runDaemon(args, ctx) {
 
     await heartbeat();
     await pollJobs();
+    await pollNodeCommands();
 
     if (once) {
         if (ipcServer) { try { ipcServer.close(); } catch {} }
@@ -657,6 +729,16 @@ async function runDaemon(args, ctx) {
     pollTimer = setInterval(() => {
         pollJobs().catch((err) => process.stderr.write(`poll threw: ${err?.message ?? err}\n`));
     }, pollMs);
+    // Commands poll less often than jobs — they're rare (model
+    // install/remove from the dashboard) and ollama pull can take
+    // minutes, so we don't want overlapping pulls of the same model.
+    const commandPollMs = Math.max(pollMs * 2, 30_000);
+    const commandTimer = setInterval(() => {
+        pollNodeCommands().catch((err) =>
+            process.stderr.write(`command poll threw: ${err?.message ?? err}\n`)
+        );
+    }, commandPollMs);
+    if (typeof commandTimer.unref === 'function') commandTimer.unref();
 
     await new Promise(() => {});
     return 0;

@@ -113,6 +113,17 @@ export function createNodeClient({ url, publicKey, privateKey, role, timeoutMs =
             return signedFetch('/api/v1/node/payments/list', { role, limit });
         },
 
+        pollCommands(limit = 5) {
+            return signedFetch('/api/v1/node/commands/poll', { limit });
+        },
+
+        completeCommand(commandId, { status, result, error: errorMessage } = {}) {
+            return signedFetch(
+                `/api/v1/node/commands/${encodeURIComponent(commandId)}/complete`,
+                { status, result, error: errorMessage }
+            );
+        },
+
         listPayouts() {
             return signedFetch('/api/v1/node/payouts/list', {});
         },

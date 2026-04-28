@@ -40,6 +40,7 @@ import service from './commands/service.js';
 import pubkey from './commands/pubkey.js';
 import debug from './commands/debug.js';
 import deploy from './commands/deploy.js';
+import consoleCmd from './commands/console.js';
 
 function parseArgs(argv) {
     const positional = [];
@@ -93,11 +94,11 @@ function parseArgs(argv) {
 const COMMANDS = {
     init, login, register, update, remove,
     start, status, stop, stats, logs,
-    payout, payments, gpu, firewall, chat, setup, model, tui, doctor, service, pubkey, debug, deploy, help
+    payout, payments, gpu, firewall, chat, setup, model, tui, doctor, service, pubkey, debug, deploy, console: consoleCmd, help
 };
 
 // Commands that can run without a loaded config.
-const NO_CONFIG = new Set(['init', 'login', 'help', 'stats', 'logs', 'stop', 'gpu', 'firewall', 'chat', 'setup', 'model', 'tui', 'doctor', 'service', 'pubkey', 'debug', 'deploy']);
+const NO_CONFIG = new Set(['init', 'login', 'help', 'stats', 'logs', 'stop', 'gpu', 'firewall', 'chat', 'setup', 'model', 'tui', 'doctor', 'service', 'pubkey', 'debug', 'deploy', 'console']);
 // Commands that need a config but not a control-plane client (none today
 // — kept as a future escape hatch).
 const NO_CLIENT = new Set();
@@ -111,9 +112,16 @@ async function main() {
     const rest = route.rest;
 
     if (sub === 'help') {
+        // Bare `infernet` on a TTY → drop into the interactive console
+        // (modeled on `claude` / `codex` / `hermes` no-arg behavior).
+        // Bare `infernet` on a non-TTY (script / pipe) → print help and
+        // exit 1 so callers notice. Explicit `infernet help` → help + 0.
+        if (argv.length === 0 && process.stdin.isTTY) {
+            const config = await loadConfig();
+            const code = await consoleCmd({ positional: [], has: () => false, get: () => undefined }, { config });
+            process.exit(code ?? 0);
+        }
         await help();
-        // Bare `infernet` (no args) on a TTY → help, exit 1 so scripts
-        // notice the implicit nudge. Explicit `infernet help` → exit 0.
         process.exit(argv.length === 0 ? 1 : 0);
     }
 

@@ -41,7 +41,7 @@ export default function DashboardShell({ eyebrow, title, description, children }
                 ))}
               </div>
               <p className="mt-5 text-sm leading-6 text-[var(--muted)]">
-                Supabase credentials stay server-side through `SUPABASE_SERVICE_ROLE_KEY`. No client-side database SDK is used.
+                Read-only public surface. Sign in to manage your nodes, jobs, and payouts.
               </p>
             </div>
           </div>

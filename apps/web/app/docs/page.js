@@ -1,4 +1,6 @@
 import Link from "next/link";
+import SiteHeader from "@/components/site-header";
+import SiteFooter from "@/components/site-footer";
 
 export const metadata = {
     title: "Documentation",
@@ -27,6 +29,8 @@ const TOC = [
 
 export default function DocsPage() {
     return (
+        <>
+        <SiteHeader />
         <main className="mx-auto w-full max-w-5xl px-6 py-16 lg:px-10">
             <header className="mb-12 space-y-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.4em] text-[var(--accent)]">
@@ -487,38 +491,130 @@ curl -sS -X POST https://infernetprotocol.com/api/auth/login \\
             {/* SELF-HOST */}
             <Section id="self-host" title="Self-host the control plane">
                 <p>
-                    Infernet's control plane is open-source and Docker-shippable. Self-hosting
-                    means you run your own Next.js app + Supabase (cloud or self-hosted) and
-                    point your operators at <em>your</em> URL via{" "}
-                    <code>infernet init --url https://your-infernet.example</code>.
+                    Infernet&apos;s control plane is open-source (MIT) and Docker-shippable. Self-hosting
+                    means you run your own Next.js app + Supabase (cloud or self-hosted) and point
+                    your operators at <em>your</em> URL via{" "}
+                    <code>infernet init --url https://your-infernet.example</code>. The protocol
+                    itself is permissionless — your operators can keep speaking to other control
+                    planes too.
                 </p>
-                <p>Two-step:</p>
+
+                <h3 className="mt-6 text-lg font-semibold text-white">When to self-host</h3>
+                <ul className="ml-5 list-disc space-y-1 text-[var(--muted)]">
+                    <li>You run a private GPU pool for one organization and don&apos;t want jobs leaving it.</li>
+                    <li>You need data residency in a specific region.</li>
+                    <li>You want to fork the dashboard, ship a different model catalog, or run an internal billing layer.</li>
+                    <li>You&apos;re building on top of the protocol and want a sandbox to break.</li>
+                </ul>
+
+                <h3 className="mt-6 text-lg font-semibold text-white">1. Clone, configure, build</h3>
                 <CodeBlock>
-{`# 1. Clone, set env, deploy
-git clone https://github.com/profullstack/infernet-protocol.git
+{`git clone https://github.com/profullstack/infernet-protocol.git
 cd infernet-protocol
 cp sample.env .env
 node tooling/generate-secrets.mjs >> .env       # CLI session, cron, DID keys
-$EDITOR .env                                    # fill SUPABASE_*, NIM, CoinPay
+$EDITOR .env                                    # fill SUPABASE_*, RESEND, CoinPay, etc.
 
-# Self-hosted Supabase (Docker, optional):
-supabase start                                  # boots local Postgres + Auth + Realtime
-supabase db reset                               # applies all migrations
-
-# 2. Build + run
 pnpm install
-pnpm --filter @infernetprotocol/web build
-pnpm --filter @infernetprotocol/web start       # http://localhost:8080
+pnpm --filter @infernetprotocol/web build`}
+                </CodeBlock>
 
-# Or via Docker (uses the multi-stage Dockerfile in docker/)
+                <h3 className="mt-6 text-lg font-semibold text-white">2. Provision Supabase</h3>
+                <p>Either flavor works:</p>
+                <ul className="ml-5 list-disc space-y-1 text-[var(--muted)]">
+                    <li>
+                        <strong>Supabase Cloud</strong> — fastest path. Create a project, copy the
+                        URL + anon key + service-role key into <code>.env</code>, then run{" "}
+                        <code>supabase db push</code> from this repo to apply migrations.
+                    </li>
+                    <li>
+                        <strong>Self-hosted Supabase</strong> — boot the official Docker stack, then
+                        in this repo run <code>supabase start &amp;&amp; supabase db reset</code>{" "}
+                        for local Postgres + Auth + Realtime + migrations applied.
+                    </li>
+                </ul>
+
+                <h3 className="mt-6 text-lg font-semibold text-white">3. Required environment variables</h3>
+                <CodeBlock>
+{`# --- Supabase ---------------------------------------------------------------
+NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...                  # server-only, never browser
+
+# --- Public-facing URL (used by every redirect, OG card, install.sh) -------
+NEXT_PUBLIC_APP_URL=https://your-infernet.example
+
+# --- Auth (CLI bearer JWTs, cron auth, DID:web platform identity) ----------
+INFERNET_CLI_SESSION_SECRET=...                   # generate-secrets.mjs fills these
+INFERNET_CRON_SECRET=...
+INFERNET_PLATFORM_DID_PRIVATE_KEY=...
+
+# --- Email (sign-up confirmation, password reset, /contact) ----------------
+RESEND_API_KEY=re_...
+
+# --- Optional: NIM fallback for the public /chat playground ----------------
+NVIDIA_NIM_API_KEY=nvapi-...
+
+# --- Payments (CoinPayPortal — non-custodial except Lightning) -------------
+COINPAY_ISSUER_API_KEY=cprt_...
+
+# --- Web server -------------------------------------------------------------
+PORT=8080`}
+                </CodeBlock>
+
+                <h3 className="mt-6 text-lg font-semibold text-white">4. Run it</h3>
+                <p>Pick a hosting target:</p>
+
+                <h4 className="mt-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">Docker</h4>
+                <CodeBlock>
+{`# Multi-stage build — preserves the pnpm workspace topology.
 docker build -t infernet-control-plane -f docker/Dockerfile .
+
+# Run with your .env mounted in
 docker run --env-file .env -p 8080:8080 infernet-control-plane`}
                 </CodeBlock>
-                <p>Operators who choose your deployment:</p>
+
+                <h4 className="mt-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">Railway / Fly / Render</h4>
+                <p>
+                    Point the platform at <code>docker/Dockerfile</code> as the builder and copy
+                    the env vars from your <code>.env</code> into the platform&apos;s secret manager.
+                    Railway specifically: set the build command to nothing (Dockerfile handles it),
+                    healthcheck path to <code>/api/health</code>, and PORT to <code>8080</code>{" "}
+                    (or leave <code>$PORT</code> auto-injection alone — <code>next start</code>{" "}
+                    honors it). Add your custom domain at the platform; in your DNS, the apex
+                    record points at the platform&apos;s edge.
+                </p>
+
+                <h4 className="mt-4 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">Bare Linux + systemd</h4>
+                <CodeBlock>
+{`pnpm --filter @infernetprotocol/web start       # http://localhost:8080
+# Front it with nginx/Caddy + Let's Encrypt for TLS, then bind a systemd
+# unit so it restarts on crash. apps/cli/commands/service.js generates a
+# matching unit for the GPU node side.`}
+                </CodeBlock>
+
+                <h3 className="mt-6 text-lg font-semibold text-white">5. Verify the deploy</h3>
+                <CodeBlock>
+{`curl -fsS https://your-infernet.example/api/health
+# {"ok":true,"uptime_s":...,"node_env":"production","commit":"<sha>"}
+
+# Round-trip the device-code login from a workstation:
+infernet init --url https://your-infernet.example
+infernet login                                  # opens browser → polls
+infernet "ping"                                 # default verb is chat`}
+                </CodeBlock>
+                <p>
+                    If <code>/api/health</code> returns 502, the container is down — most often a
+                    missing env var at boot. Check the platform&apos;s deploy logs first, before
+                    debugging anything in the app.
+                </p>
+
+                <h3 className="mt-6 text-lg font-semibold text-white">6. Operators on your deployment</h3>
                 <CodeBlock>
 {`infernet init --url https://your-infernet.example
-infernet setup
-infernet "ping"`}
+infernet setup                                  # installs Ollama, pulls a model, opens firewall
+infernet register                               # advertises the node on your control plane
+infernet start                                  # daemon takes paying jobs`}
                 </CodeBlock>
             </Section>
 
@@ -615,24 +711,9 @@ infernet "ping"`}
                 />
             </Section>
 
-            {/* FOOTER */}
-            <footer className="mt-20 border-t border-white/10 pt-10">
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-[var(--muted)]">
-                    <Link href="/" className="hover:text-white">Home</Link>
-                    <Link href="/chat" className="hover:text-white">Chat</Link>
-                    <Link href="/status" className="hover:text-white">Status</Link>
-                    <Link href="/auth/login" className="hover:text-white">Sign in</Link>
-                    <Link
-                        href="https://github.com/profullstack/infernet-protocol"
-                        className="hover:text-white"
-                        target="_blank"
-                        rel="noreferrer"
-                    >
-                        GitHub →
-                    </Link>
-                </div>
-            </footer>
         </main>
+        <SiteFooter />
+        </>
     );
 }
 

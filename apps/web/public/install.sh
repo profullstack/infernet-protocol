@@ -162,6 +162,7 @@ ensure_apt_prereqs() {
     need_pkg() { command -v "$1" >/dev/null 2>&1; }
     _missing=""
     need_pkg curl  || _missing="$_missing curl"
+    need_pkg git   || _missing="$_missing git"
     need_pkg zstd  || _missing="$_missing zstd"
     if [ -z "$_missing" ]; then
         unset _missing
@@ -242,8 +243,26 @@ try_install_node_unattended() {
         linux)
             if command -v apt-get >/dev/null 2>&1; then
                 info "installing Node.js 20 via NodeSource (idempotent — only runs if missing)"
-                curl -fsSL https://deb.nodesource.com/setup_20.x | $SUDO -E bash - >/dev/null 2>&1
-                $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs >/dev/null 2>&1
+                # NodeSource ships a setup script meant to be `curl | bash`.
+                # We CAN'T pipe it directly here because this whole installer
+                # is itself running under `curl … | sh`, so stdin is already
+                # attached to our own caller. Download to a temp file first,
+                # then exec it so it has its own stdin. (`bash -` reading
+                # from our outer pipe → "curl: (23) Failed writing body".)
+                _ns_tmp="$(mktemp 2>/dev/null || echo "/tmp/nodesource.$$.sh")"
+                if curl -fsSL https://deb.nodesource.com/setup_20.x -o "$_ns_tmp" 2>/dev/null; then
+                    $SUDO -E bash "$_ns_tmp" >/dev/null 2>&1 || true
+                    rm -f "$_ns_tmp"
+                fi
+                unset _ns_tmp
+                # If the apt repo got installed but Node didn't, install it now.
+                if ! command -v node >/dev/null 2>&1; then
+                    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs >/dev/null 2>&1 || true
+                fi
+                # Some distros ship `nodejs` but no `node` binary. Symlink.
+                if command -v nodejs >/dev/null 2>&1 && ! command -v node >/dev/null 2>&1; then
+                    $SUDO ln -sf "$(command -v nodejs)" /usr/local/bin/node 2>/dev/null || true
+                fi
                 command -v node >/dev/null 2>&1 && return 0
             elif command -v dnf >/dev/null 2>&1; then
                 $SUDO dnf install -y nodejs >/dev/null 2>&1

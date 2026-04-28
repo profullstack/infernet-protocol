@@ -16,12 +16,27 @@
  * `reason: "cancel"`.
  */
 
+import os from "node:os";
 import { randomUUID } from "node:crypto";
 import { AsyncQueue } from "../async-queue.js";
 import { MSG, PROTOCOL_VERSION } from "../protocol.js";
 
 const DEFAULT_HOST = "http://localhost:11434";
 const PROBE_TIMEOUT_MS = 500;
+
+/**
+ * Default thread cap for Ollama inference: half of the host's logical
+ * cores, floored at 1. Set as `options.num_thread` on every /api/chat
+ * call so a single inference job can't peg every core and starve the
+ * rest of the system (the daemon's poll loop, UFW, ssh, the operator's
+ * other workloads). Operators on dedicated boxes can lift the cap via
+ * the OLLAMA_NUM_THREAD env var; nobody should have to touch it
+ * otherwise.
+ */
+export function defaultNumThread() {
+    const logical = Number.isFinite(os.cpus()?.length) ? os.cpus().length : 0;
+    return Math.max(1, Math.floor(logical / 2));
+}
 
 export const OLLAMA_DEFAULT_HOST = DEFAULT_HOST;
 
@@ -40,6 +55,7 @@ export async function isOllamaReachable(host = DEFAULT_HOST, timeoutMs = PROBE_T
 export async function createOllamaBackend({
     host = process.env.OLLAMA_HOST ?? DEFAULT_HOST,
     defaultModel = process.env.INFERNET_ENGINE_MODEL ?? null,
+    numThread = Number.parseInt(process.env.OLLAMA_NUM_THREAD ?? "", 10) || defaultNumThread(),
     skipProbe = false,
     fetchImpl = globalThis.fetch
 } = {}) {
@@ -55,6 +71,7 @@ export async function createOllamaBackend({
     return {
         kind: "ollama",
         host,
+        numThread,
         generate({ messages, id, model = null, max_tokens, temperature } = {}) {
             const genId = id ?? randomUUID();
             const stream = new AsyncQueue();
@@ -82,6 +99,11 @@ export async function createOllamaBackend({
                 };
                 if (typeof temperature === "number") body.options.temperature = temperature;
                 if (typeof max_tokens === "number") body.options.num_predict = max_tokens;
+                // Bound CPU usage by default so one inference can't peg
+                // every core. Operator can lift the cap via OLLAMA_NUM_THREAD.
+                if (Number.isFinite(numThread) && numThread > 0) {
+                    body.options.num_thread = numThread;
+                }
 
                 let res;
                 try {

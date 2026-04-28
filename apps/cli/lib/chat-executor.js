@@ -70,6 +70,13 @@ function getEngine() {
             if (eng.backend) opts.backend = eng.backend;
             if (eng.model) opts.defaultModel = eng.model;
             if (eng.ollamaHost) opts.host = eng.ollamaHost;
+            // Optional override for the per-request num_thread cap.
+            // Default (50% of cores) is computed inside the Ollama
+            // backend; only forward when the operator explicitly set
+            // an override in config.
+            if (Number.isFinite(eng.ollama_num_thread) && eng.ollama_num_thread > 0) {
+                opts.numThread = eng.ollama_num_thread;
+            }
             return createEngine(opts);
         })().catch((err) => {
             // Reset so a transient failure doesn't permanently poison the

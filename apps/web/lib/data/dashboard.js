@@ -265,3 +265,41 @@ export async function getRecentJobs(userId, { limit = 8 } = {}) {
     if (error) throw new Error(error.message);
     return data ?? [];
 }
+
+/**
+ * Recent jobs PROCESSED by the user's owned providers — operator-
+ * side view. Joins jobs.provider_id back to the providers the user
+ * owns (via pubkey_links), so an operator running a node sees the
+ * actual work that node handled.
+ *
+ * Includes the provider's display name + node_id so the operator
+ * can tell which of their nodes processed each job (matters when
+ * they run multiple).
+ */
+export async function getRecentJobsProcessed(userId, { limit = 8 } = {}) {
+    const providers = await getUserProviders(userId);
+    const ids = providers.map((p) => p.id).filter(Boolean);
+    if (ids.length === 0) return [];
+
+    const nameById = new Map(providers.map((p) => [p.id, {
+        name: p.name ?? null,
+        node_id: p.node_id ?? null
+    }]));
+
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase
+        .from("jobs")
+        .select("id, title, status, payment_offer, model_name, provider_id, created_at, completed_at")
+        .in("provider_id", ids)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((j) => {
+        const meta = nameById.get(j.provider_id) ?? {};
+        return {
+            ...j,
+            provider_name: meta.name,
+            provider_node_id: meta.node_id
+        };
+    });
+}

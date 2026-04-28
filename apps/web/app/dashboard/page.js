@@ -11,6 +11,7 @@ import {
     getUserProviders,
     getUserPubkeys,
     getRecentJobs,
+    getRecentJobsProcessed,
     summarizeHardware,
     summarizeInterconnects
 } from "@/lib/data/dashboard";
@@ -26,14 +27,15 @@ export default async function DashboardPage() {
         redirect("/auth/login?next=/dashboard");
     }
 
-    const [pubkeys, providers, clients, earnings, spend, models, jobs] = await Promise.all([
+    const [pubkeys, providers, clients, earnings, spend, models, jobs, jobsProcessed] = await Promise.all([
         getUserPubkeys(user.id),
         getUserProviders(user.id),
         getUserClients(user.id),
         getEarningsSummary(user.id),
         getSpendSummary(user.id),
         getUserModelsServed(user.id),
-        getRecentJobs(user.id, { limit: 6 })
+        getRecentJobs(user.id, { limit: 6 }),
+        getRecentJobsProcessed(user.id, { limit: 8 })
     ]);
 
     const hardware = summarizeHardware(providers);
@@ -245,7 +247,59 @@ export default async function DashboardPage() {
                     </div>
                 </div>
 
-                {/* Recent activity */}
+                {/* Operator-side view: jobs your nodes actually processed */}
+                <section className="mt-10">
+                    <Card title="Recent jobs (your nodes processed)">
+                        {noProviders || jobsProcessed.length === 0 ? (
+                            <Empty
+                                hint={
+                                    noProviders
+                                        ? "No providers registered yet — register a node to start earning."
+                                        : "Your nodes haven't processed jobs yet. Once a chat or batch lands here it'll show up."
+                                }
+                                cli="infernet status"
+                            />
+                        ) : (
+                            <table className="w-full border-collapse text-sm">
+                                <thead>
+                                    <tr className="text-left text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                                        <th className="py-2 pr-3 font-medium">Title</th>
+                                        <th className="py-2 pr-3 font-medium">Model</th>
+                                        <th className="py-2 pr-3 font-medium">Node</th>
+                                        <th className="py-2 pr-3 font-medium">Status</th>
+                                        <th className="py-2 pr-3 font-medium">Earned</th>
+                                        <th className="py-2 pr-3 font-medium">When</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {jobsProcessed.map((j) => (
+                                        <tr key={j.id} className="border-t border-white/5">
+                                            <td className="py-2 pr-3 text-white truncate max-w-[20ch]">{j.title}</td>
+                                            <td className="py-2 pr-3 text-[var(--muted)]">{j.model_name || "—"}</td>
+                                            <td className="py-2 pr-3 text-[var(--muted)]">
+                                                {j.provider_id ? (
+                                                    <Link
+                                                        href={`/nodes/${j.provider_id}`}
+                                                        className="text-[var(--accent)] hover:underline"
+                                                    >
+                                                        {j.provider_name ?? j.provider_node_id ?? "node"}
+                                                    </Link>
+                                                ) : "—"}
+                                            </td>
+                                            <td className="py-2 pr-3"><StatusPill status={j.status} /></td>
+                                            <td className="py-2 pr-3 text-[var(--muted)]">{fmtUsd(j.payment_offer)}</td>
+                                            <td className="py-2 pr-3 text-[var(--muted)]">
+                                                {relTime(j.completed_at ?? j.created_at)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </Card>
+                </section>
+
+                {/* Client-side view: jobs you submitted */}
                 <section className="mt-10">
                     <Card title="Recent jobs (you submitted)">
                         {noClients || jobs.length === 0 ? (

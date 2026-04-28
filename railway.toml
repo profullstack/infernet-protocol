@@ -1,0 +1,34 @@
+# Railway service configuration for the Infernet control plane.
+#
+# Tells Railway to build via our Dockerfile (a pnpm workspace requires
+# the workspace topology preserved into install/build, which Nixpacks
+# auto-detect doesn't handle reliably for our shape).
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "docker/Dockerfile"
+
+[deploy]
+startCommand = "pnpm --filter @infernetprotocol/web start"
+healthcheckPath = "/api/overview"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+
+# Required env vars (set in Railway → Variables, NOT in this file):
+#   NEXT_PUBLIC_APP_URL
+#   NEXT_PUBLIC_SUPABASE_URL
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY
+#   SUPABASE_URL
+#   SUPABASE_SERVICE_ROLE_KEY
+#   CPR_API_BASE_URL
+#   CPR_ISSUER_API_KEY
+#   DID_VERIFICATION_KEY
+#   DID_PRIVATE_KEY_BASE64
+#   INFERNET_CLI_SESSION_SECRET
+#   CRON_SECRET
+#   COINPAYPORTAL_API_KEY (optional)
+#   COINPAYPORTAL_WEBHOOK_SECRET (optional)
+#   NVIDIA_NIM_API_KEY (optional, enables NIM fallback for /chat)
+#
+# See sample.env for the full list with comments.

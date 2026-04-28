@@ -1,0 +1,52 @@
+# Anything that doesn't need to enter the build context.
+# Keeps `docker build` fast and keeps secrets out of layers.
+
+# Build outputs
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/build
+**/.cache
+
+# Local-only state
+.env
+.env.*
+!.env.example
+**/.DS_Store
+**/coverage
+**/*.log
+
+# Source control
+.git
+.gitignore
+.github
+
+# Editor / OS junk
+.vscode
+.idea
+**/*.swp
+**/*~
+
+# Tests / docs we don't need at runtime in the production image.
+# (Tests still run in CI from a clean checkout — they're not built into
+#  the Railway image.)
+tests
+ipips
+docs
+**/*.test.js
+**/*.test.ts
+**/*.spec.js
+**/*.spec.ts
+
+# Other apps not relevant to the web image (the Dockerfile copies just
+# their package.json files explicitly so workspace resolution still works).
+apps/desktop/src
+apps/mobile/src
+apps/cli/commands
+apps/cli/lib
+apps/daemon/src
+
+# Non-build assets
+*.pdf
+INFERNET-*.pdf

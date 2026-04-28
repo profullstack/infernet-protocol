@@ -2,6 +2,7 @@ import "server-only";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getJobWithEvents } from "@/lib/data/chat";
 import { streamChatCompletion } from "@infernetprotocol/nim-adapter";
+import { makeStreamSanitizer, sanitizeText } from "@/lib/sanitize-stream";
 
 /**
  * Async generator that yields normalized job events for a given job:
@@ -36,11 +37,30 @@ export async function* streamJobEvents(jobId) {
 
     yield { type: "job", data: job };
 
+    // One sanitizer per stream — strips known training-data-leak tag
+    // pairs (e.g. <ip_reminder>...) emitted by contaminated
+    // community fine-tunes. Applied to every token + the final 'done'
+    // body so the audit trail and the user-visible stream are both
+    // clean.
+    const sanitizer = makeStreamSanitizer();
+
     let lastId = 0;
     for (const ev of pre) {
         lastId = Math.max(lastId, ev.id);
-        yield { type: ev.event_type, data: ev.data, id: ev.id };
-        if (ev.event_type === "done" || ev.event_type === "error") return;
+        if (ev.event_type === "token") {
+            const cleanText = sanitizer.process(ev.data?.text ?? "");
+            if (cleanText) {
+                yield { type: "token", data: { ...ev.data, text: cleanText }, id: ev.id };
+            }
+        } else if (ev.event_type === "done") {
+            const tail = sanitizer.flush();
+            const cleanFull = sanitizeText(ev.data?.text ?? "") + tail;
+            yield { type: "done", data: { ...ev.data, text: cleanFull }, id: ev.id };
+            return;
+        } else {
+            yield { type: ev.event_type, data: ev.data, id: ev.id };
+            if (ev.event_type === "error") return;
+        }
     }
 
     if (job?.input_spec?.fallback === "nvidia-nim") {
@@ -95,8 +115,20 @@ export async function* streamJobEvents(jobId) {
                 continue;
             }
             const ev = queue.shift();
-            yield ev;
-            if (ev.type === "done" || ev.type === "error") return;
+            if (ev.type === "token") {
+                const cleanText = sanitizer.process(ev.data?.text ?? "");
+                if (cleanText) {
+                    yield { type: "token", data: { ...ev.data, text: cleanText }, id: ev.id };
+                }
+            } else if (ev.type === "done") {
+                const tail = sanitizer.flush();
+                const cleanFull = sanitizeText(ev.data?.text ?? "") + tail;
+                yield { type: "done", data: { ...ev.data, text: cleanFull }, id: ev.id };
+                return;
+            } else {
+                yield ev;
+                if (ev.type === "error") return;
+            }
         }
     } finally {
         closed = true;
@@ -119,6 +151,7 @@ async function* runNimFallback({ supabase, job }) {
 
     let fullText = "";
     let finalized = false;
+    const sanitizer = makeStreamSanitizer();
 
     try {
         for await (const ev of streamChatCompletion({
@@ -130,11 +163,19 @@ async function* runNimFallback({ supabase, job }) {
             if (ev.type === "meta") continue;
             if (ev.type === "token") {
                 fullText += ev.data?.text ?? "";
-                const persisted = await insertJobEvent(supabase, job.id, "token", ev.data);
-                yield { type: "token", data: ev.data, id: persisted?.id };
+                const cleanText = sanitizer.process(ev.data?.text ?? "");
+                const cleanData = cleanText
+                    ? { ...ev.data, text: cleanText }
+                    : { ...ev.data, text: "" };
+                const persisted = await insertJobEvent(supabase, job.id, "token", cleanData);
+                if (cleanText) {
+                    yield { type: "token", data: cleanData, id: persisted?.id };
+                }
             } else if (ev.type === "done") {
+                const tail = sanitizer.flush();
+                const cleanFull = sanitizeText(fullText) + tail;
                 const data = {
-                    text: fullText,
+                    text: cleanFull,
                     finished_at: ev.data?.finished_at ?? new Date().toISOString()
                 };
                 const persisted = await insertJobEvent(supabase, job.id, "done", data);

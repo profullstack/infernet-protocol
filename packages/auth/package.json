@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/auth",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Nostr-based authentication helpers for the Infernet Protocol.",
   "license": "MIT",
   "type": "module",

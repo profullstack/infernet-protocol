@@ -3,3 +3,4 @@
  */
 export * from "./detect.js";
 export * from "./cpu.js";
+export * from "./interconnect.js";

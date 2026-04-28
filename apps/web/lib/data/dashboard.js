@@ -161,6 +161,34 @@ export function summarizeHardware(providers) {
     };
 }
 
+/**
+ * Aggregate fabric capability across the user's providers.
+ *   - any_nvlink: at least one provider has NVLink between GPUs
+ *   - any_infiniband: at least one IB-active provider
+ *   - rdma_capable_providers: count of providers advertising RDMA
+ */
+export function summarizeInterconnects(providers) {
+    let any_nvlink = false;
+    let any_infiniband = false;
+    let rdma_capable_providers = 0;
+    const nvlink_topologies = new Set();
+    for (const p of providers) {
+        const ic = (p.specs && typeof p.specs === "object" && p.specs.interconnects) || {};
+        if (ic.nvlink?.available) {
+            any_nvlink = true;
+            if (ic.nvlink.topology) nvlink_topologies.add(ic.nvlink.topology);
+        }
+        if (ic.infiniband?.available) any_infiniband = true;
+        if (ic.rdma_capable) rdma_capable_providers += 1;
+    }
+    return {
+        any_nvlink,
+        any_infiniband,
+        rdma_capable_providers,
+        nvlink_topologies: [...nvlink_topologies]
+    };
+}
+
 export async function getUserModelsServed(userId) {
     const providers = await getUserProviders(userId);
     const models = new Set();

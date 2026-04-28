@@ -11,7 +11,11 @@
  * no full model strings (per IPIP-0001).
  */
 
-import { detectGpus, formatGpuLine, detectCpus, detectHost, formatCpuLine } from "@infernetprotocol/gpu";
+import {
+    detectGpus, formatGpuLine,
+    detectCpus, detectHost, formatCpuLine,
+    detectInterconnects, formatInterconnectSummary
+} from "@infernetprotocol/gpu";
 
 const HELP = `infernet gpu — list local hardware
 
@@ -34,11 +38,12 @@ The list is local-only — nothing here is sent to the control plane
 without your explicit opt-in via 'infernet register'.
 `;
 
-function jsonReport(gpus, cpus, host) {
+function jsonReport(gpus, cpus, host, interconnects) {
     return {
         host,
         gpus,
-        cpus
+        cpus,
+        interconnects
     };
 }
 
@@ -64,9 +69,15 @@ export default async function gpuCommand(args) {
     }
     const cpus = detectCpus();
     const host = detectHost();
+    let interconnects = { nvlink: { available: false, links: [] }, infiniband: { available: false, devices: [] }, rdma_capable: false };
+    try {
+        interconnects = await detectInterconnects();
+    } catch (err) {
+        process.stderr.write(`interconnect detection error: ${err?.message ?? err}\n`);
+    }
 
     if (json) {
-        process.stdout.write(JSON.stringify(jsonReport(gpus, cpus, host), null, 2) + "\n");
+        process.stdout.write(JSON.stringify(jsonReport(gpus, cpus, host, interconnects), null, 2) + "\n");
         return 0;
     }
 
@@ -96,6 +107,22 @@ export default async function gpuCommand(args) {
     } else {
         for (const g of gpus) {
             process.stdout.write(`  ${formatGpuLine(g)}\n`);
+        }
+    }
+
+    process.stdout.write(`\nInterconnect\n`);
+    process.stdout.write(`  ${formatInterconnectSummary(interconnects)}\n`);
+    if (interconnects.nvlink.available) {
+        for (const l of interconnects.nvlink.links) {
+            process.stdout.write(`    NVLink: GPU${l.from} ↔ GPU${l.to} (${l.kind})\n`);
+        }
+    }
+    if (interconnects.infiniband.devices.length) {
+        for (const d of interconnects.infiniband.devices) {
+            const rate = d.rate ? ` ${d.rate}` : "";
+            const ll = d.link_layer ? ` ${d.link_layer}` : "";
+            const port = d.port != null ? `/p${d.port}` : "";
+            process.stdout.write(`    IB ${d.name}${port} — ${d.state ?? "?"}${rate}${ll}\n`);
         }
     }
     process.stdout.write(`\n`);

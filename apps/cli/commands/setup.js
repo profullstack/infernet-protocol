@@ -23,7 +23,11 @@ import { loadConfig, saveConfig, getConfigPath } from "../lib/config.js";
 import { question } from "../lib/prompt.js";
 import { applyFirewallRule, detectFirewall, describeFirewallHowTo } from "../lib/firewall.js";
 import { DEFAULT_P2P_PORT, resolveP2pPort } from "../lib/network.js";
-import { detectGpus, formatGpuLine, detectCpus, detectHost, formatCpuLine } from "@infernetprotocol/gpu";
+import {
+    detectGpus, formatGpuLine,
+    detectCpus, detectHost, formatCpuLine,
+    detectInterconnects, formatInterconnectSummary
+} from "@infernetprotocol/gpu";
 import { isDaemonAlive } from "../lib/ipc.js";
 import { createNodeClient } from "../lib/node-client.js";
 
@@ -319,6 +323,28 @@ export default async function setup(args) {
         ok(`${detectedGpus.length} GPU${detectedGpus.length === 1 ? "" : "s"}`);
         for (const g of detectedGpus) {
             process.stdout.write(`    · ${formatGpuLine(g)}\n`);
+        }
+    }
+
+    // Interconnects — NVLink between GPUs, InfiniBand for multi-node training.
+    let interconnects = { nvlink: { available: false, links: [] }, infiniband: { available: false, devices: [] }, rdma_capable: false };
+    try {
+        interconnects = await detectInterconnects();
+    } catch (err) {
+        warn(`interconnect detection error: ${err?.message ?? err}`);
+    }
+    process.stdout.write(`  interconnect: ${formatInterconnectSummary(interconnects)}\n`);
+    if (interconnects.nvlink.available) {
+        const links = interconnects.nvlink.links;
+        const preview = links.slice(0, 6).map((l) => `GPU${l.from}↔GPU${l.to} ${l.kind}`).join(", ");
+        process.stdout.write(`    · NVLink topology: ${interconnects.nvlink.topology}${links.length > 6 ? ` — ${preview}, …` : ` — ${preview}`}\n`);
+    }
+    if (interconnects.infiniband.available) {
+        const active = interconnects.infiniband.devices.filter((d) => d.state === "active");
+        for (const d of active.slice(0, 6)) {
+            const rate = d.rate ? ` ${d.rate}` : "";
+            const ll = d.link_layer ? ` ${d.link_layer}` : "";
+            process.stdout.write(`    · IB ${d.name}/p${d.port}${rate}${ll} (active)\n`);
         }
     }
 

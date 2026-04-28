@@ -11,7 +11,7 @@
 
 import { saveConfig } from '../lib/config.js';
 import { resolveP2pPort, detectLocalAddress } from '../lib/network.js';
-import { detectGpus } from '@infernetprotocol/gpu';
+import { detectGpus, detectInterconnects } from '@infernetprotocol/gpu';
 
 const HELP = `infernet register — announce this node to the control plane
 
@@ -36,15 +36,39 @@ function vramTier(vramMb) {
     return '>=48gb';
 }
 
+/**
+ * Reduce interconnect detection to a coarse, leak-free shape:
+ *   - device names / board_ids stripped
+ *   - just the capability flags clients need for matchmaking
+ */
+function summarizeInterconnects(ic) {
+    const nvlink = ic?.nvlink ?? { available: false, topology: 'none', links: [] };
+    const ib = ic?.infiniband ?? { available: false, devices: [] };
+    const activePorts = ib.devices.filter((d) => d.state === 'active');
+    return {
+        nvlink: {
+            available: !!nvlink.available,
+            topology: nvlink.topology ?? 'none',
+            link_count: Array.isArray(nvlink.links) ? nvlink.links.length : 0
+        },
+        infiniband: {
+            available: !!ib.available,
+            active_port_count: activePorts.length
+        },
+        rdma_capable: !!ic?.rdma_capable
+    };
+}
+
 async function gatherCoarseSpecs() {
-    const gpus = await detectGpus();
+    const [gpus, interconnects] = await Promise.all([detectGpus(), detectInterconnects()]);
     return {
         gpu_count: gpus.length,
         gpus: gpus.map((g) => ({
             vendor: (g.vendor ?? 'unknown').toLowerCase(),
             vram_tier: vramTier(g.vram_mb),
             model: typeof g.model === 'string' ? g.model.slice(0, 64) : null
-        }))
+        })),
+        interconnects: summarizeInterconnects(interconnects)
     };
 }
 

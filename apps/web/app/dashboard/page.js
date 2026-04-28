@@ -11,7 +11,8 @@ import {
     getUserProviders,
     getUserPubkeys,
     getRecentJobs,
-    summarizeHardware
+    summarizeHardware,
+    summarizeInterconnects
 } from "@/lib/data/dashboard";
 
 export const metadata = {
@@ -36,6 +37,7 @@ export default async function DashboardPage() {
     ]);
 
     const hardware = summarizeHardware(providers);
+    const fabric = summarizeInterconnects(providers);
     const noProviders = providers.length === 0;
     const noClients = clients.length === 0;
 
@@ -149,6 +151,38 @@ export default async function DashboardPage() {
                                         </li>
                                     ))}
                                 </ul>
+                            )}
+                        </Card>
+
+                        <Card title="Interconnect">
+                            {!noProviders ? (
+                                <ul className="space-y-1.5 text-sm">
+                                    <li className="flex items-baseline justify-between gap-3">
+                                        <span className="text-white">NVLink</span>
+                                        <span className="text-[var(--muted)]">
+                                            {fabric.any_nvlink
+                                                ? `yes${fabric.nvlink_topologies.length ? ` · ${fabric.nvlink_topologies.join(", ")}` : ""}`
+                                                : "no"}
+                                        </span>
+                                    </li>
+                                    <li className="flex items-baseline justify-between gap-3">
+                                        <span className="text-white">InfiniBand</span>
+                                        <span className="text-[var(--muted)]">
+                                            {fabric.any_infiniband ? "yes" : "no"}
+                                        </span>
+                                    </li>
+                                    <li className="flex items-baseline justify-between gap-3">
+                                        <span className="text-white">RDMA-capable nodes</span>
+                                        <span className="text-[var(--muted)]">
+                                            {fabric.rdma_capable_providers} / {providers.length}
+                                        </span>
+                                    </li>
+                                </ul>
+                            ) : (
+                                <p className="text-sm text-[var(--muted)]">
+                                    NVLink + InfiniBand are auto-detected when you register a node.
+                                    Run <code>infernet setup</code> to see what your hardware reports.
+                                </p>
                             )}
                         </Card>
 

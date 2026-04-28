@@ -47,14 +47,44 @@ log "model:         $INFERNET_MODEL"
 log "public addr:   \${INFERNET_PUBLIC_ADDRESS:-(auto-detect failed)}"
 log "public port:   $INFERNET_PUBLIC_PORT"
 
-if ! command -v curl >/dev/null 2>&1; then
-    log "Installing curl..."
-    if command -v apt-get >/dev/null 2>&1; then
-        sudo apt-get update -y && sudo apt-get install -y curl ca-certificates
-    elif command -v yum >/dev/null 2>&1; then
-        sudo yum install -y curl ca-certificates
+# \`sudo\` is only needed when we're not already root. Container images
+# (RunPod, Docker, K8s) usually run as root and may not even have sudo
+# installed; bare-metal / VM operators typically do. Resolve once.
+if [ "$(id -u 2>/dev/null || echo 0)" = "0" ]; then
+    SUDO=""
+else
+    if command -v sudo >/dev/null 2>&1; then
+        SUDO="sudo"
     else
-        fail "no apt-get or yum found — install curl manually then re-run"
+        SUDO=""
+        log "WARN: not root and no sudo — apt-get / yum installs may fail"
+    fi
+fi
+
+# System prereqs Ollama's installer needs (curl + ca-certificates for
+# the download itself, zstd for archive extraction in newer Ollama
+# releases — the installer otherwise dies with 'requires zstd').
+need_pkg() { command -v "$1" >/dev/null 2>&1; }
+MISSING=""
+need_pkg curl  || MISSING="\$MISSING curl"
+need_pkg zstd  || MISSING="\$MISSING zstd"
+if [ -n "\$MISSING" ]; then
+    log "Installing system prereqs:\$MISSING"
+    if command -v apt-get >/dev/null 2>&1; then
+        \$SUDO apt-get update -y
+        # shellcheck disable=SC2086
+        \$SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates \$MISSING
+    elif command -v dnf >/dev/null 2>&1; then
+        # shellcheck disable=SC2086
+        \$SUDO dnf install -y ca-certificates \$MISSING
+    elif command -v yum >/dev/null 2>&1; then
+        # shellcheck disable=SC2086
+        \$SUDO yum install -y ca-certificates \$MISSING
+    elif command -v apk >/dev/null 2>&1; then
+        # shellcheck disable=SC2086
+        \$SUDO apk add --no-cache ca-certificates \$MISSING
+    else
+        fail "no apt-get / dnf / yum / apk found — install\$MISSING manually then re-run"
     fi
 fi
 

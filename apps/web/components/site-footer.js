@@ -2,12 +2,14 @@ import Link from "next/link";
 
 const PRODUCT = [
     { href: "/docs", label: "Docs" },
+    { href: "/faq", label: "FAQ" },
     { href: "/chat", label: "Chat" },
     { href: "/deploy", label: "Deploy" },
     { href: "/status", label: "Status" }
 ];
 
 const COMPANY = [
+    { href: "/careers", label: "Careers" },
     { href: "/contact", label: "Contact" },
     { href: "/terms", label: "Terms" },
     { href: "/privacy", label: "Privacy" },

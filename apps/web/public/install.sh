@@ -860,20 +860,48 @@ check_path() {
             return 0
             ;;
     esac
-    warn "$INFERNET_BIN is not on your PATH"
+
+    # Best-effort: drop a system-wide symlink at /usr/local/bin/infernet
+    # so the wrapper is reachable without any shell-config changes.
+    # /usr/local/bin is on PATH for every standard distro and on every
+    # container image we care about. Fails silently on read-only roots
+    # (rare) — falls back to printing a manual hint.
+    if [ -d /usr/local/bin ] && [ -w /usr/local/bin ]; then
+        ln -sf "$WRAPPER" /usr/local/bin/infernet 2>/dev/null && {
+            ok "linked /usr/local/bin/infernet → $WRAPPER"
+            return 0
+        }
+    fi
+    # Try sudo as a fallback if we don't have direct write.
+    if [ -n "$SUDO" ] && [ -d /usr/local/bin ]; then
+        $SUDO ln -sf "$WRAPPER" /usr/local/bin/infernet 2>/dev/null && {
+            ok "linked /usr/local/bin/infernet → $WRAPPER (via sudo)"
+            return 0
+        }
+    fi
+
+    # Also append to the user's shell rc so future sessions pick it up.
     SHELL_RC=""
     case "${SHELL:-}" in
         */zsh)  SHELL_RC="$HOME/.zshrc" ;;
         */bash) SHELL_RC="$HOME/.bashrc" ;;
         */fish) SHELL_RC="$HOME/.config/fish/config.fish" ;;
     esac
+    if [ -n "$SHELL_RC" ] && [ -f "$SHELL_RC" ] \
+        && ! grep -qF "$INFERNET_BIN" "$SHELL_RC" 2>/dev/null; then
+        printf '\n# Added by Infernet Protocol installer\nexport PATH="%s:$PATH"\n' \
+            "$INFERNET_BIN" >> "$SHELL_RC" 2>/dev/null \
+            && ok "appended PATH export to $SHELL_RC"
+    fi
+
+    warn "$INFERNET_BIN is not on the current shell's PATH"
     cat <<EOF
 
-  Add this to your shell startup file (e.g. $SHELL_RC):
+  To use 'infernet' in this shell session right now, run:
 
       export PATH="$INFERNET_BIN:\$PATH"
 
-  Or run the CLI by full path: $WRAPPER
+  Or invoke by full path: $WRAPPER
 
 EOF
 }

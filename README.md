@@ -82,13 +82,19 @@ rm -rf ~/.config/infernet     # also removes node identity + saved config
 
 - **Next.js 16 + React 19** web dashboard. Also ships as the Electron desktop app (same app, Electron wrapper).
 - **Public chat playground** at `/chat` — streams tokens via Server-Sent Events. Uses live P2P providers if any are online; otherwise falls back to **NVIDIA NIM** ([build.nvidia.com](https://build.nvidia.com/)) so the demo never breaks.
-- **One-click GPU deploy** at `/deploy` — paste a RunPod API key, pick a GPU, the image boots and registers with your control plane automatically.
-- **`infernet` CLI** — one binary per GPU server. 14 subcommands: `init`, `login`, `register`, `update`, `remove`, `start`, `stop`, `status`, `stats`, `logs`, `payout`, `payments`, `gpu`, `firewall`. Daemon has a local IPC socket for live queries + a **public P2P TCP port 46337** (dual-stack IPv4/IPv6) for direct peer communication.
+- **One-click GPU deploy** at `/deploy` — mint a 24h bearer, paste the one-liner into your provider's user-data field, the box auto-detects platform + volume + GPU, installs the right engines, registers, and starts heartbeating.
+- **Multi-engine inference** — pluggable adapter (IPIP-0009) over Ollama (any GPU + Apple Silicon + CPU), vLLM (NVIDIA, high-throughput), Mojo+MAX (experimental), and stub. install.sh provisions whatever the detected hardware can run.
+- **Ray cluster support** — vLLM's tensor + pipeline parallelism via Ray for multi-GPU and multi-node serving. Single-box multi-GPU works without config; multi-node uses `INFERNET_RAY_MODE=head|worker` env vars.
+- **Workload classes (IPIP-0010)** — A (single GPU, real-time), B (provider's cluster, real-time), B.5 (cross-provider pipeline-parallel via Petals, batch only), C (distributed training via OpenDiLoCo / OpenRLHF / Hivemind, async).
+- **Training orchestration scaffold** — `@infernetprotocol/training` package with backends for DeepSpeed (Class B), OpenRLHF (Ray + vLLM rollouts + DeepSpeed updates), OpenDiLoCo (Class C), Petals (Class B.5 fine-tunes), and stub. See IPIP-0011.
+- **Batch job decomposition (IPIP-0013)** — `POST /api/v1/jobs/batch` splits one logical job (embed N docs, classify N items) into chunks fan-out across providers. BullMQ default queue, Postgres-queue fallback.
+- **`infernet` CLI** — one binary per GPU server. Subcommands: `init`, `login`, `register`, `update`, `remove`, `start`, `stop`, `status`, `stats`, `logs`, `payout`, `payments`, `gpu`, `firewall`, `chat`, `tui`, `model`, `setup`, `service`, `doctor`. Daemon has a local IPC socket for live queries + a **public P2P TCP port 46337** (dual-stack IPv4/IPv6) for direct peer communication.
 - **Supabase** backend on the server — Postgres + Auth + Realtime. Self-hosted or cloud.
 - **Nostr-signed node API** at `/api/v1/node/*` — GPU nodes sign every request with their secp256k1 / BIP-340 keypair; the control plane verifies the signature before touching the DB. No service-role keys ever leave the server.
 - **Privacy-preserving telemetry** — heartbeats carry only coarse GPU capability (vendor + VRAM tier). No hostname, platform, CPU model, or RAM total is stored.
 - **Multi-coin payments** via CoinPayPortal — BTC, BCH, ETH, SOL, POL, BNB, XRP, ADA, DOGE, plus USDT/USDC on ETH/Polygon/Solana/Base.
 - **GPU auto-detect** — nvidia-smi, rocm-smi, Apple Silicon; stashed in `providers.specs.gpus` for control-plane job matching.
+- **Host-agnostic install** — `install.sh` scans `df`, finds the biggest writable volume that isn't the root overlay, and relocates the install onto it. Works for RunPod `/workspace`, Vast.ai `/data`, Lambda `/lambda`, bare metal `/mnt/*`, anywhere.
 
 ## Security & anonymity model
 

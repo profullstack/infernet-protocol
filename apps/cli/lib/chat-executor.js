@@ -13,6 +13,7 @@
  */
 
 import { createEngine, MSG } from "@infernetprotocol/engine";
+import { loadConfig } from "./config.js";
 
 // Flush the event buffer when it hits this many tokens OR when we haven't
 // flushed in this many ms. Batching amortizes the per-request signing cost
@@ -52,10 +53,25 @@ class EventBuffer {
 // One engine per daemon process — model load happens once. Lazy so the CLI
 // doesn't pay the cost (or pull in the Mojo binary) until the first chat
 // job actually arrives.
+//
+// We pull engine.{backend,model,ollamaHost} from the saved config so the
+// daemon defaults to whatever `infernet setup` chose. The Ollama backend
+// uses `defaultModel` when the job doesn't specify one (the playground
+// /chat endpoint sometimes doesn't pass a model name). Without this
+// fallback, every model-unspecified job died with
+// "ollama backend: no model — set INFERNET_ENGINE_MODEL or pass model in the job"
 let enginePromise = null;
 function getEngine() {
     if (!enginePromise) {
-        enginePromise = createEngine().catch((err) => {
+        enginePromise = (async () => {
+            const config = (await loadConfig()) ?? {};
+            const eng = config.engine ?? {};
+            const opts = {};
+            if (eng.backend) opts.backend = eng.backend;
+            if (eng.model) opts.defaultModel = eng.model;
+            if (eng.ollamaHost) opts.host = eng.ollamaHost;
+            return createEngine(opts);
+        })().catch((err) => {
             // Reset so a transient failure doesn't permanently poison the
             // daemon — next job will retry initialization.
             enginePromise = null;

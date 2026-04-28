@@ -71,7 +71,7 @@ export default async function DashboardPage() {
                 </header>
 
                 {/* Stat cards */}
-                <section className="mb-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <section className="mb-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                     <Stat
                         label="Earnings (last 30d)"
                         value={earnings.last_30d_usd}
@@ -82,6 +82,19 @@ export default async function DashboardPage() {
                         value={spend.last_30d_usd}
                         sub={`${spend.all_time_usd} all-time · ${spend.confirmed_payments} confirmed`}
                     />
+                    <Stat
+                        label="Models served"
+                        value={models.length}
+                        sub={
+                            models.length === 0
+                                ? "Run `infernet model add` to advertise"
+                                : models.slice(0, 4).join(" · ") + (models.length > 4 ? "…" : "")
+                        }
+                    />
+                </section>
+
+                {/* Hardware cards — equal billing for GPUs and CPUs */}
+                <section className="mb-10 grid gap-4 sm:grid-cols-2">
                     <Stat
                         label="GPUs in use"
                         value={hardware.gpus.reduce((a, g) => a + g.count, 0)}
@@ -94,12 +107,14 @@ export default async function DashboardPage() {
                         }
                     />
                     <Stat
-                        label="Models served"
-                        value={models.length}
+                        label="CPU cores in use"
+                        value={hardware.cpus.reduce((a, c) => a + c.cores, 0)}
                         sub={
-                            models.length === 0
-                                ? "Run `infernet model add` to advertise"
-                                : models.slice(0, 4).join(" · ") + (models.length > 4 ? "…" : "")
+                            hardware.cpus.length > 0
+                                ? hardware.cpus.map((c) => `${c.cores} × ${c.model}`).join(" · ")
+                                : noProviders
+                                    ? "No registered providers yet"
+                                    : "Re-run `infernet register` to upload CPU info"
                         }
                     />
                 </section>

@@ -37,18 +37,6 @@ export default async function HomePage() {
       <OverviewGrid cards={overview.cards} />
       <div className="grid gap-6 xl:grid-cols-2">
         <ResourceTable
-          title="Active nodes"
-          description="Recently active nodes."
-          columns={[
-            { key: "name", label: "Node" },
-            { key: "role", label: "Role" },
-            { key: "status", label: "Status" },
-            { key: "location", label: "Location" }
-          ]}
-          rows={nodes}
-          emptyMessage="No nodes found."
-        />
-        <ResourceTable
           title="Queued jobs"
           description="Jobs in the queue right now."
           columns={[
@@ -66,7 +54,9 @@ export default async function HomePage() {
           columns={[
             { key: "name", label: "Provider" },
             { key: "status", label: "Status" },
-            { key: "gpu_model", label: "GPU" },
+            { key: "gpu_summary", label: "GPU" },
+            { key: "cpu_summary", label: "CPU" },
+            { key: "fabric", label: "Fabric" },
             { key: "price_display", label: "Price" }
           ]}
           rows={providers}

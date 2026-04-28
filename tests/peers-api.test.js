@@ -83,7 +83,7 @@ describe("listOnlinePeers — data helper", () => {
                 })
             );
             expect(Object.keys(p).sort()).toEqual(
-                ["gpu_model", "last_seen", "multiaddr", "pubkey", "served_models"]
+                ["cpu", "gpu_count", "gpu_model", "interconnects", "last_seen", "multiaddr", "pubkey", "served_models"]
             );
         }
     });
@@ -147,7 +147,8 @@ describe("GET /api/peers — contract", () => {
         const res = await GET(fakeRequest("https://example.com/api/peers"));
         const body = await res.json();
         const allowedFields = new Set([
-            "pubkey", "multiaddr", "last_seen", "served_models", "gpu_model"
+            "pubkey", "multiaddr", "last_seen", "served_models",
+            "gpu_model", "gpu_count", "cpu", "interconnects"
         ]);
         for (const peer of body.data) {
             for (const field of Object.keys(peer)) {

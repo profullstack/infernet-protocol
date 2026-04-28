@@ -5,8 +5,11 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
  * IPIP-0006 phase 1 — list recently-heartbeat'd providers as a peer
  * seed for bootstrapping new nodes.
  *
- * Returns the minimum a fresh node needs to join the network:
- *   { pubkey, multiaddr, last_seen, served_models, gpu_model }
+
+ * Returns the minimum a fresh node needs to join the network plus a
+ * coarse capability summary used by matchmaking:
+ *   { pubkey, multiaddr, last_seen, served_models, gpu_model,
+ *     gpu_count, cpu, interconnects }
  *
  * Public reads — does NOT include payout addresses, internal ids, or
  * any per-operator sensitive data. Per IPIP-0001's "minimized
@@ -33,6 +36,30 @@ function extractServedModels(specs) {
         ? specs.served_models.filter((m) => typeof m === "string")
         : [];
     return [...new Set([...fromTopLevel, ...fromGpus])];
+}
+
+function extractCpu(specs) {
+    if (!specs || typeof specs !== "object" || !specs.cpu) return null;
+    const c = specs.cpu;
+    return {
+        vendor: c.vendor ?? null,
+        arch: c.arch ?? null,
+        cores: Number.isFinite(c.cores) ? c.cores : null,
+        groups: Number.isFinite(c.groups) ? c.groups : null,
+        ram_gb: Number.isFinite(c.ram_gb) ? c.ram_gb : null
+    };
+}
+
+function extractInterconnects(specs) {
+    if (!specs || typeof specs !== "object" || !specs.interconnects) return null;
+    const ic = specs.interconnects;
+    return {
+        nvlink: !!ic.nvlink?.available,
+        xgmi: !!ic.xgmi?.available,
+        infiniband: !!ic.infiniband?.available,
+        efa: !!ic.efa?.available,
+        rdma_capable: !!ic.rdma_capable
+    };
 }
 
 /**
@@ -68,7 +95,10 @@ export async function listOnlinePeers(opts = {}) {
         multiaddr: buildMultiaddr(row.address, row.port),
         last_seen: row.last_seen,
         served_models: extractServedModels(row.specs),
-        gpu_model: row.gpu_model ?? null
+        gpu_model: row.gpu_model ?? null,
+        gpu_count: Array.isArray(row.specs?.gpus) ? row.specs.gpus.length : 0,
+        cpu: extractCpu(row.specs),
+        interconnects: extractInterconnects(row.specs)
     }));
 }
 

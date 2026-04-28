@@ -32,10 +32,44 @@ function mapProvider(row) {
     id: row.id,
     name: row.name,
     status: row.status,
-    gpu_model: row.gpu_model || "unknown",
+    gpu_summary: summarizeGpu(row),
+    cpu_summary: summarizeCpu(row.specs),
+    fabric: summarizeFabric(row.specs),
     price_display: mapCurrency(row.price),
     reputation: row.reputation ?? "—"
   };
+}
+
+function summarizeGpu(row) {
+  const specs = row.specs && typeof row.specs === "object" ? row.specs : {};
+  if (Array.isArray(specs.gpus) && specs.gpus.length > 0) {
+    const first = specs.gpus[0];
+    const more = specs.gpus.length > 1 ? ` +${specs.gpus.length - 1}` : "";
+    return `${first.model ?? first.vendor ?? "GPU"}${more}`;
+  }
+  return row.gpu_model || "—";
+}
+
+function summarizeCpu(specs) {
+  if (!specs || typeof specs !== "object" || !specs.cpu) return "—";
+  const c = specs.cpu;
+  const parts = [];
+  if (c.vendor) parts.push(c.vendor);
+  if (c.arch) parts.push(c.arch);
+  if (Number.isFinite(c.cores)) parts.push(`${c.cores} cores`);
+  return parts.join(" · ") || "—";
+}
+
+function summarizeFabric(specs) {
+  if (!specs || typeof specs !== "object" || !specs.interconnects) return "—";
+  const ic = specs.interconnects;
+  const flags = [];
+  if (ic.nvlink?.available) flags.push("NVLink");
+  if (ic.xgmi?.available) flags.push("xGMI");
+  if (ic.infiniband?.available) flags.push("IB");
+  if (ic.efa?.available) flags.push("EFA");
+  if (flags.length === 0) return ic.rdma_capable ? "RDMA" : "—";
+  return flags.join(" · ");
 }
 
 function mapJob(row) {
@@ -86,7 +120,7 @@ export async function getProviders({ limit, status } = {}) {
   const supabase = getSupabaseServerClient();
   let query = supabase
     .from("providers")
-    .select("id,name,status,gpu_model,price,reputation,created_at")
+    .select("id,name,status,gpu_model,price,reputation,specs,created_at")
     .order("created_at", { ascending: false });
 
   if (status) {

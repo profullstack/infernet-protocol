@@ -226,11 +226,20 @@ export async function getUserModelsServed(userId) {
     const models = new Set();
     for (const p of providers) {
         const specs = p.specs && typeof p.specs === "object" ? p.specs : {};
-        if (Array.isArray(specs.models)) {
-            for (const m of specs.models) {
-                if (typeof m === "string") models.add(m);
-                else if (m?.name) models.add(String(m.name));
-            }
+        // Daemon heartbeat writes specs.served_models (canonical field
+        // matching /status + /chat routing). The previous specs.models
+        // path was a stale name from an earlier schema and always
+        // returned empty — that's why /dashboard showed 0 models while
+        // /status showed correctly. Fallback kept for backwards-compat
+        // with any old rows still on disk.
+        const served = Array.isArray(specs.served_models)
+            ? specs.served_models
+            : Array.isArray(specs.models)
+                ? specs.models
+                : [];
+        for (const m of served) {
+            if (typeof m === "string") models.add(m);
+            else if (m?.name) models.add(String(m.name));
         }
     }
     return [...models];

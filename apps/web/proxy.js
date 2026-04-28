@@ -12,7 +12,7 @@ import { createServerClient } from "@supabase/ssr";
  * Skips static assets, the health probe, and a couple of public
  * non-auth API routes that don't need session context.
  */
-export async function middleware(request) {
+export async function proxy(request) {
     // Canonical host: redirect www.infernetprotocol.com → infernetprotocol.com
     // (and any other www.* host we end up answering for) with a 308 so
     // the method + body survive. We build the target URL from scratch

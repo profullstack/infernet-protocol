@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { verifyBearer } from "@/lib/auth/bearer";
 import { appUrl } from "@/lib/auth/app-url";
 
@@ -31,18 +30,11 @@ export async function GET(request) {
     const token = url.searchParams.get("token");
     const model = url.searchParams.get("model") ?? null;
 
-    let installSh = null;
-    for (const candidate of [
-        // app's public mirror (Railway runtime path)
-        join(process.cwd(), "public", "install.sh"),
-        // dev runtime — apps/web cwd
-        join(process.cwd(), "..", "..", "install.sh"),
-        // repo root
-        join(process.cwd(), "install.sh")
-    ]) {
-        installSh = await readFile(candidate, "utf8").catch(() => null);
-        if (installSh) break;
-    }
+    const installSh = await readFile(
+        new URL("../../../../public/install.sh", import.meta.url),
+        "utf8"
+    ).catch(() => null);
+
     if (!installSh) {
         return new NextResponse("# install.sh not found on this deploy\n", {
             status: 500,

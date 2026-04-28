@@ -92,10 +92,12 @@ WRAPPER="$INFERNET_BIN/infernet"
 detect_hosting_platform_ports() {
     # RunPod sets RUNPOD_TCP_PORT_<internal>=<external> for every
     # exposed port, and RUNPOD_PUBLIC_IP for the host's edge IP.
+    # POSIX sh — no `local`, prefix function-scoped vars with _ to
+    # avoid clashing with the global namespace.
     if [ -n "${RUNPOD_PUBLIC_IP:-}" ]; then
-        local _bind_port="${INFERNET_PUBLIC_PORT:-46337}"
-        local _mapped_var="RUNPOD_TCP_PORT_${_bind_port}"
-        local _mapped="$(eval "echo \${$_mapped_var:-}")"
+        _bind_port="${INFERNET_PUBLIC_PORT:-46337}"
+        _mapped_var="RUNPOD_TCP_PORT_${_bind_port}"
+        _mapped="$(eval "echo \${$_mapped_var:-}")"
         if [ -n "$_mapped" ]; then
             : "${INFERNET_BIND_PORT:=$_bind_port}"
             INFERNET_PUBLIC_PORT="$_mapped"
@@ -104,6 +106,7 @@ detect_hosting_platform_ports() {
             printf '  [hosting] RunPod detected — advertising %s:%s, daemon binds :%s\n' \
                 "$INFERNET_PUBLIC_ADDRESS" "$INFERNET_PUBLIC_PORT" "$INFERNET_BIND_PORT"
         fi
+        unset _bind_port _mapped_var _mapped
     fi
     # Other platforms can be added here as they're encountered. Default
     # is the no-op case where bind and advertise are the same port.
@@ -157,29 +160,31 @@ fi
 # Idempotent: only installs missing packages. Safe to re-run any time.
 ensure_apt_prereqs() {
     need_pkg() { command -v "$1" >/dev/null 2>&1; }
-    local missing=""
-    need_pkg curl  || missing="$missing curl"
-    need_pkg zstd  || missing="$missing zstd"
-    if [ -z "$missing" ]; then
+    _missing=""
+    need_pkg curl  || _missing="$_missing curl"
+    need_pkg zstd  || _missing="$_missing zstd"
+    if [ -z "$_missing" ]; then
+        unset _missing
         return 0
     fi
-    info "installing system prereqs:$missing"
+    info "installing system prereqs:$_missing"
     if command -v apt-get >/dev/null 2>&1; then
         $SUDO apt-get update -y >/dev/null 2>&1 || true
         # shellcheck disable=SC2086
-        $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates $missing
+        $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates $_missing
     elif command -v dnf >/dev/null 2>&1; then
         # shellcheck disable=SC2086
-        $SUDO dnf install -y ca-certificates $missing
+        $SUDO dnf install -y ca-certificates $_missing
     elif command -v yum >/dev/null 2>&1; then
         # shellcheck disable=SC2086
-        $SUDO yum install -y ca-certificates $missing
+        $SUDO yum install -y ca-certificates $_missing
     elif command -v apk >/dev/null 2>&1; then
         # shellcheck disable=SC2086
-        $SUDO apk add --no-cache ca-certificates $missing
+        $SUDO apk add --no-cache ca-certificates $_missing
     else
-        warn "no apt-get / dnf / yum / apk found — please install$missing manually"
+        warn "no apt-get / dnf / yum / apk found — please install$_missing manually"
     fi
+    unset _missing
 }
 
 # ---------------------------------------------------------------------------
@@ -222,11 +227,16 @@ EOF
 try_install_node_unattended() {
     # Idempotent: skips if Node 18+ is already installed. Returns
     # 0 if Node ends up usable, 1 if we couldn't install it (caller
-    # falls back to the manual hint).
+    # falls back to the manual hint). POSIX sh — function-scoped
+    # vars prefixed with _ to keep the global namespace clean.
     if command -v node >/dev/null 2>&1; then
-        local v="$(node -v | sed 's/^v//')"
-        local major="$(echo "$v" | cut -d. -f1)"
-        [ "${major:-0}" -ge 18 ] && return 0
+        _node_v="$(node -v | sed 's/^v//')"
+        _node_major="$(echo "$_node_v" | cut -d. -f1)"
+        if [ "${_node_major:-0}" -ge 18 ]; then
+            unset _node_v _node_major
+            return 0
+        fi
+        unset _node_v _node_major
     fi
     case "$OS" in
         linux)

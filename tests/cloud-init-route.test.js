@@ -18,7 +18,8 @@ describe("GET /api/deploy/cloud-init", () => {
         expect(res.headers.get("content-type")).toMatch(/text\/x-shellscript/);
         expect(res.headers.get("cache-control")).toBe("no-store");
         const body = await res.text();
-        expect(body).toContain("#!/usr/bin/env bash");
+        // POSIX sh — install.sh works under /bin/sh, /bin/bash, /bin/dash.
+        expect(body).toMatch(/^#!\/bin\/sh\b/);
         // The route returns the canonical install.sh body — anchor on
         // a stable string that lives in install.sh so we catch
         // accidental drift.

@@ -79,6 +79,38 @@ REPO_RAW_BASE="https://raw.githubusercontent.com/profullstack/infernet-protocol"
 DEFAULT_REF="master"
 NPM_PACKAGE="@infernetprotocol/cli"
 
+# ---------------------------------------------------------------------------
+# Operator identity resolution — never assume root, never trust env alone.
+# `curl | sh` invocations can land with HOME / USER unset (cron, container
+# init, /etc/skel-less images). Fall back through whoami → id → getent →
+# uid-based default. If we still can't determine, fail loud.
+# ---------------------------------------------------------------------------
+_inf_resolve_user() {
+    if [ -n "${USER:-}" ]; then echo "$USER"; return 0; fi
+    _u="$(whoami 2>/dev/null || id -un 2>/dev/null)"
+    [ -n "$_u" ] && { echo "$_u"; return 0; }
+    [ "$(id -u 2>/dev/null || echo 0)" = "0" ] && { echo "root"; return 0; }
+    echo "node"
+}
+
+_inf_resolve_home() {
+    # If $HOME is set and exists, trust it.
+    if [ -n "${HOME:-}" ] && [ -d "$HOME" ]; then echo "$HOME"; return 0; fi
+    # Look it up via getent on the resolved user.
+    _u="$(_inf_resolve_user)"
+    _h="$(getent passwd "$_u" 2>/dev/null | awk -F: '{print $6}')"
+    if [ -n "$_h" ] && [ -d "$_h" ]; then echo "$_h"; return 0; fi
+    # Last resort — uid 0 → /root, else /tmp/$user.
+    if [ "$(id -u 2>/dev/null || echo 0)" = "0" ]; then echo "/root"; return 0; fi
+    _h="/tmp/$_u"
+    mkdir -p "$_h" 2>/dev/null || true
+    echo "$_h"
+}
+
+USER="$(_inf_resolve_user)"
+HOME="$(_inf_resolve_home)"
+export USER HOME
+
 INFERNET_HOME="${INFERNET_HOME:-$HOME/.infernet}"
 INFERNET_BIN="${INFERNET_BIN:-$HOME/.local/bin}"
 INFERNET_REF="${INFERNET_REF:-$DEFAULT_REF}"
@@ -1009,6 +1041,8 @@ auto_bootstrap_native() {
 main() {
     printf '\n'
     printf '%sInfernet Protocol installer%s\n' "$BOLD" "$RESET"
+    printf '  user:        %s (uid=%s)\n' "$USER" "$(id -u 2>/dev/null || echo ?)"
+    printf '  home:        %s\n' "$HOME"
     printf '  install dir: %s\n' "$INFERNET_HOME"
     printf '  bin dir:     %s\n' "$INFERNET_BIN"
     printf '  ref:         %s\n' "$INFERNET_REF"

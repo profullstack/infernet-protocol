@@ -41,6 +41,8 @@ const PROFITABILITY_PERKS = [
     "Free laptop — macOS or HP Envy",
     "Free monthly API credits",
     "Free Starlink Mini",
+    "Competitive salary regardless of location",
+    "Work from anywhere at any time",
     "Health care and dental coverage",
     "Retirement account",
     "Free coworking / cooking space",

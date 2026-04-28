@@ -24,5 +24,18 @@
     "@infernetprotocol/cli": "workspace:*",
     "@infernetprotocol/engine": "workspace:^",
     "vitest": "^3.0.8"
+  },
+  "pnpm": {
+    "overrides": {
+      "postcss": "8.5.10",
+      "tmp": "0.2.4",
+      "tar": "7.5.11",
+      "@tootallnate/once": "3.0.1",
+      "send": "0.19.0",
+      "semver": "7.7.3",
+      "fast-xml-parser": "5.7.0",
+      "@xmldom/xmldom": "0.8.13",
+      "uuid": "14.0.0"
+    }
   }
 }

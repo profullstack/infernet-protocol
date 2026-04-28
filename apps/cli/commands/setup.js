@@ -183,13 +183,13 @@ function runSubcommand(subcommand, extraArgs = []) {
 }
 
 /**
- * Returns true if the control plane has a row for this node's pubkey.
- * Treats an unauthenticated 4xx as "not registered yet" (which is what
- * a missing row produces). Network errors → false so we don't block on
- * a transient outage.
+ * Fetch the control-plane row for this node, or null. Network/auth
+ * errors → null so we don't block on a transient outage. Note that
+ * /api/v1/node/me wraps the row as `{ row: <actual> }`, so we have to
+ * unwrap before deciding whether registration succeeded.
  */
-async function isRegistered(config) {
-    if (!config?.controlPlane?.url || !config?.node?.publicKey) return false;
+async function fetchSelfRow(config) {
+    if (!config?.controlPlane?.url || !config?.node?.publicKey) return null;
     try {
         const client = createNodeClient({
             url: config.controlPlane.url,
@@ -198,11 +198,36 @@ async function isRegistered(config) {
             role: config.node.role,
             timeoutMs: 5000
         });
-        const row = await client.me();
-        return !!row;
+        const resp = await client.me();
+        return resp?.row ?? null;
     } catch {
-        return false;
+        return null;
     }
+}
+
+async function isRegistered(config) {
+    return (await fetchSelfRow(config)) !== null;
+}
+
+/**
+ * After `infernet start` we want to know the daemon's heartbeats are
+ * actually landing on the control plane — not just that the local IPC
+ * socket is alive. Poll /me until last_seen is recent, or give up.
+ */
+async function waitForFreshHeartbeat(config, { timeoutMs = 45000, freshMs = 60000 } = {}) {
+    const deadline = Date.now() + timeoutMs;
+    let lastRow = null;
+    while (Date.now() < deadline) {
+        const row = await fetchSelfRow(config);
+        if (row) {
+            lastRow = row;
+            const lastSeen = row.last_seen ? Date.parse(row.last_seen) : 0;
+            const fresh = Number.isFinite(lastSeen) && Date.now() - lastSeen < freshMs;
+            if (fresh && row.status === "available") return { ok: true, row };
+        }
+        await new Promise((r) => setTimeout(r, 3000));
+    }
+    return { ok: false, row: lastRow };
 }
 
 async function pullModel(name) {
@@ -289,11 +314,18 @@ export default async function setup(args) {
     process.stdout.write("\nInfernet setup — checking your environment\n");
 
     // Step count: hardware (1) + node (1) + ollama+model (0|2) + firewall (0|1)
-    // + config (1) + identity (0|1) + registration (0|1) + daemon (0|1).
-    // For simplicity over precision, just budget the maximum and we display
-    // the actual step number out of the running total.
-    let total = backend === "ollama" ? 5 : 4;
+    //   + config (1) + identity (0|1) + registration (0|1) + daemon (0|1)
+    //   + login (0|1).
+    // Track the actual maximum so the printed counter never goes [7/6].
+    const isProviderRole = (existing?.node?.role ?? "provider") === "provider";
+    let total = 2; // hardware + node.js
+    if (backend === "ollama") total += 2; // ollama + model
     if (!skipFirewall && process.platform === "linux") total += 1;
+    total += 1; // config
+    if (!skipIdentity) total += 1;
+    if (!skipRegister && isProviderRole) total += 1;
+    if (!skipDaemon && isProviderRole) total += 1;
+    total += 1; // login (always offered)
     let n = 0;
 
     // ---- Hardware (always; first so the operator sees what setup sees) ----
@@ -565,6 +597,53 @@ export default async function setup(args) {
             } else {
                 process.stdout.write("  skipped — run `infernet start` later\n");
             }
+        }
+
+        // Heartbeat verification — alive locally isn't enough; the control
+        // plane needs to see a fresh last_seen before chat will route to us.
+        if (await isDaemonAlive(500)) {
+            process.stdout.write("  verifying heartbeat reaches control plane (up to 45s)...\n");
+            const res = await waitForFreshHeartbeat(configAfterId);
+            if (res.ok) {
+                ok(`heartbeat ok — last_seen ${res.row.last_seen}, status=${res.row.status}`);
+            } else if (res.row) {
+                warn(
+                    `daemon alive locally but control plane shows stale state ` +
+                    `(last_seen=${res.row.last_seen ?? "never"}, status=${res.row.status ?? "?"}). ` +
+                    `Check 'infernet logs' for heartbeat errors.`
+                );
+            } else {
+                warn(
+                    `control plane has no row for this pubkey. Either registration ` +
+                    `didn't complete, or the daemon is using a different identity. ` +
+                    `Try 'infernet register' then 'infernet doctor'.`
+                );
+            }
+        }
+    }
+
+    // ---- Login (offer to chain into device-code flow) ----
+    n += 1;
+    step(n, total, "Sign-in");
+    const alreadySignedIn = !!(configAfterId?.auth?.bearerToken);
+    if (alreadySignedIn) {
+        ok(`signed in as ${configAfterId.auth.email ?? configAfterId.auth.userId}`);
+    } else {
+        process.stdout.write("  Sign in to view your dashboard, manage payouts, and submit paid jobs.\n");
+        let proceed = false;
+        if (yes) {
+            // Don't auto-launch a browser flow under --yes; surface the next step instead.
+            process.stdout.write("  --yes set; skipping. Run `infernet login` when ready.\n");
+        } else {
+            const ans = await question("  Sign in now (opens browser)?", { default: "y" });
+            proceed = ans.toLowerCase().startsWith("y");
+        }
+        if (proceed) {
+            const code = await runSubcommand("login", []);
+            if (code !== 0) warn("  login did not complete — re-run `infernet login` later");
+            else ok("signed in");
+        } else if (!yes) {
+            process.stdout.write("  skipped — run `infernet login` later\n");
         }
     }
 

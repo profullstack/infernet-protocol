@@ -61,7 +61,7 @@
 #   INFERNET_CONTROL_PLANE=URL    default https://infernetprotocol.com
 #   INFERNET_MODEL=name           default qwen2.5:7b
 #   INFERNET_NODE_ROLE=role       provider | aggregator | client (default provider)
-#   INFERNET_NODE_NAME=name       human-readable name (default $(hostname))
+#   INFERNET_NODE_NAME=name       human-readable name (default user@host)
 #   INFERNET_PUBLIC_PORT=port     P2P port (default 46337)
 #   INFERNET_AUTOSTART=0          set to 0 to install only, skip setup+start
 #
@@ -88,7 +88,10 @@ INFERNET_AUTOSTART="${INFERNET_AUTOSTART:-1}"
 INFERNET_CONTROL_PLANE="${INFERNET_CONTROL_PLANE:-https://infernetprotocol.com}"
 INFERNET_MODEL="${INFERNET_MODEL:-qwen2.5:7b}"
 INFERNET_NODE_ROLE="${INFERNET_NODE_ROLE:-provider}"
-INFERNET_NODE_NAME="${INFERNET_NODE_NAME:-$(hostname 2>/dev/null || echo node)}"
+# Default to user@host so operators recognize their own nodes in the
+# dashboard. Falls back to plain hostname if neither $USER nor whoami
+# resolves (rare — happens in scratch containers without /etc/passwd).
+INFERNET_NODE_NAME="${INFERNET_NODE_NAME:-${USER:-$(whoami 2>/dev/null || echo node)}@$(hostname 2>/dev/null || echo host)}"
 INFERNET_PUBLIC_PORT="${INFERNET_PUBLIC_PORT:-46337}"
 INFERNET_BIND_PORT="${INFERNET_BIND_PORT:-}"
 INFERNET_BEARER="${INFERNET_BEARER:-}"

@@ -124,8 +124,14 @@ export default async function init(args) {
     }
 
     if (!name) {
+        // Default to user@host — operators recognize their own boxes
+        // by user@host; "provider@hostname" reads as ad-copy, not as
+        // an identifier they own.
+        const userPart = process.env.USER ?? (() => {
+            try { return os.userInfo().username; } catch { return null; }
+        })() ?? role;
         name = await question('Human-readable node name', {
-            default: `${role}@${os.hostname()}`
+            default: `${userPart}@${os.hostname()}`
         });
     }
 

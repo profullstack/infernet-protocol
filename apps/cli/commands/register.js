@@ -250,7 +250,11 @@ export default async function register(args, ctx) {
         }
     }
 
-    process.stdout.write(`Registering ${node.role} "${node.nodeId}"...\n`);
+    // Display: lead with the human-readable name when one is configured;
+    // fall back to the machine node_id otherwise. Operators recognize
+    // their own user@host name; nobody recognizes "provider-0f44326c".
+    const displayName = node.name && node.name !== node.nodeId ? node.name : node.nodeId;
+    process.stdout.write(`Registering ${node.role} "${displayName}" (node_id=${node.nodeId})...\n`);
 
     let row;
     try {

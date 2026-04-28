@@ -119,6 +119,14 @@ export async function heartbeatNode({ role, pubkey, body }) {
     }
     if (typeof body.address === "string") patch.address = body.address;
     if (Number.isFinite(body.port)) patch.port = Number(body.port);
+    // IPIP-0008: heartbeats may carry a fresh `specs` snapshot so the
+    // control plane reflects current CPU / GPU / served_models without
+    // requiring a separate `infernet register`. The daemon caches and
+    // refreshes this every ~5 min; we accept whatever shape arrives —
+    // sanitization already happened CLI-side via gatherCoarseSpecs.
+    if (body.specs && typeof body.specs === "object" && !Array.isArray(body.specs)) {
+        patch.specs = body.specs;
+    }
 
     const { error } = await supabase.from(table).update(patch).eq("id", existing.id);
     if (error) throw withStatus(error.message, 500);

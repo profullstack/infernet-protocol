@@ -36,6 +36,7 @@ import { spawnDetachedDaemon } from '../lib/daemonize.js';
 import { isDaemonAlive } from '../lib/ipc.js';
 import { resolveP2pPort, detectLocalAddress, formatEndpoint } from '../lib/network.js';
 import { executeChatJob, failChatJob, shutdownEngine } from '../lib/chat-executor.js';
+import { gatherCoarseSpecs } from './register.js';
 
 const HELP = `infernet start — run the node daemon
 
@@ -178,12 +179,39 @@ async function runDaemon(args, ctx) {
     let p2pConnections = 0;
     let p2pLastConnectionAt = null;
 
+    // Specs cache — re-detection (nvidia-smi, /sys/class/infiniband, Ollama
+    // /api/tags) is cheap but not free. Refresh every SPECS_TTL_MS so the
+    // control plane sees current served-models / hardware without paying
+    // the detection cost on every 30s heartbeat.
+    const SPECS_TTL_MS = 5 * 60 * 1000;
+    let cachedSpecs = null;
+    let cachedSpecsAt = 0;
+
+    async function freshSpecs() {
+        if (node.role !== 'provider') return null;
+        const now = Date.now();
+        if (cachedSpecs && now - cachedSpecsAt < SPECS_TTL_MS) return cachedSpecs;
+        try {
+            cachedSpecs = await gatherCoarseSpecs();
+            cachedSpecsAt = now;
+            return cachedSpecs;
+        } catch (err) {
+            process.stderr.write(`specs detection failed: ${err?.message ?? err}\n`);
+            return cachedSpecs; // fall back to last known good
+        }
+    }
+
     async function heartbeat() {
         const payload = { status: 'available' };
         if (!noAdvertise) {
             if (advertisedAddress) payload.address = advertisedAddress;
             if (!p2pDisabled) payload.port = p2pPort;
         }
+        // Provider role only: include current specs so the control plane
+        // sees fresh CPU / GPU / served_models without requiring a manual
+        // `infernet register` after each capability change.
+        const specs = await freshSpecs();
+        if (specs) payload.specs = specs;
         try {
             await client.heartbeat(payload);
             stats.heartbeatsOk += 1;

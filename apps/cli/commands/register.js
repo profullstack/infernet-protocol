@@ -107,7 +107,7 @@ function summarizeCpu() {
     };
 }
 
-async function gatherCoarseSpecs() {
+export async function gatherCoarseSpecs() {
     const [gpus, interconnects, config] = await Promise.all([
         detectGpus(),
         detectInterconnects(),
@@ -228,4 +228,4 @@ export default async function register(args, ctx) {
     return 0;
 }
 
-export { HELP };
+export { HELP, vramTier, summarizeCpu, summarizeInterconnects };

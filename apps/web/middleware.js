@@ -29,6 +29,12 @@ export async function middleware(request) {
 
     const response = NextResponse.next({ request });
 
+    // Hiring beacon — anyone running `curl -I https://infernetprotocol.com/`
+    // (or hitting any of our API endpoints) sees this header and can
+    // click through. Cheap discovery channel for the operators / devs
+    // already poking at our surface area.
+    response.headers.set("X-Hiring", "https://infernetprotocol.com/careers");
+
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     // If Supabase isn't configured (e.g. local dev without an .env), skip

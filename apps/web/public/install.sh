@@ -31,7 +31,7 @@
 #   INFERNET_REF=branch           branch/tag/commit for git path (master)
 #   INFERNET_NPM_VERSION=X.Y.Z    pin npm version (latest)
 #   INFERNET_FORCE_GIT=1          skip npm, force git path
-#   INFERNET_MIN_DISK_MB=N        override disk-space threshold (3072 / 8192)
+#   INFERNET_MIN_DISK_MB=N        override disk-space threshold (3072 / 12288)
 #   INFERNET_SKIP_DISK_CHECK=1    skip the disk-space preflight
 #
 # Auto-bootstrap (everything below is optional — the script still works
@@ -146,12 +146,16 @@ detect_os() {
 # disk-space preflight
 #
 # pnpm install on this monorepo is ~1.5 GB, Node 20 via mise is ~80 MB,
-# and `infernet setup` will pull a model (qwen2.5:7b ≈ 4.4 GB) when a
-# bearer token is set. Failing halfway through a 4 GB model pull is a
-# bad UX — bail loudly up front instead.
+# and `infernet setup` will pull a model when a bearer token is set.
+# Larger model sizes to keep in mind:
+#   qwen2.5:7b              ≈ 4.4 GB
+#   qwen3.5-uncensored:9b   ≈ 7.4 GB
+#   llama3:70b              ≈ 40+ GB (operator handles their own)
+# Failing halfway through a multi-GB model pull is a bad UX — bail
+# loudly up front instead.
 #
 # Override:
-#   INFERNET_MIN_DISK_MB=N      override threshold (default: 3072 / 8192)
+#   INFERNET_MIN_DISK_MB=N      override threshold (default: 3072 / 12288)
 #   INFERNET_SKIP_DISK_CHECK=1  skip the check entirely
 # ---------------------------------------------------------------------------
 free_mb_at() {
@@ -171,10 +175,12 @@ check_disk_space() {
     if [ "${INFERNET_SKIP_DISK_CHECK:-}" = "1" ]; then
         return 0
     fi
-    # Default 3 GB without bearer (just the install). 8 GB with bearer
-    # because the auto-bootstrap will pull a model after we exit.
+    # Default 3 GB without bearer (just the install). 12 GB with bearer
+    # because the auto-bootstrap will pull a model after we exit, and
+    # comfortable models go up to ~7.5 GB (qwen3.5-uncensored:9b) plus
+    # ~2 GB install + headroom.
     if [ -n "$INFERNET_BEARER" ]; then
-        _default_need=8192
+        _default_need=12288
     else
         _default_need=3072
     fi

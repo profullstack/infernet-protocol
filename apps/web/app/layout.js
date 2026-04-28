@@ -22,6 +22,10 @@ export const metadata = {
     title: "Infernet Protocol — Bitcoin for AI inference",
     description:
       "Decentralized GPU compute. No native token, no rent extraction, no permission required."
+  },
+  icons: {
+    icon: "/logo.svg",
+    shortcut: "/logo.svg"
   }
 };
 

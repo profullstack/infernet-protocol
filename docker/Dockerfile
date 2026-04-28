@@ -83,7 +83,7 @@ RUN pnpm --filter @infernetprotocol/web build
 # ---------------------------------------------------------------------------
 FROM base AS production
 ENV NODE_ENV=production \
-    PORT=3000 \
+    PORT=8080 \
     HOSTNAME=0.0.0.0
 
 COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
@@ -93,7 +93,7 @@ COPY --from=builder /app/apps/web            ./apps/web
 COPY --from=builder /app/packages            ./packages
 COPY --from=builder /app/node_modules        ./node_modules
 
-EXPOSE 3000
+EXPOSE 8080
 
 # pnpm --filter resolves the workspace and runs `next start` in
 # /app/apps/web with the right node_modules on PATH.

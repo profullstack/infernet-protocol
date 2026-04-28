@@ -13,6 +13,18 @@ import { createServerClient } from "@supabase/ssr";
  * non-auth API routes that don't need session context.
  */
 export async function middleware(request) {
+    // Canonical host: redirect www.infernetprotocol.com → infernetprotocol.com
+    // (and any other www.* host we end up answering for) with a 308 so
+    // the method + body survive. Strip the leading "www." and bounce.
+    const host = request.headers.get("host") ?? "";
+    if (host.startsWith("www.")) {
+        const target = new URL(request.url);
+        target.host = host.slice(4);
+        // Force https on the redirect — proxies sometimes hand us http.
+        target.protocol = "https:";
+        return NextResponse.redirect(target, 308);
+    }
+
     const response = NextResponse.next({ request });
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

@@ -15,11 +15,13 @@ export default function HomePage() {
       {/* Hero */}
       <section className="relative overflow-hidden border-b border-white/10">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-start gap-8 px-6 py-20 sm:py-28 lg:px-10">
-          <p className="text-xs font-semibold uppercase tracking-[0.4em] text-[var(--accent)]">
-            Infernet Protocol
-          </p>
+          <img
+            src="/logo.svg"
+            alt="Infernet Protocol"
+            className="h-12 w-auto sm:h-14"
+          />
           <h1 className="max-w-4xl text-5xl font-semibold leading-[1.05] tracking-tight text-white sm:text-6xl lg:text-7xl">
-            Bitcoin for AI inference.
+            We&apos;re doing to AI what Bitcoin did to money.
           </h1>
           <p className="max-w-2xl text-lg leading-8 text-[var(--muted)] sm:text-xl">
             A peer-to-peer GPU inference marketplace. Run one CLI command, point it at any model

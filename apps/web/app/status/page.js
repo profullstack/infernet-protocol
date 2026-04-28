@@ -26,15 +26,15 @@ export default async function HomePage() {
 
   return (
     <DashboardShell
-      eyebrow="Server-managed control plane"
-      title="Infernet orchestration on Next.js + Supabase"
-      description="All data fetching is executed on the server. The browser only talks to Next.js routes and rendered server components."
+      eyebrow="Network status"
+      title="Infernet network status"
+      description="Live snapshot of nodes, jobs, providers, models, clients, and aggregators on the network."
     >
       <OverviewGrid cards={overview.cards} />
       <div className="grid gap-6 xl:grid-cols-2">
         <ResourceTable
           title="Active nodes"
-          description="Nodes exposed through server-side Supabase queries."
+          description="Recently active nodes."
           columns={[
             { key: "name", label: "Node" },
             { key: "role", label: "Role" },
@@ -46,7 +46,7 @@ export default async function HomePage() {
         />
         <ResourceTable
           title="Queued jobs"
-          description="Jobs are read through route-backed services."
+          description="Jobs in the queue right now."
           columns={[
             { key: "title", label: "Job" },
             { key: "status", label: "Status" },
@@ -70,7 +70,7 @@ export default async function HomePage() {
         />
         <ResourceTable
           title="Models"
-          description="Model registry from Supabase."
+          description="Available models."
           columns={[
             { key: "name", label: "Model" },
             { key: "family", label: "Family" },
@@ -82,7 +82,7 @@ export default async function HomePage() {
         />
         <ResourceTable
           title="Clients"
-          description="Consumers using the control plane APIs."
+          description="Clients using the control plane."
           columns={[
             { key: "name", label: "Client" },
             { key: "status", label: "Status" },

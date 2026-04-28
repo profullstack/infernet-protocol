@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAuthClient } from "@/lib/supabase/auth-server";
 import { parseAuthBody, wantsRedirect } from "@/lib/auth/parse-body";
+import { appUrl } from "@/lib/auth/app-url";
 
 export const dynamic = "force-dynamic";
-
-function appUrl() {
-    return process.env.NEXT_PUBLIC_APP_URL ?? "https://infernetprotocol.com";
-}
 
 /**
  * Two flows behind one endpoint:
@@ -22,7 +19,7 @@ export async function POST(request) {
     if (!email) {
         return wantHtml
             ? NextResponse.redirect(
-                new URL(`/auth/login?error=${encodeURIComponent("email required")}`, request.url),
+                new URL(`/auth/login?error=${encodeURIComponent("email required")}`, appUrl()),
                 { status: 303 }
             )
             : NextResponse.json({ error: "email required" }, { status: 400 });
@@ -35,13 +32,13 @@ export async function POST(request) {
         if (error) {
             return wantHtml
                 ? NextResponse.redirect(
-                    new URL(`/auth/login?error=${encodeURIComponent(error.message)}`, request.url),
+                    new URL(`/auth/login?error=${encodeURIComponent(error.message)}`, appUrl()),
                     { status: 303 }
                 )
                 : NextResponse.json({ error: error.message }, { status: 401 });
         }
         return wantHtml
-            ? NextResponse.redirect(new URL("/status", request.url), { status: 303 })
+            ? NextResponse.redirect(new URL("/status", appUrl()), { status: 303 })
             : NextResponse.json({ ok: true });
     }
 
@@ -53,13 +50,13 @@ export async function POST(request) {
     if (error) {
         return wantHtml
             ? NextResponse.redirect(
-                new URL(`/auth/login?error=${encodeURIComponent(error.message)}`, request.url),
+                new URL(`/auth/login?error=${encodeURIComponent(error.message)}`, appUrl()),
                 { status: 303 }
             )
             : NextResponse.json({ error: error.message }, { status: 400 });
     }
 
     return wantHtml
-        ? NextResponse.redirect(new URL("/auth/check-email?reason=magic-link", request.url), { status: 303 })
+        ? NextResponse.redirect(new URL("/auth/check-email?reason=magic-link", appUrl()), { status: 303 })
         : NextResponse.json({ ok: true, message: "Magic link sent." });
 }

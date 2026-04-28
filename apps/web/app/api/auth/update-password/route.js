@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAuthClient } from "@/lib/supabase/auth-server";
 import { parseAuthBody, wantsRedirect } from "@/lib/auth/parse-body";
+import { appUrl } from "@/lib/auth/app-url";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export async function POST(request) {
         const msg = `password must be at least ${MIN_PASSWORD_LENGTH} characters`;
         return wantHtml
             ? NextResponse.redirect(
-                new URL(`/auth/update-password?error=${encodeURIComponent(msg)}`, request.url),
+                new URL(`/auth/update-password?error=${encodeURIComponent(msg)}`, appUrl()),
                 { status: 303 }
             )
             : NextResponse.json({ error: msg }, { status: 400 });
@@ -28,13 +29,13 @@ export async function POST(request) {
     if (error) {
         return wantHtml
             ? NextResponse.redirect(
-                new URL(`/auth/update-password?error=${encodeURIComponent(error.message)}`, request.url),
+                new URL(`/auth/update-password?error=${encodeURIComponent(error.message)}`, appUrl()),
                 { status: 303 }
             )
             : NextResponse.json({ error: error.message }, { status: 400 });
     }
 
     return wantHtml
-        ? NextResponse.redirect(new URL("/status?password-updated=1", request.url), { status: 303 })
+        ? NextResponse.redirect(new URL("/status?password-updated=1", appUrl()), { status: 303 })
         : NextResponse.json({ ok: true });
 }

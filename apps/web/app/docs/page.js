@@ -508,11 +508,11 @@ supabase db reset                               # applies all migrations
 # 2. Build + run
 pnpm install
 pnpm --filter @infernetprotocol/web build
-pnpm --filter @infernetprotocol/web start       # http://localhost:3000
+pnpm --filter @infernetprotocol/web start       # http://localhost:8080
 
 # Or via Docker (uses the multi-stage Dockerfile in docker/)
 docker build -t infernet-control-plane -f docker/Dockerfile .
-docker run --env-file .env -p 3000:3000 infernet-control-plane`}
+docker run --env-file .env -p 8080:8080 infernet-control-plane`}
                 </CodeBlock>
                 <p>Operators who choose your deployment:</p>
                 <CodeBlock>

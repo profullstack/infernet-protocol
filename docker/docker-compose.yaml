@@ -7,10 +7,10 @@ services:
       dockerfile: docker/Dockerfile
     container_name: infernet-app
     ports:
-      - "3000:3000"
+      - "8080:8080"
     environment:
       - NODE_ENV=production
-      - PORT=3000
+      - PORT=8080
       - SUPABASE_URL=http://host.docker.internal:54321
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     restart: unless-stopped

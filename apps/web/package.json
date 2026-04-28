@@ -5,9 +5,9 @@
   "description": "Infernet Protocol control plane — Next.js + Supabase web app",
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 8080",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 8080",
     "lint": "next lint"
   },
   "dependencies": {
@@ -16,6 +16,7 @@
     "@infernetprotocol/deploy-providers": "workspace:*",
     "@infernetprotocol/nim-adapter": "workspace:*",
     "@infernetprotocol/payments": "workspace:*",
+    "@profullstack/favicon-generator": "^1.1.4",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.49.8",
     "clsx": "^2.1.1",

@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAuthClient } from "@/lib/supabase/auth-server";
 import { parseAuthBody, wantsRedirect } from "@/lib/auth/parse-body";
+import { appUrl } from "@/lib/auth/app-url";
 
 export const dynamic = "force-dynamic";
-
-function appUrl() {
-    return process.env.NEXT_PUBLIC_APP_URL ?? "https://infernetprotocol.com";
-}
 
 export async function POST(request) {
     const { email } = await parseAuthBody(request);
@@ -15,7 +12,7 @@ export async function POST(request) {
     if (!email) {
         return wantHtml
             ? NextResponse.redirect(
-                new URL(`/auth/reset-password?error=${encodeURIComponent("email required")}`, request.url),
+                new URL(`/auth/reset-password?error=${encodeURIComponent("email required")}`, appUrl()),
                 { status: 303 }
             )
             : NextResponse.json({ error: "email required" }, { status: 400 });
@@ -34,6 +31,6 @@ export async function POST(request) {
     }
 
     return wantHtml
-        ? NextResponse.redirect(new URL("/auth/check-email?reason=reset", request.url), { status: 303 })
+        ? NextResponse.redirect(new URL("/auth/check-email?reason=reset", appUrl()), { status: 303 })
         : NextResponse.json({ ok: true, message: "If that email is registered, a reset link has been sent." });
 }

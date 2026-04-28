@@ -38,6 +38,13 @@
 #                                 the biggest writable mount when it has
 #                                 ≥2x more free space than $HOME)
 #
+# Engine selection (optional):
+#
+#   INFERNET_INSTALL_VLLM=0       skip vLLM install even on NVIDIA
+#   INFERNET_INSTALL_VLLM=1       force vLLM install (fails on non-NVIDIA)
+#   INFERNET_VLLM_MODEL=name      auto-start `vllm serve <name>` in background
+#                                 after install (e.g. Qwen/Qwen2.5-7B-Instruct)
+#
 # Auto-bootstrap (everything below is optional — the script still works
 # without them, but with these set it leaves the node fully running
 # without ever needing an interactive `infernet setup` afterwards):
@@ -327,7 +334,8 @@ check_disk_space() {
     # — if missing, the Ollama install path is the lighter CPU/Vulkan one.
     if [ -n "$INFERNET_BEARER" ]; then
         if command -v nvidia-smi >/dev/null 2>&1; then
-            _default_need=15360   # 15 GB — install + Ollama+CUDA + ~7 GB model + headroom
+            # 15 GB Ollama+CUDA + 5 GB vLLM venv + 5 GB headroom for tar peaks
+            _default_need=25600   # 25 GB — Ollama+CUDA + vLLM + ~7 GB model + headroom
         else
             _default_need=10240   # 10 GB — install + Ollama (no CUDA) + model + headroom
         fi
@@ -602,6 +610,115 @@ clone_or_update() {
     fi
 }
 
+# ---------------------------------------------------------------------------
+# GPU vendor detection + vLLM install (NVIDIA only).
+#
+# Ollama covers every box we care about (NVIDIA / AMD / Apple Silicon /
+# CPU). vLLM only runs on NVIDIA + CUDA 12.x. When we see nvidia-smi we
+# install vLLM in addition to Ollama so the operator gets the high-
+# throughput option as well — auto-select picks vLLM ahead of Ollama if
+# both are running (IPIP-0009).
+#
+# Opt-out: INFERNET_INSTALL_VLLM=0
+# Force on (will fail loudly without nvidia-smi): INFERNET_INSTALL_VLLM=1
+# Auto-start vllm serve <model>: set INFERNET_VLLM_MODEL=<repo/name>
+# ---------------------------------------------------------------------------
+detect_gpu_vendor() {
+    if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
+        echo nvidia
+    elif command -v rocm-smi >/dev/null 2>&1; then
+        echo amd
+    elif [ "$OS" = "macos" ] && system_profiler SPDisplaysDataType 2>/dev/null | grep -q "Apple"; then
+        echo apple
+    else
+        echo none
+    fi
+}
+
+try_install_vllm() {
+    # Skip if explicitly disabled, or if not on NVIDIA.
+    case "${INFERNET_INSTALL_VLLM:-auto}" in
+        0|no|false|"") return 0 ;;
+    esac
+    GPU_VENDOR="$(detect_gpu_vendor)"
+    if [ "$GPU_VENDOR" != "nvidia" ]; then
+        if [ "${INFERNET_INSTALL_VLLM:-auto}" = "1" ] || [ "${INFERNET_INSTALL_VLLM:-auto}" = "yes" ]; then
+            warn "INFERNET_INSTALL_VLLM=1 set but no NVIDIA GPU detected — vLLM is NVIDIA-only"
+            return 1
+        fi
+        info "non-NVIDIA host ($GPU_VENDOR) — skipping vLLM (Ollama covers this hardware)"
+        return 0
+    fi
+
+    info "NVIDIA GPU detected — installing vLLM alongside Ollama"
+    _vllm_dir="$INFERNET_HOME/vllm-venv"
+
+    # Need Python 3.11 in the venv. mise can install it; reuse the
+    # binary we already provisioned for Node.
+    _mise_bin="${MISE_INSTALL_PATH:-$HOME/.local/bin/mise}"
+    if [ -x "$_mise_bin" ]; then
+        info "  → installing Python 3.11 via mise"
+        "$_mise_bin" install python@3.11 || warn "mise install python@3.11 failed"
+        "$_mise_bin" use --global python@3.11 || warn "mise use --global python@3.11 failed"
+        # Re-trust after mise rewrites config.toml.
+        "$_mise_bin" trust "$HOME/.config/mise/config.toml" >/dev/null 2>&1 || true
+    fi
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        warn "python3 not on PATH — can't install vLLM. Set INFERNET_INSTALL_VLLM=0 to silence."
+        unset _vllm_dir _mise_bin
+        return 1
+    fi
+
+    info "  → creating venv at $_vllm_dir"
+    if ! python3 -m venv "$_vllm_dir"; then
+        warn "python3 -m venv failed — install python3-venv (apt) and re-run"
+        unset _vllm_dir _mise_bin
+        return 1
+    fi
+
+    # uv is dramatically faster than pip for the multi-GB vLLM install.
+    info "  → installing uv (fast pip frontend) in venv"
+    "$_vllm_dir/bin/pip" install --upgrade --quiet pip uv || warn "uv install failed; will fall back to pip"
+
+    info "  → installing vLLM (~5 GB of CUDA wheels; this takes 5-15 min)"
+    if [ -x "$_vllm_dir/bin/uv" ]; then
+        "$_vllm_dir/bin/uv" pip install --python "$_vllm_dir/bin/python" vllm \
+            || { warn "uv pip install vllm failed; trying pip"; "$_vllm_dir/bin/pip" install vllm; }
+    else
+        "$_vllm_dir/bin/pip" install vllm || { warn "pip install vllm failed"; unset _vllm_dir _mise_bin; return 1; }
+    fi
+
+    # Symlink vllm onto $INFERNET_BIN so operators can run it without
+    # remembering the venv path.
+    if [ -x "$_vllm_dir/bin/vllm" ]; then
+        mkdir -p "$INFERNET_BIN"
+        ln -sf "$_vllm_dir/bin/vllm" "$INFERNET_BIN/vllm"
+        ok "vLLM installed at $_vllm_dir/bin/vllm (linked to $INFERNET_BIN/vllm)"
+    else
+        warn "vllm binary missing after install — see logs above"
+        unset _vllm_dir _mise_bin
+        return 1
+    fi
+
+    # Auto-start a vllm serve daemon if INFERNET_VLLM_MODEL is set.
+    if [ -n "${INFERNET_VLLM_MODEL:-}" ]; then
+        info "  → starting 'vllm serve $INFERNET_VLLM_MODEL' in the background"
+        _vllm_log="$INFERNET_HOME/vllm.log"
+        nohup "$_vllm_dir/bin/vllm" serve "$INFERNET_VLLM_MODEL" \
+            --host 0.0.0.0 --port 8000 \
+            > "$_vllm_log" 2>&1 &
+        printf '%d\n' $! > "$INFERNET_HOME/vllm.pid"
+        ok "vllm serve started (pid $!) — logs: $_vllm_log"
+        unset _vllm_log
+    else
+        printf '  to serve a model later: %s/vllm serve <repo/name> --host 0.0.0.0 --port 8000\n' "$INFERNET_BIN"
+        printf '  or set INFERNET_VLLM_MODEL=<repo/name> and re-run this installer to auto-start.\n'
+    fi
+
+    unset _vllm_dir _mise_bin
+}
+
 run_install() {
     info "running pnpm install (downloads ~1.5 GB of node_modules; takes 1-3 min)"
     # Stream pnpm output directly to the terminal so the operator can
@@ -777,6 +894,11 @@ main() {
         check_path
         used_npm=0
     fi
+
+    # On NVIDIA hosts, also install vLLM so the operator gets the
+    # high-throughput engine alongside Ollama. Skipped on AMD / Apple
+    # Silicon / CPU. Opt-out: INFERNET_INSTALL_VLLM=0.
+    try_install_vllm || warn "vLLM install hit issues — continuing with Ollama only"
 
     printf '\n%sInstall complete.%s\n' "$GREEN" "$RESET"
 

@@ -3,6 +3,7 @@ import OverviewGrid from "@/components/overview-grid";
 import ResourceTable from "@/components/resource-table";
 import SiteHeader from "@/components/site-header";
 import SiteFooter from "@/components/site-footer";
+import AutoRefresh from "@/components/auto-refresh";
 import {
   getAggregators,
   getClients,
@@ -34,6 +35,7 @@ export default async function HomePage() {
       title="Infernet network status"
       description="Live snapshot of nodes, jobs, providers, models, clients, and aggregators on the network."
     >
+      <div className="flex justify-end"><AutoRefresh intervalMs={10000} /></div>
       <OverviewGrid cards={overview.cards} />
       <div className="grid gap-6 xl:grid-cols-2">
         <ResourceTable

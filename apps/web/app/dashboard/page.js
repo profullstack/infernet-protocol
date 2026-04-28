@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import SiteHeader from "@/components/site-header";
 import SiteFooter from "@/components/site-footer";
+import AutoRefresh from "@/components/auto-refresh";
 import { getCurrentUser } from "@/lib/supabase/auth-server";
 import {
     getEarningsSummary,
@@ -57,7 +58,8 @@ export default async function DashboardPage() {
                             Your nodes, jobs, and money flow on the Infernet network.
                         </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <AutoRefresh intervalMs={10000} />
                         <CopyableUserId id={user.id} />
                         <form action="/api/auth/logout" method="post">
                             <button

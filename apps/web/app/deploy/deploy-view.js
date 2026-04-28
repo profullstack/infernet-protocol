@@ -1,210 +1,200 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
- * One-click deploy UI.
+ * One-click deploy UI — universal cloud-init + provider deep links.
  *
  * Flow:
- *   1. User pastes their RunPod API key.
- *   2. We hit /api/deploy/runpod/gpu-types to list GPUs visible to them.
- *   3. They pick a GPU + name the node + paste control-plane creds.
- *   4. POST /api/deploy/runpod spins up a pod running the infernet
- *      provider image. Response shows the deployment id.
+ *   1. If signed in, "Mint deploy token" calls /api/v1/user/deploy/provision
+ *      to get a 24h bearer + a customized cloud-init URL.
+ *   2. Show a one-liner the user can paste anywhere (their own server,
+ *      a DigitalOcean droplet's user_data, a RunPod custom-image pod, etc.)
+ *   3. Provider-specific cards link to RunPod / DigitalOcean's "deploy"
+ *      flows with the cloud-init URL pre-filled where possible.
  *
- * Credentials: the user's RunPod API key and the Supabase service-role
- * key are both sent in the request body and immediately dropped by the
- * server. They are NOT stored. We display a prominent disclosure.
+ * No API keys are pasted into this page. The cloud-init script does
+ * everything inside the rented box; we just hand it a token that lets
+ * the new node attach itself to the user's account.
  */
 export default function DeployView() {
-  const [apiKey, setApiKey] = useState("");
-  const [gpuTypes, setGpuTypes] = useState([]);
-  const [gpuTypeId, setGpuTypeId] = useState("");
-  const [loadingGpus, setLoadingGpus] = useState(false);
-  const [supabaseUrl, setSupabaseUrl] = useState("");
-  const [supabaseServiceRoleKey, setSupabaseServiceRoleKey] = useState("");
-  const [name, setName] = useState("");
-  const [role, setRole] = useState("provider");
-  const [deploying, setDeploying] = useState(false);
-  const [deployment, setDeployment] = useState(null);
-  const [error, setError] = useState(null);
+    const [token, setToken] = useState(null);
+    const [cloudInitUrl, setCloudInitUrl] = useState(null);
+    const [expiresAt, setExpiresAt] = useState(null);
+    const [error, setError] = useState(null);
+    const [signedIn, setSignedIn] = useState(null);
+    const [origin, setOrigin] = useState("https://infernetprotocol.com");
 
-  async function listGpus() {
-    if (!apiKey) {
-      setError("Paste your RunPod API key first.");
-      return;
+    useEffect(() => {
+        if (typeof window !== "undefined") setOrigin(window.location.origin);
+    }, []);
+
+    async function mint() {
+        setError(null);
+        try {
+            const res = await fetch("/api/v1/user/deploy/provision", { method: "POST" });
+            if (res.status === 401) {
+                setSignedIn(false);
+                throw new Error("Sign in first to mint a deploy token.");
+            }
+            const body = await res.json();
+            if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
+            setToken(body.data.token);
+            setCloudInitUrl(`${origin}${body.data.cloud_init_url}`);
+            setExpiresAt(body.data.expires_at);
+            setSignedIn(true);
+        } catch (e) {
+            setError(e?.message ?? String(e));
+        }
     }
-    setError(null);
-    setLoadingGpus(true);
-    setGpuTypes([]);
-    setGpuTypeId("");
-    try {
-      const res = await fetch("/api/deploy/runpod/gpu-types", {
-        headers: { "x-runpod-api-key": apiKey }
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
-      setGpuTypes(body.gpuTypes ?? []);
-    } catch (e) {
-      setError(e?.message ?? String(e));
-    } finally {
-      setLoadingGpus(false);
-    }
-  }
 
-  async function deploy() {
-    if (!apiKey || !gpuTypeId || !supabaseUrl || !supabaseServiceRoleKey) {
-      setError("Fill in API key, GPU type, and Supabase credentials.");
-      return;
-    }
-    setError(null);
-    setDeploying(true);
-    setDeployment(null);
-    try {
-      const res = await fetch("/api/deploy/runpod", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiKey,
-          gpuTypeId,
-          supabaseUrl,
-          supabaseServiceRoleKey,
-          name: name || undefined,
-          role
-        })
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
-      setDeployment(body);
-    } catch (e) {
-      setError(e?.message ?? String(e));
-    } finally {
-      setDeploying(false);
-    }
-  }
+    const fullUrl = cloudInitUrl ?? `${origin}/api/deploy/cloud-init`;
+    const oneLiner = `curl -fsSL '${fullUrl}' | bash`;
 
-  return (
-    <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-10">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-        <header className="rounded-[2rem] border border-white/10 bg-[var(--panel)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur">
-          <p className="text-xs uppercase tracking-[0.35em] text-[var(--accent)]">One-click deploy</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-white">Rent a GPU, earn crypto</h1>
-          <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
-            Launch an Infernet provider on RunPod in one click. Your pod boots from a prebuilt image, registers with the control plane, and starts accepting inference jobs automatically. No SSH. No package install.
-          </p>
-          <p className="mt-4 rounded-xl border border-[var(--warn)]/40 bg-[var(--warn)]/10 px-4 py-3 text-xs leading-5 text-[var(--warn)]">
-            Credentials (RunPod API key, Supabase service-role key) are proxied through the server and <strong>never stored</strong>. They are used once to launch the pod and forgotten. Inspect the network tab if you want to verify.
-          </p>
-        </header>
+    return (
+        <main className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6 lg:px-10">
+            <header className="mb-8 space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.4em] text-[var(--accent)]">
+                    Rent a GPU, run a node
+                </p>
+                <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                    Spin up a provider on RunPod or DigitalOcean.
+                </h1>
+                <p className="max-w-2xl text-sm leading-6 text-[var(--muted)]">
+                    Universal bootstrap: one cloud-init script that works on any Linux box.
+                    Pulls the CLI, installs Ollama, picks a model, registers, and starts heartbeating —
+                    all in one boot. No SSH afterwards.
+                </p>
+            </header>
 
-        <section className="rounded-[2rem] border border-white/10 bg-[var(--panel)] p-6">
-          <h2 className="text-lg font-semibold text-white">1. RunPod</h2>
-          <p className="mt-1 text-xs text-[var(--muted)]">
-            Get an API key at <a className="underline" href="https://www.runpod.io/console/user/settings" target="_blank" rel="noreferrer">runpod.io/console/user/settings</a>.
-          </p>
-          <div className="mt-4 flex gap-2">
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="rp_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-              className="flex-1 rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-4 py-3 font-mono text-xs text-white outline-none"
-            />
-            <button
-              type="button"
-              onClick={listGpus}
-              disabled={loadingGpus || !apiKey}
-              className="rounded-xl bg-[var(--accent-strong)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-black disabled:opacity-40"
-            >
-              {loadingGpus ? "…" : "List GPUs"}
-            </button>
-          </div>
+            {/* Token mint */}
+            <section className="mb-8 rounded-[1.5rem] border border-white/10 bg-[var(--panel)] p-6 backdrop-blur">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 className="text-lg font-semibold text-white">1. Mint a deploy token</h2>
+                        <p className="mt-1 text-sm text-[var(--muted)]">
+                            24h-scoped bearer. The new node uses it to auto-link itself to your account.
+                            Skip this step if you want the node to be unlinked (you can claim its pubkey later via{" "}
+                            <code>infernet pubkey link</code>).
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={mint}
+                        className="inline-flex shrink-0 rounded-full bg-[var(--accent-strong)] px-5 py-2.5 text-sm font-semibold text-[var(--bg)] transition hover:bg-[var(--accent)]"
+                    >
+                        {token ? "Re-mint" : "Mint deploy token"}
+                    </button>
+                </div>
+                {signedIn === false ? (
+                    <p className="mt-4 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-100">
+                        Not signed in. <a href="/auth/login?next=/deploy" className="underline">Sign in</a> or paste your CLI token first via <code>infernet login</code>.
+                    </p>
+                ) : null}
+                {token ? (
+                    <p className="mt-4 text-xs text-[var(--muted)]">
+                        ✓ Minted. Expires <span className="font-mono text-[var(--accent)]">{expiresAt}</span>.
+                    </p>
+                ) : null}
+                {error ? (
+                    <p className="mt-4 rounded-lg border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200">
+                        {error}
+                    </p>
+                ) : null}
+            </section>
 
-          {gpuTypes.length > 0 ? (
-            <div className="mt-4">
-              <label className="block text-xs uppercase tracking-[0.25em] text-[var(--muted)]">GPU type</label>
-              <select
-                value={gpuTypeId}
-                onChange={(e) => setGpuTypeId(e.target.value)}
-                className="mt-2 w-full rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-4 py-3 text-sm text-white"
-              >
-                <option value="">— select —</option>
-                {gpuTypes.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name} · {(g.vramMb / 1024).toFixed(0)} GB · ${g.pricePerHour ?? "?"}/hr · {g.region}
-                  </option>
+            {/* The one-liner */}
+            <section className="mb-8 rounded-[1.5rem] border border-white/10 bg-[var(--panel)] p-6 backdrop-blur">
+                <h2 className="text-lg font-semibold text-white">2. Paste this into your rented box</h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                    Works on DigitalOcean, RunPod custom images, AWS, GCP, bare metal — anywhere with{" "}
+                    <code>curl</code> and root.
+                </p>
+                <pre className="mt-4 overflow-x-auto rounded-lg bg-[var(--panel-strong)] p-4 text-xs leading-6 text-[var(--accent)]">
+{oneLiner}
+                </pre>
+                <p className="mt-3 text-xs text-[var(--muted)]">
+                    Need to override the model or port? See env vars at{" "}
+                    <a href={fullUrl} target="_blank" rel="noreferrer" className="underline">
+                        /api/deploy/cloud-init
+                    </a>
+                    .
+                </p>
+            </section>
+
+            {/* Provider cards */}
+            <section className="mb-8 grid gap-4 sm:grid-cols-2">
+                <ProviderCard
+                    title="DigitalOcean"
+                    blurb="Cheapest path: a $0.06/hr CPU droplet boots in ~30s. Use the GPU droplets for inference jobs that need them."
+                    steps={[
+                        <>
+                            Create a Droplet at{" "}
+                            <a href="https://cloud.digitalocean.com/droplets/new" target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
+                                cloud.digitalocean.com/droplets/new
+                            </a>
+                            . Pick a GPU droplet (or any size for CPU-only).
+                        </>,
+                        <>
+                            In <em>Advanced Options → Add Initialization scripts (user data)</em>, paste:
+                        </>,
+                        <pre className="overflow-x-auto rounded bg-[var(--panel-strong)] p-2 text-xs leading-5 text-[var(--accent)]">
+{`#cloud-config
+runcmd:
+  - ${oneLiner}`}
+                        </pre>,
+                        <>Click Create. The node registers itself within ~2 min.</>
+                    ]}
+                />
+                <ProviderCard
+                    title="RunPod"
+                    blurb="Cheapest GPU rent. Spin up an RTX 4090 or A100 by the hour. Cold start ~45s for the model pull."
+                    steps={[
+                        <>
+                            Create a Pod at{" "}
+                            <a href="https://www.runpod.io/console/pods" target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
+                                runpod.io/console/pods
+                            </a>
+                            . Pick a GPU + the <code>runpod/base:0.6.2-cuda12.4.1-ubuntu22.04</code> template (or any Ubuntu image).
+                        </>,
+                        <>Expose TCP port <code>46337</code> (the daemon's P2P port).</>,
+                        <>In <em>Container Start Command</em>, paste:</>,
+                        <pre className="overflow-x-auto rounded bg-[var(--panel-strong)] p-2 text-xs leading-5 text-[var(--accent)]">
+{`bash -lc "${oneLiner}"`}
+                        </pre>,
+                        <>Deploy. Watch your node appear at <a href="/dashboard" className="text-[var(--accent)] underline">/dashboard</a>.</>
+                    ]}
+                />
+            </section>
+
+            <section className="rounded-[1.5rem] border border-white/10 bg-[var(--panel)] p-6 text-sm text-[var(--muted)]">
+                <h2 className="mb-3 text-lg font-semibold text-white">After it boots</h2>
+                <ul className="ml-5 list-disc space-y-1.5">
+                    <li>The node registers, pulls the model, opens its P2P port, and starts heartbeating.</li>
+                    <li>If you minted a deploy token, the node is auto-linked to your account — visible at <a href="/dashboard" className="text-[var(--accent)] underline">/dashboard</a> within a minute.</li>
+                    <li>To swap models later, SSH in and run <code>ollama pull &lt;model&gt;</code> — the next heartbeat will advertise it automatically.</li>
+                    <li>To wind down: stop / destroy the box at the cloud provider. Heartbeats stop within 2 min and the node falls out of routing.</li>
+                </ul>
+            </section>
+        </main>
+    );
+}
+
+function ProviderCard({ title, blurb, steps }) {
+    return (
+        <div className="rounded-[1.5rem] border border-white/10 bg-[var(--panel)] p-6 backdrop-blur">
+            <h3 className="text-lg font-semibold text-white">{title}</h3>
+            <p className="mt-1 text-sm text-[var(--muted)]">{blurb}</p>
+            <ol className="mt-4 space-y-3 text-sm text-[var(--muted)]">
+                {steps.map((step, i) => (
+                    <li key={i} className="flex gap-3">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--accent)]/15 text-[10px] font-semibold text-[var(--accent)]">
+                            {i + 1}
+                        </span>
+                        <div className="space-y-2">{step}</div>
+                    </li>
                 ))}
-              </select>
-            </div>
-          ) : null}
-        </section>
-
-        <section className="rounded-[2rem] border border-white/10 bg-[var(--panel)] p-6">
-          <h2 className="text-lg font-semibold text-white">2. Control plane</h2>
-          <p className="mt-1 text-xs text-[var(--muted)]">
-            Where should the node report home? Use your own self-hosted Supabase or the Infernet cloud URL.
-          </p>
-          <div className="mt-4 grid gap-3">
-            <input
-              value={supabaseUrl}
-              onChange={(e) => setSupabaseUrl(e.target.value)}
-              placeholder="https://<project-ref>.supabase.co"
-              className="rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-4 py-3 text-sm text-white outline-none"
-            />
-            <input
-              type="password"
-              value={supabaseServiceRoleKey}
-              onChange={(e) => setSupabaseServiceRoleKey(e.target.value)}
-              placeholder="Supabase service-role key"
-              className="rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-4 py-3 font-mono text-xs text-white outline-none"
-            />
-          </div>
-        </section>
-
-        <section className="rounded-[2rem] border border-white/10 bg-[var(--panel)] p-6">
-          <h2 className="text-lg font-semibold text-white">3. Node</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Optional node name"
-              className="rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-4 py-3 text-sm text-white outline-none"
-            />
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-4 py-3 text-sm text-white"
-            >
-              <option value="provider">provider</option>
-              <option value="aggregator">aggregator</option>
-            </select>
-          </div>
-          <button
-            type="button"
-            onClick={deploy}
-            disabled={deploying || !gpuTypeId}
-            className="mt-5 w-full rounded-xl bg-[var(--accent-strong)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-black disabled:opacity-40"
-          >
-            {deploying ? "Deploying…" : "Deploy to RunPod"}
-          </button>
-        </section>
-
-        {error ? (
-          <div className="rounded-2xl border border-[var(--warn)]/40 bg-[var(--warn)]/10 px-4 py-3 text-sm text-[var(--warn)]">
-            {error}
-          </div>
-        ) : null}
-
-        {deployment ? (
-          <div className="rounded-2xl border border-[var(--accent)]/40 bg-[var(--accent)]/5 px-4 py-4 text-sm text-white">
-            <p className="font-semibold">Pod launched 🎉</p>
-            <pre className="mt-2 overflow-x-auto text-xs text-[var(--muted)]">{JSON.stringify(deployment, null, 2)}</pre>
-            <p className="mt-2 text-xs text-[var(--muted)]">
-              It may take 1–3 minutes to boot and register. Watch for it on the <a className="underline" href="/">dashboard</a>.
-            </p>
-          </div>
-        ) : null}
-      </div>
-    </main>
-  );
+            </ol>
+        </div>
+    );
 }

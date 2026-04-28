@@ -89,7 +89,9 @@ export default async function DashboardPage() {
                         value={models.length}
                         sub={
                             models.length === 0
-                                ? "Run `infernet model add` to advertise"
+                                ? noProviders
+                                    ? "Register a node to advertise models"
+                                    : "Run `infernet model add <name>` to pull and advertise"
                                 : models.slice(0, 4).join(" · ") + (models.length > 4 ? "…" : "")
                         }
                     />

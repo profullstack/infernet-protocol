@@ -123,7 +123,18 @@ async function cmdPull(host, name) {
     // Quick reachability check before spawning ollama, so we get a friendly
     // error rather than a confusing CLI-not-found if Ollama isn't installed.
     await fetchTags(host);
-    await streamPull(name);
+    try {
+        await streamPull(name);
+    } catch (err) {
+        process.stderr.write(`error: ${err?.message ?? err}\n`);
+        process.stderr.write(
+            `\nNothing pulled. Common causes:\n` +
+            `  - typo in the model spec (try \`ollama list\` on the registry: https://ollama.com/library)\n` +
+            `  - missing tag — try the bare model name (e.g. qwen2.5 → qwen2.5:latest)\n` +
+            `  - private / gated model — pull manually with \`ollama pull ${name}\` to see the raw error\n`
+        );
+        return 1;
+    }
     return 0;
 }
 

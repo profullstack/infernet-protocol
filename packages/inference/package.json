@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/inference",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Distributed inference coordinator and worker for the Infernet Protocol.",
   "license": "MIT",
   "type": "module",

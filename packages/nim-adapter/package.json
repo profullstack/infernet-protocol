@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/nim-adapter",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "NVIDIA NIM / build.nvidia.com adapter for the Infernet Protocol — treats NIM's OpenAI-compatible endpoint as a fallback inference provider.",
   "license": "MIT",
   "type": "module",

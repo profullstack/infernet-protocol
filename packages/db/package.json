@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/db",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Supabase-backed model layer for the Infernet Protocol (Provider, Client, Job, Aggregator).",
   "license": "MIT",
   "type": "module",

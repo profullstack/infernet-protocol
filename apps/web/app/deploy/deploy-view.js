@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import CopyButton from "@/components/copy-button";
+import ProviderLogos from "@/components/provider-logos";
 
 /**
  * One-click deploy UI — universal cloud-init + provider deep links.
@@ -216,7 +217,12 @@ wsl --install -d Ubuntu`}
                 />
             </section>
 
-            <section className="rounded-[1.5rem] border border-white/10 bg-[var(--panel)] p-6 text-sm text-[var(--muted)]">
+            <ProviderLogos
+                heading="Auto-detected on"
+                subheading="install.sh scans every mounted filesystem and relocates the install onto whatever big volume your platform exposes — no per-platform config."
+            />
+
+            <section className="mt-8 rounded-[1.5rem] border border-white/10 bg-[var(--panel)] p-6 text-sm text-[var(--muted)]">
                 <h2 className="mb-3 text-lg font-semibold text-white">After it boots</h2>
                 <ul className="ml-5 list-disc space-y-1.5">
                     <li>The node registers, pulls the model, opens its P2P port, and starts heartbeating.</li>

@@ -234,7 +234,11 @@ EOF
         unset _src _dst
     }
     relocate_dot_dir ".config/infernet"
-    relocate_dot_dir ".config/mise"
+    # NOTE: do NOT symlink ~/.config/mise — mise canonicalizes config
+    # paths when storing trust state, and a symlinked config dir
+    # creates a path-resolution mismatch where `mise trust` records
+    # one path and child processes look up another. The config is
+    # tiny (~50 bytes), keeping it on the overlay is fine.
     relocate_dot_dir ".cache/infernet"
     relocate_dot_dir ".ollama"
 
@@ -466,27 +470,40 @@ try_install_node_unattended() {
         return 1
     fi
 
+    # Auto-confirm any trust prompts (non-interactive install).
+    MISE_YES=1
+    export MISE_YES
+
     # Use mise by absolute path — no PATH dependency.
     "$_mise_bin" install node@20 >/dev/null 2>&1 || warn "mise install node@20 failed"
     "$_mise_bin" use --global node@20 >/dev/null 2>&1 || warn "mise use --global node@20 failed"
 
     # Trust the config we just wrote. mise refuses to read untrusted
-    # config.toml files (security feature), and `mise use --global`
+    # config.toml files (security feature) and `mise use --global`
     # writes a fresh one — without this, every subsequent `node` /
-    # `npm` invocation that goes through mise's shim layer prints
-    # noisy "Config files are not trusted" errors and exits non-zero,
-    # which in turn breaks pnpm install's subprocess scripts.
+    # `npm` invocation through mise's shim layer prints "Config files
+    # are not trusted" and exits non-zero, breaking pnpm subprocess
+    # scripts. Trust BOTH the symlink path and the canonical path
+    # (mise canonicalizes paths internally and child processes may
+    # look up either form).
     _mise_global_cfg="$HOME/.config/mise/config.toml"
     if [ -f "$_mise_global_cfg" ]; then
         "$_mise_bin" trust "$_mise_global_cfg" >/dev/null 2>&1 || true
+        _mise_canon="$(readlink -f "$_mise_global_cfg" 2>/dev/null || echo "$_mise_global_cfg")"
+        if [ "$_mise_canon" != "$_mise_global_cfg" ]; then
+            "$_mise_bin" trust "$_mise_canon" >/dev/null 2>&1 || true
+        fi
+        unset _mise_canon
     fi
-    # Belt-and-suspenders: also allowlist the parent dir via env var
-    # so future invocations (the wrapper, `infernet setup`, etc.)
-    # don't re-trip the trust prompt. Set globally for this script's
-    # remaining lifetime; the wrapper sets it independently at runtime.
-    MISE_TRUSTED_CONFIG_PATHS="$HOME/.config/mise"
+    # Belt-and-suspenders: allowlist parent dirs via env var so future
+    # invocations don't re-trip trust. Include both possible paths.
+    _mise_cfg_dirs="$HOME/.config/mise"
+    if [ -L "$HOME/.config/mise" ]; then
+        _mise_cfg_dirs="$_mise_cfg_dirs:$(readlink -f "$HOME/.config/mise" 2>/dev/null)"
+    fi
+    MISE_TRUSTED_CONFIG_PATHS="$_mise_cfg_dirs"
     export MISE_TRUSTED_CONFIG_PATHS
-    unset _mise_global_cfg
+    unset _mise_global_cfg _mise_cfg_dirs
 
     # Now expose the shims so plain `node` / `npm` works for the rest
     # of the script and for the wrapper at runtime.
@@ -608,11 +625,20 @@ write_wrapper() {
 # config has activated mise yet (containers, fresh logins, cron).
 _mise_data="\${MISE_DATA_DIR:-\${XDG_DATA_HOME:-\$HOME/.local/share}/mise}"
 [ -d "\$_mise_data/shims" ] && PATH="\$_mise_data/shims:\$PATH"
-# mise refuses to read untrusted config.toml files. install.sh ran
-# 'mise trust' on it once, but allowlist the parent dir as well so
-# fresh shells, containers, or rebuilt mise caches don't re-prompt.
-: "\${MISE_TRUSTED_CONFIG_PATHS:=\$HOME/.config/mise}"
+# mise refuses to read untrusted config.toml files. Allowlist the
+# config dir (and its canonical form if it's a symlink) so child
+# mise invocations don't re-prompt. MISE_YES backstops any trust
+# prompt that slips through.
+: "\${MISE_YES:=1}"
+export MISE_YES
+_mise_cfg="\$HOME/.config/mise"
+if [ -L "\$_mise_cfg" ]; then
+    : "\${MISE_TRUSTED_CONFIG_PATHS:=\$_mise_cfg:\$(readlink -f "\$_mise_cfg" 2>/dev/null)}"
+else
+    : "\${MISE_TRUSTED_CONFIG_PATHS:=\$_mise_cfg}"
+fi
 export MISE_TRUSTED_CONFIG_PATHS
+unset _mise_cfg
 exec node "$SOURCE_DIR/apps/cli/index.js" "\$@"
 EOF
     chmod +x "$WRAPPER"

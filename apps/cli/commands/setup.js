@@ -540,63 +540,45 @@ export default async function setup(args) {
     const role = configAfterId?.node?.role ?? "provider";
     const isProvider = role === "provider";
 
-    // ---- Registration (calls `infernet register` if needed; providers only) ----
+    // ---- Registration (always re-runs; register is an upsert, and the
+    //      payload shape — specs.cpu, specs.interconnects, etc. — evolves,
+    //      so re-registering keeps the row current with the running CLI). ----
     if (!skipRegister && isProvider && configAfterId) {
         n += 1;
         step(n, total, "Provider registration");
-        const registered = await isRegistered(configAfterId);
-        if (registered) {
-            ok("already registered with the control plane");
+        const code = await runSubcommand("register", []);
+        if (code !== 0) {
+            fail(`register exited ${code}`);
+            warn("  re-run `infernet register` once the control plane is reachable");
         } else {
-            warn("not registered yet");
-            let proceed = yes;
-            if (!yes) {
-                const ans = await question("  Register now?", { default: "y" });
-                proceed = ans.toLowerCase().startsWith("y");
-            }
-            if (proceed) {
-                const code = await runSubcommand("register", []);
-                if (code !== 0) {
-                    fail(`register exited ${code}`);
-                    warn("  re-run `infernet register` once the control plane is reachable");
-                } else {
-                    ok("registered");
-                }
-            } else {
-                process.stdout.write("  skipped — run `infernet register` later\n");
-            }
+            ok("registered (specs synced)");
         }
     }
 
-    // ---- Daemon (offers to start it; providers only) ----
+    // ---- Daemon (always restart so it picks up current CLI code; providers only) ----
     if (!skipDaemon && isProvider && configAfterId) {
         n += 1;
         step(n, total, "Daemon");
-        const alive = await isDaemonAlive(500);
-        if (alive) {
-            ok("daemon already running");
+        const wasAlive = await isDaemonAlive(500);
+        if (wasAlive) {
+            process.stdout.write("  daemon was running — restarting so it picks up current CLI code\n");
+            try {
+                await runSubcommand("stop", []);
+            } catch {
+                // best-effort
+            }
+            // Give the OS a moment to release the IPC socket / pidfile.
+            await new Promise((r) => setTimeout(r, 800));
+        }
+        const startCode = await runSubcommand("start", []);
+        if (startCode !== 0) {
+            fail(`start exited ${startCode}`);
+            warn("  check `infernet logs` and `infernet status`");
         } else {
-            warn("daemon not running");
-            let proceed = yes;
-            if (!yes) {
-                const ans = await question("  Start the daemon now (detached)?", { default: "y" });
-                proceed = ans.toLowerCase().startsWith("y");
-            }
-            if (proceed) {
-                const code = await runSubcommand("start", []);
-                if (code !== 0) {
-                    fail(`start exited ${code}`);
-                    warn("  check `infernet logs` and `infernet status`");
-                } else {
-                    // start detaches; give it a beat then verify.
-                    await new Promise((r) => setTimeout(r, 1500));
-                    const aliveNow = await isDaemonAlive(800);
-                    if (aliveNow) ok("daemon running");
-                    else warn("daemon spawned but not yet responding — check `infernet status`");
-                }
-            } else {
-                process.stdout.write("  skipped — run `infernet start` later\n");
-            }
+            await new Promise((r) => setTimeout(r, 1500));
+            const aliveNow = await isDaemonAlive(800);
+            if (aliveNow) ok(wasAlive ? "daemon restarted" : "daemon started");
+            else warn("daemon spawned but not yet responding — check `infernet status`");
         }
 
         // Heartbeat verification — alive locally isn't enough; the control
@@ -622,17 +604,17 @@ export default async function setup(args) {
         }
     }
 
-    // ---- Login (offer to chain into device-code flow) ----
+    // ---- Login (offer to chain into device-code flow; auto-links pubkey on success) ----
     n += 1;
     step(n, total, "Sign-in");
     const alreadySignedIn = !!(configAfterId?.auth?.bearerToken);
+    let didLogin = false;
     if (alreadySignedIn) {
         ok(`signed in as ${configAfterId.auth.email ?? configAfterId.auth.userId}`);
     } else {
         process.stdout.write("  Sign in to view your dashboard, manage payouts, and submit paid jobs.\n");
         let proceed = false;
         if (yes) {
-            // Don't auto-launch a browser flow under --yes; surface the next step instead.
             process.stdout.write("  --yes set; skipping. Run `infernet login` when ready.\n");
         } else {
             const ans = await question("  Sign in now (opens browser)?", { default: "y" });
@@ -641,10 +623,19 @@ export default async function setup(args) {
         if (proceed) {
             const code = await runSubcommand("login", []);
             if (code !== 0) warn("  login did not complete — re-run `infernet login` later");
-            else ok("signed in");
+            else { ok("signed in"); didLogin = true; }
         } else if (!yes) {
             process.stdout.write("  skipped — run `infernet login` later\n");
         }
+    }
+
+    // ---- Pubkey link (only needed when already-signed-in: a fresh login
+    //      already auto-links via login.js → autoLinkPubkey). Without this
+    //      step, /dashboard couldn't tell which providers belong to a user
+    //      who signed in before they ran `infernet init`. ----
+    if (alreadySignedIn && !didLogin && isProvider && configAfterId?.node?.publicKey) {
+        const code = await runSubcommand("pubkey", ["link"]);
+        if (code !== 0) warn("  pubkey link did not complete — re-run `infernet pubkey link` manually");
     }
 
     process.stdout.write("\n");

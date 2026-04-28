@@ -1,7 +1,7 @@
 export const metadata = {
     title: "Careers — Infernet Protocol",
     description:
-        "Build a decentralized GPU compute marketplace. Open roles: DiPaC Architect (equity-only) and Internship (AI monkey)."
+        "Build a decentralized GPU compute marketplace. Open roles: DiPaC Architect (equity-only) and Internship (AI babysitter)."
 };
 
 const ROLES = [
@@ -15,12 +15,13 @@ const ROLES = [
         ]
     },
     {
-        title: "Internship (AI monkey)",
+        title: "Internship (AI babysitter)",
         compensation: "Stipend + equity",
         location: "Remote",
         body: [
-            "Run experiments. Push code. Break things. Help wire vLLM/Ollama/Petals into the engine adapter, build dashboards, write docs, debug live operator issues.",
-            "Curiosity > credentials. We don't care if you're a CS junior or self-taught — we care that you can read a stack trace and ship a fix the same day."
+            "A code monkey with real engineering chops who manages AI agents (Claude Code, Codex, etc.) instead of typing every line by hand. You write the prompts, review the diffs, push the buttons, and own the outcome — the AI is your apprentice, not your replacement.",
+            "Day-to-day: drive AI agents through real PRs (engine adapters, dashboards, daemon fixes), spot when they're hallucinating APIs, redirect when they go off-rails, and ship the result. You'll need enough engineering judgment to recognize bad code when an agent confidently produces it.",
+            "Curiosity > credentials. We don't care if you're a CS junior or self-taught — we care that you can read a stack trace, write a correct prompt, and ship a fix the same day."
         ]
     }
 ];

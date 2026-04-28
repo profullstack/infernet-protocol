@@ -10,7 +10,7 @@ export default function AuthFormShell({ title, subtitle, error, children, footer
         <main className="flex min-h-screen items-center justify-center px-4 py-10">
             <div className="w-full max-w-md">
                 <Link href="/" className="mb-8 inline-flex" aria-label="Infernet Protocol home">
-                    <img src="/logo.svg" alt="Infernet Protocol" className="h-8 w-auto" />
+                    <img src="/logo.svg" alt="Infernet Protocol" className="h-16 w-auto" />
                 </Link>
 
                 <div className="rounded-[1.5rem] border border-white/10 bg-[var(--panel)] p-8 backdrop-blur">

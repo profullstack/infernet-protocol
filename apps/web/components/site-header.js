@@ -12,7 +12,7 @@ export default function SiteHeader() {
         <header className="border-b border-white/10 bg-[var(--bg)]/80 backdrop-blur">
             <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-6 px-6 py-4 lg:px-10">
                 <Link href="/" aria-label="Infernet Protocol home" className="inline-flex">
-                    <img src="/logo.svg" alt="Infernet Protocol" className="h-7 w-auto" />
+                    <img src="/logo.svg" alt="Infernet Protocol" className="h-14 w-auto" />
                 </Link>
                 <nav className="hidden items-center gap-x-6 text-sm text-[var(--muted)] sm:flex">
                     {NAV.map((item) => (

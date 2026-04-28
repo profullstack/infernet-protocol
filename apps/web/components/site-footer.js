@@ -24,7 +24,7 @@ export default function SiteFooter() {
             <div className="grid gap-10 border-t border-white/10 pt-10 sm:grid-cols-[1.4fr_1fr_1fr]">
                 <div className="space-y-3">
                     <Link href="/" aria-label="Infernet Protocol home" className="inline-flex">
-                        <img src="/logo.svg" alt="Infernet Protocol" className="h-7 w-auto" />
+                        <img src="/logo.svg" alt="Infernet Protocol" className="h-14 w-auto" />
                     </Link>
                     <p className="max-w-sm text-sm leading-6 text-[var(--muted)]">
                         Decentralized GPU compute for inference and distributed training. No native

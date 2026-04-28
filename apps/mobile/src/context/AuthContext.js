@@ -2,6 +2,12 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { supabase } from '../lib/supabase';
 
+// Control plane the mobile app talks to. Defaults to the hosted
+// Infernet control plane; override with EXPO_PUBLIC_INFERNET_API_URL
+// (e.g. http://127.0.0.1:8080 when running the web app locally).
+const INFERNET_API_URL =
+  process.env.EXPO_PUBLIC_INFERNET_API_URL || 'https://infernetprotocol.com';
+
 // Create the context
 const AuthContext = createContext();
 
@@ -176,7 +182,7 @@ export const AuthProvider = ({ children }) => {
       };
 
       // 4. Authenticate with the server
-      const response = await fetch('http://127.0.0.1:8080/api/nostr/auth', {
+      const response = await fetch(`${INFERNET_API_URL}/api/nostr/auth`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -245,7 +251,7 @@ export const AuthProvider = ({ children }) => {
       };
 
       // 4. Register with the server
-      const response = await fetch('http://127.0.0.1:8080/api/nostr/register', {
+      const response = await fetch(`${INFERNET_API_URL}/api/nostr/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

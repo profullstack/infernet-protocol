@@ -7,7 +7,6 @@ import {
   getClients,
   getDashboardOverview,
   getJobs,
-  getNodes,
   getProviders,
   getServedModelsAcrossProviders
 } from "@/lib/data/infernet";

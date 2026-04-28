@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/logger",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Structured logger used across Infernet Protocol packages.",
   "license": "MIT",
   "type": "module",

@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 /**
  * Shared layout for the four auth form pages. Centered card, branded
  * header, error banner, footer with cross-links. Pages drop their own

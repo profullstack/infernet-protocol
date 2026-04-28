@@ -16,7 +16,8 @@ const SIGNED_IN_NAV = [
     { href: "/docs", label: "Docs" },
     { href: "/chat", label: "Chat" },
     { href: "/status", label: "Status" },
-    { href: "/careers", label: "Careers" }
+    { href: "/careers", label: "Careers" },
+    { href: "/settings", label: "Settings" }
 ];
 
 export default async function SiteHeader() {

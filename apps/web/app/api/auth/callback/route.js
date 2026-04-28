@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
  * Email confirmation + magic-link landing.
  *
  * Supabase's redirect URL after a magic-link click looks like:
- *   /api/auth/callback?code=<pkce>&next=/status
+ *   /api/auth/callback?code=<pkce>&next=/dashboard
  *
  * We exchange the PKCE code for a session (Supabase sets the session
  * cookie via @supabase/ssr) and redirect to `next`.
@@ -18,7 +18,7 @@ export async function GET(request) {
     // outbound redirects against appUrl() so we don't leak proxy hosts.
     const url = new URL(request.url);
     const code = url.searchParams.get("code");
-    const next = url.searchParams.get("next") || "/status";
+    const next = url.searchParams.get("next") || "/dashboard";
 
     if (!code) {
         return NextResponse.redirect(

@@ -38,14 +38,14 @@ export async function POST(request) {
                 : NextResponse.json({ error: error.message }, { status: 401 });
         }
         return wantHtml
-            ? NextResponse.redirect(new URL("/status", appUrl()), { status: 303 })
+            ? NextResponse.redirect(new URL("/dashboard", appUrl()), { status: 303 })
             : NextResponse.json({ ok: true });
     }
 
     // Magic link path
     const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: `${appUrl()}/api/auth/callback?next=/status` }
+        options: { emailRedirectTo: `${appUrl()}/api/auth/callback?next=/dashboard` }
     });
     if (error) {
         return wantHtml

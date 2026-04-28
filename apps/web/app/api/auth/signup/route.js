@@ -23,7 +23,7 @@ export async function POST(request) {
     const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: `${appUrl()}/api/auth/callback?next=/status` }
+        options: { emailRedirectTo: `${appUrl()}/api/auth/callback?next=/dashboard` }
     });
 
     if (error) {

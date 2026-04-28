@@ -36,6 +36,6 @@ export async function POST(request) {
     }
 
     return wantHtml
-        ? NextResponse.redirect(new URL("/status?password-updated=1", appUrl()), { status: 303 })
+        ? NextResponse.redirect(new URL("/dashboard?password-updated=1", appUrl()), { status: 303 })
         : NextResponse.json({ ok: true });
 }

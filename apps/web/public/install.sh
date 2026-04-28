@@ -31,6 +31,27 @@
 #   INFERNET_REF=branch           branch/tag/commit for git path (master)
 #   INFERNET_NPM_VERSION=X.Y.Z    pin npm version (latest)
 #   INFERNET_FORCE_GIT=1          skip npm, force git path
+#   INFERNET_USE_DOCKER=1         skip native install — `docker run` chovy/infernetprotocol:latest
+#                                 instead. Useful when Docker is the simpler path.
+#   INFERNET_DOCKER_IMAGE=name    image to run (chovy/infernetprotocol:latest)
+#
+# Auto-bootstrap (everything below is optional — the script still works
+# without them, but with these set it leaves the node fully running
+# without ever needing an interactive `infernet setup` afterwards):
+#
+#   INFERNET_BEARER=<JWT>         24h CLI bearer minted at /deploy. Auto-links
+#                                 the node to the issuing user's account.
+#   INFERNET_CONTROL_PLANE=URL    default https://infernetprotocol.com
+#   INFERNET_MODEL=name           default qwen2.5:7b
+#   INFERNET_NODE_ROLE=role       provider | aggregator | client (default provider)
+#   INFERNET_NODE_NAME=name       human-readable name (default $(hostname))
+#   INFERNET_PUBLIC_PORT=port     P2P port (default 46337)
+#   INFERNET_AUTOSTART=0          set to 0 to install only, skip setup+start
+#
+# Zero-touch full bootstrap (Docker, no SSH afterwards):
+#
+#   curl -fsSL https://infernetprotocol.com/install.sh \\
+#     | INFERNET_USE_DOCKER=1 INFERNET_BEARER=$TOKEN INFERNET_MODEL=qwen2.5:7b sh
 #
 # Re-running this script updates an existing install in place.
 
@@ -46,6 +67,15 @@ INFERNET_BIN="${INFERNET_BIN:-$HOME/.local/bin}"
 INFERNET_REF="${INFERNET_REF:-$DEFAULT_REF}"
 INFERNET_NPM_VERSION="${INFERNET_NPM_VERSION:-latest}"
 INFERNET_FORCE_GIT="${INFERNET_FORCE_GIT:-}"
+INFERNET_USE_DOCKER="${INFERNET_USE_DOCKER:-}"
+INFERNET_DOCKER_IMAGE="${INFERNET_DOCKER_IMAGE:-chovy/infernetprotocol:latest}"
+INFERNET_AUTOSTART="${INFERNET_AUTOSTART:-1}"
+INFERNET_CONTROL_PLANE="${INFERNET_CONTROL_PLANE:-https://infernetprotocol.com}"
+INFERNET_MODEL="${INFERNET_MODEL:-qwen2.5:7b}"
+INFERNET_NODE_ROLE="${INFERNET_NODE_ROLE:-provider}"
+INFERNET_NODE_NAME="${INFERNET_NODE_NAME:-$(hostname 2>/dev/null || echo node)}"
+INFERNET_PUBLIC_PORT="${INFERNET_PUBLIC_PORT:-46337}"
+INFERNET_BEARER="${INFERNET_BEARER:-}"
 SOURCE_DIR="$INFERNET_HOME/source"
 WRAPPER="$INFERNET_BIN/infernet"
 
@@ -268,16 +298,133 @@ EOF
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Docker path — `docker run chovy/infernetprotocol:latest` with all the
+# right env vars wired up. Skips the native install entirely. The image
+# itself runs the cloud-init bootstrap on container start, which means
+# the user never has to ssh in afterwards.
+# ---------------------------------------------------------------------------
+ensure_docker() {
+    if ! command -v docker >/dev/null 2>&1; then
+        fail "INFERNET_USE_DOCKER=1 was set but \`docker\` is not on PATH. Install Docker first: https://docs.docker.com/engine/install/"
+    fi
+    if ! docker info >/dev/null 2>&1; then
+        fail "docker daemon not reachable (try 'sudo systemctl start docker' or run with sudo)"
+    fi
+    ok "Docker $(docker --version | awk '{print $3}' | tr -d ',')"
+}
+
+run_docker_path() {
+    ensure_docker
+
+    info "pulling $INFERNET_DOCKER_IMAGE"
+    docker pull "$INFERNET_DOCKER_IMAGE" >/dev/null 2>&1 \
+        || fail "docker pull failed for $INFERNET_DOCKER_IMAGE"
+    ok "image pulled"
+
+    # Stop + remove any prior infernet-provider container so re-running
+    # the installer cleanly replaces it.
+    if docker ps -a --format '{{.Names}}' | grep -qx 'infernet-provider'; then
+        info "removing previous infernet-provider container"
+        docker rm -f infernet-provider >/dev/null 2>&1 || true
+    fi
+
+    GPU_FLAG=""
+    if command -v nvidia-smi >/dev/null 2>&1; then
+        GPU_FLAG="--gpus all"
+        ok "NVIDIA GPU detected — passing --gpus all"
+    else
+        warn "no NVIDIA GPU detected — running CPU-only"
+    fi
+
+    BEARER_FLAG=""
+    if [ -n "$INFERNET_BEARER" ]; then
+        BEARER_FLAG="-e INFERNET_BEARER=$INFERNET_BEARER"
+        ok "INFERNET_BEARER provided — node will auto-link to the issuing account"
+    else
+        warn "INFERNET_BEARER not set — node won't be linked to a user account"
+        warn "  (mint one at $INFERNET_CONTROL_PLANE/deploy and re-run with INFERNET_BEARER=…)"
+    fi
+
+    info "starting infernet-provider container (detached)"
+    # shellcheck disable=SC2086
+    docker run -d \
+        --name infernet-provider \
+        --restart unless-stopped \
+        $GPU_FLAG \
+        -p 8080:8080 \
+        -p "$INFERNET_PUBLIC_PORT:$INFERNET_PUBLIC_PORT" \
+        -e "INFERNET_CONTROL_PLANE=$INFERNET_CONTROL_PLANE" \
+        -e "INFERNET_MODEL=$INFERNET_MODEL" \
+        -e "INFERNET_NODE_ROLE=$INFERNET_NODE_ROLE" \
+        -e "INFERNET_NODE_NAME=$INFERNET_NODE_NAME" \
+        -e "INFERNET_PUBLIC_PORT=$INFERNET_PUBLIC_PORT" \
+        $BEARER_FLAG \
+        "$INFERNET_DOCKER_IMAGE" >/dev/null \
+        || fail "docker run failed"
+    ok "container started: infernet-provider"
+
+    printf '\n%sDocker bootstrap launched.%s\n' "$GREEN" "$RESET"
+    printf '\nThe container is installing Ollama + pulling %s + registering with\n' "$INFERNET_MODEL"
+    printf '%s. This takes ~2-5 min on first boot.\n' "$INFERNET_CONTROL_PLANE"
+    printf '\nWatch progress:\n'
+    printf '  docker logs -f infernet-provider\n'
+    printf '\nHealth:\n'
+    printf '  curl http://localhost:8080/healthz\n'
+    printf '\nStop:\n'
+    printf '  docker stop infernet-provider && docker rm infernet-provider\n\n'
+}
+
+# ---------------------------------------------------------------------------
+# Native auto-bootstrap — after install completes, run `infernet setup`
+# automatically (and `infernet login --token` if a bearer was provided)
+# so the user never has to ssh in to finish the setup.
+# ---------------------------------------------------------------------------
+auto_bootstrap_native() {
+    if [ "$INFERNET_AUTOSTART" = "0" ]; then
+        info "INFERNET_AUTOSTART=0 — skipping setup. Run 'infernet setup' manually when ready."
+        return 0
+    fi
+
+    INFERNET_CMD="$WRAPPER"
+    [ -x "$INFERNET_CMD" ] || INFERNET_CMD="infernet"
+
+    if [ -n "$INFERNET_BEARER" ]; then
+        info "running infernet init + login (bearer provided)"
+        export INFERNET_NONINTERACTIVE=1
+        "$INFERNET_CMD" init --yes \
+            --role "$INFERNET_NODE_ROLE" \
+            --url "$INFERNET_CONTROL_PLANE" \
+            --name "$INFERNET_NODE_NAME" >/dev/null 2>&1 || warn "infernet init had issues"
+        "$INFERNET_CMD" login --token "$INFERNET_BEARER" >/dev/null 2>&1 || warn "infernet login --token failed"
+    fi
+
+    info "running infernet setup --yes (this takes a few minutes the first time)"
+    export INFERNET_NONINTERACTIVE=1
+    "$INFERNET_CMD" setup --yes --model "$INFERNET_MODEL" --port "$INFERNET_PUBLIC_PORT" \
+        || warn "infernet setup exited with errors — re-run 'infernet setup' to retry"
+}
+
 main() {
     printf '\n'
     printf '%sInfernet Protocol installer%s\n' "$BOLD" "$RESET"
-    printf '  install dir: %s\n' "$INFERNET_HOME"
-    printf '  bin dir:     %s\n' "$INFERNET_BIN"
-    printf '  ref:         %s\n' "$INFERNET_REF"
+    if [ -n "$INFERNET_USE_DOCKER" ] && [ "$INFERNET_USE_DOCKER" != "0" ]; then
+        printf '  mode:        docker (%s)\n' "$INFERNET_DOCKER_IMAGE"
+    else
+        printf '  mode:        native\n'
+        printf '  install dir: %s\n' "$INFERNET_HOME"
+        printf '  bin dir:     %s\n' "$INFERNET_BIN"
+        printf '  ref:         %s\n' "$INFERNET_REF"
+    fi
     printf '\n'
 
     detect_os
     ok "OS: $OS"
+
+    if [ -n "$INFERNET_USE_DOCKER" ] && [ "$INFERNET_USE_DOCKER" != "0" ]; then
+        run_docker_path
+        return 0
+    fi
 
     check_node
 
@@ -295,10 +442,14 @@ main() {
     fi
 
     printf '\n%sInstall complete.%s\n' "$GREEN" "$RESET"
-    printf '\nNext steps:\n'
-    printf '  1. infernet setup     # install Ollama + pull a model + open firewall\n'
-    printf '  2. infernet chat "hi" # try local inference\n'
-    printf '  3. infernet help      # full command list\n'
+
+    auto_bootstrap_native
+
+    printf '\nUse:\n'
+    printf '  infernet status       # daemon state\n'
+    printf '  infernet chat "hi"    # local + P2P inference\n'
+    printf '  infernet debug        # diagnostic bundle for support\n'
+    printf '  infernet help         # full command list\n'
     printf '\nTo update later, just re-run this installer.\n'
     if [ "$used_npm" = "1" ]; then
         printf 'To uninstall:    npm uninstall -g %s\n\n' "$NPM_PACKAGE"

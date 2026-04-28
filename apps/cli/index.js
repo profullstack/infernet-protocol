@@ -38,6 +38,7 @@ import tui from './commands/tui.js';
 import doctor from './commands/doctor.js';
 import service from './commands/service.js';
 import pubkey from './commands/pubkey.js';
+import debug from './commands/debug.js';
 
 function parseArgs(argv) {
     const positional = [];
@@ -91,11 +92,11 @@ function parseArgs(argv) {
 const COMMANDS = {
     init, login, register, update, remove,
     start, status, stop, stats, logs,
-    payout, payments, gpu, firewall, chat, setup, model, tui, doctor, service, pubkey, help
+    payout, payments, gpu, firewall, chat, setup, model, tui, doctor, service, pubkey, debug, help
 };
 
 // Commands that can run without a loaded config.
-const NO_CONFIG = new Set(['init', 'login', 'help', 'stats', 'logs', 'stop', 'gpu', 'firewall', 'chat', 'setup', 'model', 'tui', 'doctor', 'service', 'pubkey']);
+const NO_CONFIG = new Set(['init', 'login', 'help', 'stats', 'logs', 'stop', 'gpu', 'firewall', 'chat', 'setup', 'model', 'tui', 'doctor', 'service', 'pubkey', 'debug']);
 // Commands that need a config but not a control-plane client (none today
 // — kept as a future escape hatch).
 const NO_CLIENT = new Set();

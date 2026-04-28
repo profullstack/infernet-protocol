@@ -216,6 +216,44 @@ async function runDaemon(args, ctx) {
     }
 
     /**
+     * Reachability self-check — daemon calls /api/probe?host=&port=
+     * once after starting the P2P listener. Result cached on the
+     * specs object so it ships with heartbeats and surfaces in the
+     * dashboard. Refreshed every REACHABILITY_TTL_MS so a router
+     * port-forward added later gets picked up without restart.
+     */
+    const REACHABILITY_TTL_MS = 10 * 60 * 1000;
+    let cachedReachable = null;
+    let cachedReachableAt = 0;
+
+    async function probeReachable() {
+        if (noAdvertise || !advertisedAddress || !p2pPort || p2pDisabled) return null;
+        const now = Date.now();
+        if (cachedReachable !== null && now - cachedReachableAt < REACHABILITY_TTL_MS) {
+            return cachedReachable;
+        }
+        const baseUrl = config.controlPlane?.url;
+        if (!baseUrl) return null;
+        try {
+            const url = new URL("/api/probe", baseUrl);
+            url.searchParams.set("host", advertisedAddress);
+            url.searchParams.set("port", String(p2pPort));
+            const res = await fetch(url, { signal: AbortSignal.timeout?.(7000) });
+            if (!res.ok) return null;
+            const body = await res.json();
+            cachedReachable = {
+                ok: !!body.reachable,
+                error: body.error ?? null,
+                checked_at: new Date(now).toISOString()
+            };
+            cachedReachableAt = now;
+            return cachedReachable;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
      * Live load snapshot — fresh on every heartbeat, NOT cached. The
      * picker on the control plane uses this to skip saturated nodes
      * and weight by remaining headroom. Cheap to compute (one
@@ -278,10 +316,17 @@ async function runDaemon(args, ctx) {
         }
         if (!base) return null;
         // Always re-read load (cheap, must be current). bench rolls
-        // independently as jobs complete.
+        // independently as jobs complete. reachability has its own
+        // TTL so we don't hammer /api/probe on every heartbeat.
         const bench = benchSummary();
         const load = await liveLoad();
-        return { ...base, ...(bench ? { bench } : {}), load };
+        const reachable = await probeReachable();
+        return {
+            ...base,
+            ...(bench ? { bench } : {}),
+            load,
+            ...(reachable ? { reachable } : {})
+        };
     }
 
     async function heartbeat() {

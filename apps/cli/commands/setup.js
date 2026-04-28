@@ -246,6 +246,72 @@ async function isRegistered(config) {
  * actually landing on the control plane — not just that the local IPC
  * socket is alive. Poll /me until last_seen is recent, or give up.
  */
+/**
+ * Probe the control plane for whether the node's advertised
+ * (address, port) is reachable from the public Internet. Prints a
+ * concrete port-forwarding cookbook on failure — the typical
+ * residential router case.
+ *
+ * The control-plane-mediated chat path doesn't actually need inbound
+ * (daemon polls/posts outbound), so unreachable is a soft warning.
+ * But IPIP-0002 P2P chat and libp2p discovery DO need it, so we
+ * surface this clearly.
+ */
+async function reportReachability(row, config, port) {
+    const address = row?.address ?? null;
+    const advertisedPort = Number.isFinite(row?.port) ? row.port : port;
+    if (!address || !Number.isFinite(advertisedPort)) {
+        process.stdout.write("  reachability: skipped (no address/port advertised — fine for outbound-only setups)\n");
+        return;
+    }
+    const baseUrl = config?.controlPlane?.url;
+    if (!baseUrl) return;
+
+    process.stdout.write(`  probing inbound reachability at ${address}:${advertisedPort}...\n`);
+    let probe;
+    try {
+        const url = new URL("/api/probe", baseUrl);
+        url.searchParams.set("host", address);
+        url.searchParams.set("port", String(advertisedPort));
+        const res = await fetch(url, { signal: AbortSignal.timeout?.(8000) });
+        probe = await res.json();
+    } catch (err) {
+        warn(`  probe failed to run: ${err?.message ?? err}`);
+        return;
+    }
+
+    if (probe?.reachable) {
+        ok(`inbound reachable from the public Internet (${probe.elapsed_ms}ms)`);
+        return;
+    }
+
+    warn(`inbound NOT reachable: ${probe?.error ?? "unknown"}`);
+    process.stdout.write(
+        "\n  This means: control-plane-routed chat jobs still work (your daemon's\n" +
+        "  outbound polling doesn't need inbound connectivity), but direct P2P\n" +
+        "  features can't reach you. Other operators won't see your node as a\n" +
+        "  dial-able peer.\n"
+    );
+    process.stdout.write("\n  How to punch a hole in your firewall (port forwarding):\n");
+    process.stdout.write("    1. Open your router admin page. Common defaults:\n");
+    process.stdout.write("         http://192.168.1.1   (Linksys, Asus, TP-Link, Netgear)\n");
+    process.stdout.write("         http://192.168.0.1   (D-Link, Belkin, some Netgear)\n");
+    process.stdout.write("         http://10.0.0.1      (Comcast/Xfinity, ATT)\n");
+    process.stdout.write("       Or run `ip route | awk '/default/ {print $3}'` to see your gateway.\n");
+    process.stdout.write("    2. Find the section called \"Port Forwarding\", \"Virtual Servers\",\n");
+    process.stdout.write("       \"NAT/Gaming\", or similar.\n");
+    process.stdout.write("    3. Add a rule:\n");
+    process.stdout.write(`         External port: ${advertisedPort}    (TCP)\n`);
+    process.stdout.write(`         Internal IP:   <this machine's LAN IP — usually 192.168.x.x>\n`);
+    process.stdout.write(`         Internal port: ${advertisedPort}    (TCP)\n`);
+    process.stdout.write("    4. Save / apply.  Some routers reboot.\n");
+    process.stdout.write("    5. Re-run `infernet setup` to re-probe (or wait ~10 min and the\n");
+    process.stdout.write("       daemon will re-check on its own).\n");
+    process.stdout.write("\n  Or, if you don't want to expose your home IP at all, run\n");
+    process.stdout.write("  `infernet start --no-advertise` so the daemon doesn't broadcast its\n");
+    process.stdout.write("  address. You'll still get jobs via the control plane.\n");
+}
+
 async function waitForFreshHeartbeat(config, { timeoutMs = 45000, freshMs = 60000 } = {}) {
     const deadline = Date.now() + timeoutMs;
     let lastRow = null;
@@ -702,6 +768,7 @@ export default async function setup(args) {
             const res = await waitForFreshHeartbeat(configAfterId);
             if (res.ok) {
                 ok(`heartbeat ok — last_seen ${res.row.last_seen}, status=${res.row.status}`);
+                await reportReachability(res.row, configAfterId, port);
             } else if (res.row) {
                 warn(
                     `daemon alive locally but control plane shows stale state ` +

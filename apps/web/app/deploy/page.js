@@ -9,5 +9,9 @@ export const metadata = {
 };
 
 export default function DeployPage() {
-  return <DeployView />;
+  // Configure your RunPod template once via env var on the control
+  // plane. When set, the page renders a "Deploy on RunPod" button
+  // that pre-fills the bearer + model in RunPod's deploy form.
+  const runpodTemplateId = process.env.RUNPOD_TEMPLATE_ID ?? null;
+  return <DeployView runpodTemplateId={runpodTemplateId} />;
 }

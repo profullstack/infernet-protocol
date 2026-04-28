@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { buildRunpodDeployUrl } from "@/lib/deploy/links";
 
 /**
  * One-click deploy UI — universal cloud-init + provider deep links.
@@ -17,17 +18,27 @@ import { useEffect, useState } from "react";
  * everything inside the rented box; we just hand it a token that lets
  * the new node attach itself to the user's account.
  */
-export default function DeployView() {
+export default function DeployView({ runpodTemplateId = null }) {
     const [token, setToken] = useState(null);
     const [cloudInitUrl, setCloudInitUrl] = useState(null);
     const [expiresAt, setExpiresAt] = useState(null);
     const [error, setError] = useState(null);
     const [signedIn, setSignedIn] = useState(null);
     const [origin, setOrigin] = useState("https://infernetprotocol.com");
+    const [model, setModel] = useState("qwen2.5:7b");
 
     useEffect(() => {
         if (typeof window !== "undefined") setOrigin(window.location.origin);
     }, []);
+
+    const runpodUrl = runpodTemplateId
+        ? buildRunpodDeployUrl({
+              templateId: runpodTemplateId,
+              bearer: token,
+              model,
+              controlPlane: origin
+          })
+        : null;
 
     async function mint() {
         setError(null);
@@ -103,9 +114,61 @@ export default function DeployView() {
                 ) : null}
             </section>
 
+            {/* One-click RunPod deploy — only renders when a template ID is configured. */}
+            {runpodTemplateId ? (
+                <section className="mb-8 rounded-[1.5rem] border border-white/10 bg-[var(--panel)] p-6 backdrop-blur">
+                    <h2 className="text-lg font-semibold text-white">2a. One-click on RunPod</h2>
+                    <p className="mt-1 text-sm text-[var(--muted)]">
+                        Open RunPod's deploy form with your bearer + model already filled in.
+                        Just pick a GPU and click <em>Deploy Pod</em>.
+                    </p>
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <label className="text-sm text-[var(--muted)]">
+                            Model:{" "}
+                            <select
+                                value={model}
+                                onChange={(e) => setModel(e.target.value)}
+                                className="ml-2 rounded border border-white/10 bg-[var(--panel-strong)] px-2 py-1 text-sm text-white"
+                            >
+                                <option value="qwen2.5:0.5b">qwen2.5:0.5b (≈400 MB)</option>
+                                <option value="qwen2.5:3b">qwen2.5:3b (≈2 GB)</option>
+                                <option value="qwen2.5:7b">qwen2.5:7b (≈4.4 GB)</option>
+                                <option value="qwen2.5:14b">qwen2.5:14b (≈9 GB)</option>
+                                <option value="qwen2.5:32b">qwen2.5:32b (≈20 GB)</option>
+                                <option value="qwen2.5:72b">qwen2.5:72b (≈40 GB)</option>
+                            </select>
+                        </label>
+                        {token && runpodUrl ? (
+                            <a
+                                href={runpodUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex shrink-0 rounded-full bg-[var(--accent-strong)] px-5 py-2.5 text-sm font-semibold text-[var(--bg)] transition hover:bg-[var(--accent)]"
+                            >
+                                Deploy on RunPod →
+                            </a>
+                        ) : (
+                            <button
+                                type="button"
+                                disabled
+                                className="inline-flex shrink-0 cursor-not-allowed rounded-full border border-white/15 px-5 py-2.5 text-sm font-medium text-[var(--muted)]"
+                            >
+                                Mint a token first ↑
+                            </button>
+                        )}
+                    </div>
+                    <p className="mt-3 text-xs text-[var(--muted)]">
+                        The button URL embeds your bearer + chosen model in
+                        <code> env[INFERNET_BEARER]</code> /
+                        <code> env[INFERNET_MODEL]</code> query params. RunPod's
+                        deploy form prefills both. The bearer expires in 24h.
+                    </p>
+                </section>
+            ) : null}
+
             {/* The one-liner */}
             <section className="mb-8 rounded-[1.5rem] border border-white/10 bg-[var(--panel)] p-6 backdrop-blur">
-                <h2 className="text-lg font-semibold text-white">2. Paste this into your rented box</h2>
+                <h2 className="text-lg font-semibold text-white">2{runpodTemplateId ? "b" : ""}. Paste this into your rented box</h2>
                 <p className="mt-1 text-sm text-[var(--muted)]">
                     Works on DigitalOcean, RunPod custom images, AWS, GCP, bare metal — anywhere with{" "}
                     <code>curl</code> and root.

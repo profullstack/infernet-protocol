@@ -54,6 +54,7 @@ COPY packages/logger/package.json           ./packages/logger/package.json
 COPY packages/nim-adapter/package.json      ./packages/nim-adapter/package.json
 COPY packages/payments/package.json         ./packages/payments/package.json
 COPY packages/sdk-js/package.json           ./packages/sdk-js/package.json
+COPY packages/training/package.json         ./packages/training/package.json
 
 # Only install what apps/web needs (and its workspace deps).
 RUN pnpm install --frozen-lockfile --filter @infernetprotocol/web...

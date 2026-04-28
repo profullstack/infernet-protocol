@@ -27,6 +27,7 @@
 import { createMojoBackend } from "./backends/mojo.js";
 import { createOllamaBackend, isOllamaReachable } from "./backends/ollama.js";
 import { createVllmBackend, isVllmReachable } from "./backends/vllm.js";
+import { createLlamacppBackend, isLlamacppReachable } from "./backends/llamacpp.js";
 import { createStubBackend } from "./backends/stub.js";
 
 export * from "./protocol.js";
@@ -35,12 +36,15 @@ export { EngineProcess } from "./engine-process.js";
 export { resolveBinary } from "./resolve-binary.js";
 export { isOllamaReachable } from "./backends/ollama.js";
 export { isVllmReachable } from "./backends/vllm.js";
+export { isLlamacppReachable } from "./backends/llamacpp.js";
 
 export async function createEngine(opts = {}) {
     const backend = opts.backend ?? (await autoSelectBackend());
     switch (backend) {
         case "vllm":
             return createVllmBackend(opts);
+        case "llamacpp":
+            return createLlamacppBackend(opts);
         case "ollama":
             return createOllamaBackend(opts);
         case "mojo":
@@ -56,10 +60,12 @@ async function autoSelectBackend() {
     const explicit = process.env.INFERNET_ENGINE_BACKEND;
     if (explicit) return explicit;
     if (process.env.INFERNET_ENGINE_BIN) return "mojo";
-    // vLLM is an explicit operator setup choice (heavy install, NVIDIA-only),
-    // so a running vLLM server is a strong signal of intent — pick it
-    // ahead of a passive Ollama install.
+    // Auto-select precedence: vLLM (NVIDIA throughput) > llama.cpp (light,
+    // explicit operator setup) > Ollama (easy default for any GPU + CPU).
+    // Each is a deliberate operator choice when running, so a running
+    // server signals intent.
     if (await isVllmReachable(process.env.VLLM_HOST)) return "vllm";
+    if (await isLlamacppReachable(process.env.LLAMACPP_HOST)) return "llamacpp";
     if (await isOllamaReachable(process.env.OLLAMA_HOST)) return "ollama";
     return "stub";
 }

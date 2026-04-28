@@ -18,7 +18,7 @@ import CopyButton from "@/components/copy-button";
  * everything inside the rented box; we just hand it a token that lets
  * the new node attach itself to the user's account.
  */
-export default function DeployView() {
+export default function DeployView({ signedInAs = null }) {
     const [token, setToken] = useState(null);
     const [cloudInitUrl, setCloudInitUrl] = useState(null);
     const [expiresAt, setExpiresAt] = useState(null);
@@ -66,6 +66,12 @@ export default function DeployView() {
                     Pulls the CLI, installs Ollama, picks a model, registers, and starts heartbeating —
                     all in one boot. No SSH afterwards.
                 </p>
+                {signedInAs ? (
+                    <p className="text-xs text-[var(--muted)]">
+                        Signed in as <span className="font-mono text-white">{signedInAs}</span>.
+                        Tokens minted here are bound to this account and expire in 24h.
+                    </p>
+                ) : null}
             </header>
 
             {/* Token mint */}

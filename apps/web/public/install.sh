@@ -33,6 +33,10 @@
 #   INFERNET_FORCE_GIT=1          skip npm, force git path
 #   INFERNET_MIN_DISK_MB=N        override disk-space threshold (3 / 10 / 15 GB)
 #   INFERNET_SKIP_DISK_CHECK=1    skip the disk-space preflight
+#   INFERNET_NO_RELOCATE=1        keep install at $HOME even if a bigger
+#                                 volume is mounted (default: relocate to
+#                                 the biggest writable mount when it has
+#                                 ≥2x more free space than $HOME)
 #
 # Auto-bootstrap (everything below is optional — the script still works
 # without them, but with these set it leaves the node fully running
@@ -114,6 +118,137 @@ detect_hosting_platform_ports() {
     # is the no-op case where bind and advertise are the same port.
 }
 detect_hosting_platform_ports || true
+
+# ---------------------------------------------------------------------------
+# Big-volume relocation (host-agnostic).
+#
+# Many GPU hosts have a small root filesystem (5–20 GB overlay) and a
+# big persistent volume mounted somewhere else:
+#   RunPod         /workspace       (or /vllm-workspace, /runpod-volume)
+#   Vast.ai        /workspace       (or /data)
+#   Lambda Labs    /lambda          (or /home/$user — already-big-fs case)
+#   bare metal     /mnt/<whatever>  whatever the operator mounted
+#
+# Rather than special-case every platform, scan `df -P` for the
+# writable mount with the most free space (excluding $HOME's own
+# filesystem and anything virtual/system) and relocate the install
+# there if it offers materially more headroom than $HOME.
+#
+# Relocates everything we can:
+#   INFERNET_HOME   → $VOLUME/infernet      (clone + node_modules)
+#   INFERNET_BIN    → $VOLUME/infernet/bin  (wrapper + mise binary)
+#   MISE_DATA_DIR   → $VOLUME/mise          (node 20)
+#   OLLAMA_MODELS   → $VOLUME/ollama-models (model blobs)
+#   PNPM_HOME       → $VOLUME/pnpm          (pnpm store)
+#   /usr/local/lib/ollama → symlink → $VOLUME/ollama-libs (CUDA libs)
+#
+# The /usr/local/lib/ollama symlink is the load-bearing one: it's
+# where Ollama's installer extracts the ~3 GB mlx_cuda_v13 + cudnn
+# tarball. We pre-create the symlink so the extract lands on the big
+# disk instead of filling up the root overlay.
+#
+# Opt out: set INFERNET_HOME explicitly, OR set INFERNET_NO_RELOCATE=1.
+# ---------------------------------------------------------------------------
+detect_install_volume() {
+    [ "${INFERNET_NO_RELOCATE:-}" = "1" ] && return 0
+    # If user set INFERNET_HOME explicitly, respect it.
+    [ "$INFERNET_HOME" = "$HOME/.infernet" ] || return 0
+
+    _home_mp="$(df -P "$HOME" 2>/dev/null | awk 'NR==2 {print $6}')"
+    _home_kb="$(df -P "$HOME" 2>/dev/null | awk 'NR==2 {print $4}')"
+    [ -n "$_home_mp" ] || return 0
+
+    _best_mp=""
+    _best_kb=0
+    # Scan every mounted fs, pick the writable one with the most
+    # free space that isn't $HOME's mount and isn't virtual/system.
+    while read -r _fs _blocks _used _avail _capacity _mp; do
+        case "$_fs" in
+            tmpfs|devtmpfs|overlay|proc|sysfs|cgroup*|mqueue|securityfs|pstore|debugfs|tracefs|configfs|fusectl|none|squashfs|nsfs|hugetlbfs|binfmt_misc|autofs)
+                continue ;;
+        esac
+        case "$_mp" in
+            /|/proc|/proc/*|/sys|/sys/*|/dev|/dev/*|/run|/run/*|/boot|/boot/*|/etc|/etc/*|/usr|/usr/*|/var/lib/docker*|/snap|/snap/*|/tmp)
+                continue ;;
+        esac
+        [ "$_mp" = "$_home_mp" ] && continue
+        [ -w "$_mp" ] || continue
+        # Must have at least 10 GB free to be worth relocating to.
+        [ "${_avail:-0}" -lt 10485760 ] && continue
+        if [ "$_avail" -gt "$_best_kb" ]; then
+            _best_kb="$_avail"
+            _best_mp="$_mp"
+        fi
+    done <<EOF
+$(df -P 2>/dev/null | tail -n +2)
+EOF
+
+    [ -z "$_best_mp" ] && return 0
+
+    # Only relocate if the volume has at least 2x more free space than
+    # $HOME — guards against e.g. a 16 GB USB drive on a desktop with
+    # 200 GB free at $HOME.
+    if [ "$_best_kb" -lt $(( ${_home_kb:-0} * 2 )) ]; then
+        return 0
+    fi
+
+    INFERNET_HOME="$_best_mp/infernet"
+    INFERNET_BIN="$INFERNET_HOME/bin"
+    SOURCE_DIR="$INFERNET_HOME/source"
+    WRAPPER="$INFERNET_BIN/infernet"
+
+    MISE_DATA_DIR="$_best_mp/mise"
+    MISE_INSTALL_PATH="$INFERNET_BIN/mise"
+    OLLAMA_MODELS="$_best_mp/ollama-models"
+    PNPM_HOME="$_best_mp/pnpm"
+    export MISE_DATA_DIR MISE_INSTALL_PATH OLLAMA_MODELS PNPM_HOME
+
+    # Pre-create the Ollama lib symlink so its installer's tar extract
+    # lands on the volume. Skip if /usr/local/lib/ollama already exists
+    # as a directory (failed prior install — operator must clean up).
+    mkdir -p "$_best_mp/ollama-libs" 2>/dev/null || true
+    if [ -L /usr/local/lib/ollama ] || [ ! -e /usr/local/lib/ollama ]; then
+        mkdir -p /usr/local/lib 2>/dev/null || true
+        rm -f /usr/local/lib/ollama 2>/dev/null || true
+        ln -sf "$_best_mp/ollama-libs" /usr/local/lib/ollama 2>/dev/null || true
+    fi
+
+    # Symlink ~/.X dirs the daemon + tooling write to — daemon config,
+    # identity, daemon.log, mise's config, ollama's blobs cache, etc.
+    # Each is just a symlink (a few bytes on the overlay), but the
+    # writes that follow them all land on the big volume.
+    relocate_dot_dir() {
+        # $1 = relative path under $HOME (e.g. ".config/infernet")
+        _src="$HOME/$1"
+        _dst="$_best_mp/$1"
+        mkdir -p "$_dst" 2>/dev/null || true
+        # Make sure parent of $_src exists on the overlay.
+        mkdir -p "$(dirname "$_src")" 2>/dev/null || true
+        if [ -L "$_src" ] || [ ! -e "$_src" ]; then
+            rm -f "$_src" 2>/dev/null || true
+            ln -sf "$_dst" "$_src" 2>/dev/null || true
+        elif [ -d "$_src" ] && [ -z "$(ls -A "$_src" 2>/dev/null)" ]; then
+            # Empty real dir — replace with symlink.
+            rmdir "$_src" 2>/dev/null && ln -sf "$_dst" "$_src" 2>/dev/null || true
+        fi
+        unset _src _dst
+    }
+    relocate_dot_dir ".config/infernet"
+    relocate_dot_dir ".config/mise"
+    relocate_dot_dir ".cache/infernet"
+    relocate_dot_dir ".ollama"
+
+    _free_g=$(( _best_kb / 1024 / 1024 ))
+    _home_g=$(( ${_home_kb:-0} / 1024 / 1024 ))
+    printf '  [storage] big volume at %s (%s GB free) — relocating install off $HOME (%s GB)\n' \
+        "$_best_mp" "$_free_g" "$_home_g"
+    printf '            INFERNET_HOME=%s\n' "$INFERNET_HOME"
+    printf '            OLLAMA_MODELS=%s\n' "$OLLAMA_MODELS"
+    printf '            /usr/local/lib/ollama → %s/ollama-libs\n' "$_best_mp"
+    printf '            ~/.config/infernet, ~/.cache/infernet, ~/.ollama → %s/...\n' "$_best_mp"
+    unset _home_mp _home_kb _best_mp _best_kb _fs _blocks _used _avail _capacity _mp _free_g _home_g
+}
+detect_install_volume || true
 
 # ---------------------------------------------------------------------------
 # pretty output

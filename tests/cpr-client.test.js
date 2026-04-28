@@ -32,12 +32,12 @@ describe("CPR client config getters", () => {
 
     it("default base URL is the public CPR endpoint", () => {
         delete process.env.CPR_API_BASE_URL;
-        expect(getCprBaseUrl()).toBe("https://coinpayportal.com/api/cpr");
+        expect(getCprBaseUrl()).toBe("https://coinpayportal.com/api/reputation");
     });
 
     it("base URL can be overridden via env (e.g. self-host)", () => {
-        process.env.CPR_API_BASE_URL = "https://my-cpr.example/api/cpr";
-        expect(getCprBaseUrl()).toBe("https://my-cpr.example/api/cpr");
+        process.env.CPR_API_BASE_URL = "https://my-cpr.example/api/reputation";
+        expect(getCprBaseUrl()).toBe("https://my-cpr.example/api/reputation");
     });
 });
 
@@ -76,19 +76,19 @@ describe("submitReceipt", () => {
         else delete process.env.CPR_ISSUER_API_KEY;
     });
 
-    it("POSTs to <base>/receipts with the issuer Bearer token", async () => {
+    it("POSTs to <base>/receipt (singular) with the issuer Bearer token", async () => {
         const fetchImpl = vi.fn(async () => ({
             ok: true,
             status: 201,
             text: async () => JSON.stringify({ ok: true })
         }));
         await submitReceipt({ receipt_id: "r-1", task_id: "j-1" }, {
-            baseUrl: "https://cpr.example/api/cpr",
+            baseUrl: "https://cpr.example/api/reputation",
             apiKey: "k-1",
             fetchImpl
         });
         const [url, init] = fetchImpl.mock.calls[0];
-        expect(url).toBe("https://cpr.example/api/cpr/receipts");
+        expect(url).toBe("https://cpr.example/api/reputation/receipt");
         expect(init.method).toBe("POST");
         expect(init.headers.authorization).toBe("Bearer k-1");
         expect(init.headers["content-type"]).toBe("application/json");
@@ -135,6 +135,6 @@ describe("submitReceipt", () => {
         }));
         await submitReceipt({ receipt_id: "r-1" }, { fetchImpl, apiKey: "k" });
         const [url] = fetchImpl.mock.calls[0];
-        expect(url).toMatch(/\/receipts$/);
+        expect(url).toMatch(/\/receipt$/);
     });
 });

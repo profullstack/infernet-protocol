@@ -8,11 +8,20 @@ import "server-only";
  * speaks the wire protocol.
  *
  * Configured via two env vars:
- *   CPR_API_BASE_URL       default: https://coinpayportal.com/api/cpr
+ *   CPR_API_BASE_URL       default: https://coinpayportal.com/api/reputation
  *   CPR_ISSUER_API_KEY     issued at issuer-registration time
+ *
+ * NOTE: CoinPay's CPR endpoints live under /api/reputation/*, not
+ * /api/cpr/*. The CPR brand name is internal; the URL space is
+ * /api/reputation/ for continuity with their existing docs.
  */
 
-const DEFAULT_BASE = "https://coinpayportal.com/api/cpr";
+// CoinPay's CPR endpoints actually live under /api/reputation/* on
+// coinpayportal.com (verified against the source at
+// ~/src/coinpayportal/src/app/api/reputation/...). The CPR brand
+// name is internal — the URL space stayed `/api/reputation/` for
+// continuity with the published platform-integration docs.
+const DEFAULT_BASE = "https://coinpayportal.com/api/reputation";
 const REQUEST_TIMEOUT_MS = 10_000;
 
 export function getCprBaseUrl() {
@@ -43,7 +52,10 @@ export async function submitReceipt(receipt, opts = {}) {
         throw new Error("CPR_ISSUER_API_KEY not configured — cannot submit receipt");
     }
 
-    const url = `${baseUrl.replace(/\/+$/, "")}/receipts`;
+    // POST /receipt (singular) is the submission endpoint;
+    // /receipts (plural) is the list endpoint per CoinPay's
+    // src/app/api/reputation/receipt/route.ts handler.
+    const url = `${baseUrl.replace(/\/+$/, "")}/receipt`;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
 

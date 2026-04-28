@@ -9,9 +9,27 @@
  * hostname, platform, CPU model, or RAM total leaves the node.
  */
 
-import { saveConfig } from '../lib/config.js';
+import { saveConfig, loadConfig } from '../lib/config.js';
 import { resolveP2pPort, detectLocalAddress } from '../lib/network.js';
 import { detectGpus, detectInterconnects, detectCpus, detectHost } from '@infernetprotocol/gpu';
+
+/**
+ * Probe Ollama for the actual list of models pulled locally. Empty
+ * array on any failure — we still want to register the node even if
+ * the engine isn't up at register time.
+ */
+async function detectOllamaModels(host) {
+    if (!host) return [];
+    try {
+        const res = await fetch(new URL('/api/tags', host), { signal: AbortSignal.timeout?.(2000) });
+        if (!res.ok) return [];
+        const json = await res.json();
+        const models = Array.isArray(json?.models) ? json.models : [];
+        return models.map((m) => m.name ?? m.model).filter((s) => typeof s === 'string');
+    } catch {
+        return [];
+    }
+}
 
 const HELP = `infernet register — announce this node to the control plane
 
@@ -90,7 +108,24 @@ function summarizeCpu() {
 }
 
 async function gatherCoarseSpecs() {
-    const [gpus, interconnects] = await Promise.all([detectGpus(), detectInterconnects()]);
+    const [gpus, interconnects, config] = await Promise.all([
+        detectGpus(),
+        detectInterconnects(),
+        loadConfig().catch(() => ({}))
+    ]);
+
+    // Models: union of (a) the model `infernet setup` chose and (b)
+    // every model Ollama currently has pulled. The control plane uses
+    // this for /chat model selection and routing; without it the
+    // network looks empty even when nodes are up.
+    const configuredModel = config?.engine?.model ?? null;
+    const ollamaHost = config?.engine?.ollamaHost ?? null;
+    const pulledModels = ollamaHost ? await detectOllamaModels(ollamaHost) : [];
+    const served_models = [...new Set([
+        ...(configuredModel ? [configuredModel] : []),
+        ...pulledModels
+    ])];
+
     return {
         cpu: summarizeCpu(),
         gpu_count: gpus.length,
@@ -99,7 +134,8 @@ async function gatherCoarseSpecs() {
             vram_tier: vramTier(g.vram_mb),
             model: typeof g.model === 'string' ? g.model.slice(0, 64) : null
         })),
-        interconnects: summarizeInterconnects(interconnects)
+        interconnects: summarizeInterconnects(interconnects),
+        served_models
     };
 }
 

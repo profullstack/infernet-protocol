@@ -192,37 +192,72 @@ export async function getAggregators({ limit } = {}) {
 }
 
 export async function getDashboardOverview() {
-  const [nodes, providers, jobs, models] = await Promise.all([
-    getNodes({ limit: 100 }),
-    getProviders({ limit: 100 }),
-    getJobs({ limit: 100 }),
-    getModels({ limit: 100 })
+  const supabase = getSupabaseServerClient();
+  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+  // Provider rows include the specs jsonb so we can count distinct
+  // served_models across the network — that's what the public /chat
+  // playground actually needs to know is online.
+  const [{ data: providersAll, error: pErr }, jobs] = await Promise.all([
+    supabase.from("providers").select("status, last_seen, specs"),
+    getJobs({ limit: 100 })
   ]);
+  if (pErr) throw new Error(pErr.message);
+  const providers = providersAll ?? [];
+
+  const onlineProviders = providers.filter(
+    (p) => p.status === "available" && p.last_seen && p.last_seen >= tenMinAgo
+  );
+
+  // Distinct models advertised across providers' specs.served_models.
+  const modelSet = new Set();
+  for (const p of providers) {
+    const served = Array.isArray(p?.specs?.served_models) ? p.specs.served_models : [];
+    for (const m of served) {
+      if (typeof m === "string" && m) modelSet.add(m);
+    }
+  }
+
+  const pendingJobs = jobs.filter((j) => j.status === "pending").length;
 
   return {
     cards: [
       {
-        label: "Nodes",
-        value: nodes.length,
-        note: `${nodes.filter((node) => node.status === "available").length} available`
+        label: "Online nodes",
+        value: onlineProviders.length,
+        note: `of ${providers.length} registered`
       },
       {
-        label: "Providers",
-        value: providers.length,
-        note: `${providers.filter((provider) => provider.status === "available").length} ready`
+        label: "Models served",
+        value: modelSet.size,
+        note: modelSet.size === 0
+          ? "no models advertised"
+          : [...modelSet].slice(0, 3).join(", ") + (modelSet.size > 3 ? "…" : "")
       },
       {
         label: "Jobs",
         value: jobs.length,
-        note: `${jobs.filter((job) => job.status === "pending").length} pending`
+        note: `${pendingJobs} pending`
       },
       {
-        label: "Models",
-        value: models.length,
-        note: `${models.filter((model) => model.visibility === "public").length} public`
+        label: "Last heartbeat",
+        value: onlineProviders[0]?.last_seen ? relativeAgo(onlineProviders[0].last_seen) : "—",
+        note: onlineProviders[0]?.last_seen ?? "no heartbeats yet"
       }
     ]
   };
+}
+
+function relativeAgo(iso) {
+  if (!iso) return "—";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms)) return "—";
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return `${h}h ago`;
 }
 
 export const __testables__ = {

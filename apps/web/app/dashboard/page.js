@@ -1,7 +1,5 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import SiteHeader from "@/components/site-header";
-import SiteFooter from "@/components/site-footer";
 import AutoRefresh from "@/components/auto-refresh";
 import { getCurrentUser } from "@/lib/supabase/auth-server";
 import {
@@ -44,7 +42,6 @@ export default async function DashboardPage() {
 
     return (
         <>
-            <SiteHeader />
             <main className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-10">
                 <header className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                     <div>
@@ -297,7 +294,6 @@ export default async function DashboardPage() {
                     </p>
                 </section>
             </main>
-            <SiteFooter />
         </>
     );
 }

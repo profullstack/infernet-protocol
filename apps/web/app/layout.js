@@ -1,4 +1,6 @@
 import "./globals.css";
+import SiteHeader from "@/components/site-header";
+import SiteFooter from "@/components/site-footer";
 
 export const metadata = {
   metadataBase: new URL(
@@ -32,7 +34,13 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="flex min-h-screen flex-col">
+        {/* SiteHeader is async (reads the user) — Next.js handles
+            the suspense boundary automatically. */}
+        <SiteHeader />
+        <div className="flex-1">{children}</div>
+        <SiteFooter />
+      </body>
     </html>
   );
 }

@@ -1,8 +1,6 @@
 import DashboardShell from "@/components/dashboard-shell";
 import OverviewGrid from "@/components/overview-grid";
 import ResourceTable from "@/components/resource-table";
-import SiteHeader from "@/components/site-header";
-import SiteFooter from "@/components/site-footer";
 import AutoRefresh from "@/components/auto-refresh";
 import {
   getAggregators,
@@ -28,7 +26,6 @@ export default async function HomePage() {
 
   return (
     <>
-    <SiteHeader />
     <DashboardShell
       eyebrow="Network status"
       title="Infernet network status"
@@ -98,7 +95,6 @@ export default async function HomePage() {
         />
       </div>
     </DashboardShell>
-    <SiteFooter />
     </>
   );
 }

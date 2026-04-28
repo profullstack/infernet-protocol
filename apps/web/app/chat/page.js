@@ -17,5 +17,9 @@ export default async function ChatPage() {
     models = [];
   }
 
-  return <ChatView initialModels={models} />;
+  return (
+    <>
+      <ChatView initialModels={models} />
+    </>
+  );
 }

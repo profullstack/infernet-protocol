@@ -1,5 +1,3 @@
-import SiteHeader from "@/components/site-header";
-import SiteFooter from "@/components/site-footer";
 
 export const metadata = {
     title: "Contact",
@@ -14,7 +12,6 @@ export default async function ContactPage({ searchParams }) {
 
     return (
         <>
-            <SiteHeader />
             <main className="mx-auto w-full max-w-3xl px-6 py-16 lg:px-10">
                 <header className="mb-10 space-y-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.4em] text-[var(--accent)]">
@@ -80,7 +77,6 @@ export default async function ContactPage({ searchParams }) {
                     </button>
                 </form>
             </main>
-            <SiteFooter />
         </>
     );
 }

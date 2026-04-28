@@ -1,6 +1,5 @@
 import Link from "next/link";
-import SiteHeader from "@/components/site-header";
-import SiteFooter from "@/components/site-footer";
+import CopyButton from "@/components/copy-button";
 
 export const metadata = {
   title: "Infernet Protocol — Decentralized GPU compute",
@@ -14,7 +13,6 @@ const INSTALL_ONE_LINER =
 export default function HomePage() {
   return (
     <>
-      <SiteHeader />
       <main className="min-h-screen">
       {/* Hero */}
       <section className="relative overflow-hidden border-b border-white/10">
@@ -155,14 +153,21 @@ export default function HomePage() {
 
           <div className="rounded-[1.5rem] border border-white/10 bg-[var(--panel-strong)] p-6 font-mono text-sm leading-7 text-[var(--accent)]">
             <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">Install</p>
-            <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-all text-[var(--accent)]">
-              {INSTALL_ONE_LINER}
-            </pre>
+            <div className="relative mt-3">
+              <CopyButton text={INSTALL_ONE_LINER} />
+              <pre className="overflow-x-auto whitespace-pre-wrap break-all pr-20 text-[var(--accent)]">
+                {INSTALL_ONE_LINER}
+              </pre>
+            </div>
             <p className="mt-6 text-xs uppercase tracking-[0.3em] text-[var(--muted)]">Then</p>
-            <pre className="mt-3 text-white">
+            <div className="relative mt-3">
+              <CopyButton text={`infernet setup
+infernet "what is 2+2?"`} />
+              <pre className="overflow-x-auto whitespace-pre-wrap break-all pr-20 text-white">
 {`infernet setup            # bootstrap Ollama + model + firewall
 infernet "what is 2+2?"   # default verb is chat`}
-            </pre>
+              </pre>
+            </div>
           </div>
         </div>
       </section>
@@ -192,7 +197,6 @@ infernet "what is 2+2?"   # default verb is chat`}
       </section>
 
       </main>
-      <SiteFooter />
     </>
   );
 }

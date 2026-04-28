@@ -1,6 +1,5 @@
 import Link from "next/link";
-import SiteHeader from "@/components/site-header";
-import SiteFooter from "@/components/site-footer";
+import CopyButton from "@/components/copy-button";
 
 export const metadata = {
     title: "Documentation",
@@ -32,7 +31,6 @@ const TOC = [
 export default function DocsPage() {
     return (
         <>
-        <SiteHeader />
         <main className="mx-auto w-full max-w-5xl px-6 py-16 lg:px-10">
             <header className="mb-12 space-y-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.4em] text-[var(--accent)]">
@@ -921,7 +919,6 @@ infernet start                                  # daemon takes paying jobs`}
             </Section>
 
         </main>
-        <SiteFooter />
         </>
     );
 }
@@ -945,11 +942,28 @@ function Section({ id, title, children }) {
 }
 
 function CodeBlock({ children }) {
+    // Pull the raw text from children so the copy button has something
+    // to put on the clipboard. Works for plain strings + arrays of
+    // strings (the most common shapes inside our `{`...`}` literals).
+    const text = childrenToText(children);
     return (
-        <pre className="overflow-x-auto rounded-[1rem] border border-white/10 bg-[var(--panel-strong)] p-5 font-mono text-sm leading-6 text-[var(--accent)]">
-            <code>{children}</code>
-        </pre>
+        <div className="relative my-3">
+            <CopyButton text={text} />
+            <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-[1rem] border border-white/10 bg-[var(--panel-strong)] p-5 pr-20 font-mono text-sm leading-6 text-[var(--accent)]">
+                <code>{children}</code>
+            </pre>
+        </div>
     );
+}
+
+function childrenToText(children) {
+    if (typeof children === "string") return children;
+    if (Array.isArray(children)) return children.map(childrenToText).join("");
+    if (children == null || typeof children === "boolean") return "";
+    if (typeof children === "object" && "props" in children) {
+        return childrenToText(children.props?.children);
+    }
+    return String(children);
 }
 
 function Aside({ type = "note", children }) {

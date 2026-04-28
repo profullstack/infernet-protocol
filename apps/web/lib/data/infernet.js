@@ -248,6 +248,46 @@ export async function getDashboardOverview() {
   };
 }
 
+/**
+ * Distinct served-model names across online providers, with each
+ * model's count of advertising providers and freshest last_seen.
+ * The /status "Models served" panel reads this — replaces the old
+ * `models`-table query which was effectively dead.
+ */
+export async function getServedModelsAcrossProviders({ liveWindowMin = 10 } = {}) {
+  const supabase = getSupabaseServerClient();
+  const cutoff = new Date(Date.now() - liveWindowMin * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("providers")
+    .select("specs, last_seen")
+    .eq("status", "available")
+    .gte("last_seen", cutoff);
+  if (error) throw new Error(error.message);
+
+  const byName = new Map(); // name → { providers: int, freshest: iso }
+  for (const row of data ?? []) {
+    const served = Array.isArray(row?.specs?.served_models) ? row.specs.served_models : [];
+    for (const m of served) {
+      if (typeof m !== "string" || !m) continue;
+      const cur = byName.get(m) ?? { providers: 0, freshest: null };
+      cur.providers += 1;
+      if (!cur.freshest || (row.last_seen && row.last_seen > cur.freshest)) {
+        cur.freshest = row.last_seen;
+      }
+      byName.set(m, cur);
+    }
+  }
+
+  return [...byName.entries()]
+    .map(([name, v]) => ({
+      id: name,
+      name,
+      providers: v.providers,
+      freshest_seen: v.freshest ? relativeAgo(v.freshest) : "—"
+    }))
+    .sort((a, b) => b.providers - a.providers || a.name.localeCompare(b.name));
+}
+
 function relativeAgo(iso) {
   if (!iso) return "—";
   const ms = Date.now() - new Date(iso).getTime();

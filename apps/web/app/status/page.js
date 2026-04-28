@@ -9,20 +9,19 @@ import {
   getClients,
   getDashboardOverview,
   getJobs,
-  getModels,
   getNodes,
-  getProviders
+  getProviders,
+  getServedModelsAcrossProviders
 } from "@/lib/data/infernet";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [overview, nodes, jobs, providers, models, clients, aggregators] = await Promise.all([
+  const [overview, jobs, providers, models, clients, aggregators] = await Promise.all([
     getDashboardOverview(),
-    getNodes({ limit: 6 }),
     getJobs({ limit: 6 }),
     getProviders({ limit: 6 }),
-    getModels({ limit: 6 }),
+    getServedModelsAcrossProviders(),
     getClients({ limit: 6 }),
     getAggregators({ limit: 6 })
   ]);
@@ -65,16 +64,15 @@ export default async function HomePage() {
           emptyMessage="No providers found."
         />
         <ResourceTable
-          title="Models"
-          description="Available models."
+          title="Models served"
+          description="Models live providers are advertising right now."
           columns={[
             { key: "name", label: "Model" },
-            { key: "family", label: "Family" },
-            { key: "context_length", label: "Context" },
-            { key: "visibility", label: "Visibility" }
+            { key: "providers", label: "Providers" },
+            { key: "freshest_seen", label: "Last heartbeat" }
           ]}
           rows={models}
-          emptyMessage="No models found."
+          emptyMessage="No models advertised. Online providers haven't sent a fresh specs.served_models yet."
         />
         <ResourceTable
           title="Clients"

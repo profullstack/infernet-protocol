@@ -53,6 +53,27 @@ export default function DeployView({ signedInAs = null }) {
     const fullUrl = cloudInitUrl ?? `${origin}/api/deploy/cloud-init`;
     const oneLiner = `curl -fsSL '${fullUrl}' | sh`;
 
+    // DigitalOcean API: create a droplet directly via REST. user_data
+    // gets the same one-liner the manual UI flow uses, JSON-encoded so
+    // shell-quote escaping survives. Operator replaces $DO_TOKEN with
+    // their personal access token, edits region/size/ssh_keys.
+    const doApiCmd = `curl -X POST https://api.digitalocean.com/v2/droplets \\
+  -H "Authorization: Bearer $DO_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '${JSON.stringify({
+        name: "infernet",
+        region: "sfo3",
+        size: "gpu-h100x1-80gb",
+        image: "gpu-h100x1-base",
+        ssh_keys: [],
+        backups: false,
+        ipv6: true,
+        monitoring: true,
+        tags: ["infernet"],
+        user_data: oneLiner,
+        vpc_uuid: ""
+    }, null, 2)}'`;
+
     return (
         <main className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6 lg:px-10">
             <header className="mb-8 space-y-3">
@@ -158,6 +179,37 @@ runcmd:
                             </pre>
                         </div>,
                         <>Click Create. The node registers itself within ~2 min.</>
+                    ]}
+                />
+                <ProviderCard
+                    title="DigitalOcean (API)"
+                    blurb="One-shot from your terminal. Replace $DO_TOKEN with your personal access token, edit region/size/ssh_keys to taste."
+                    steps={[
+                        <>
+                            Get a token at{" "}
+                            <a href="https://cloud.digitalocean.com/account/api/tokens" target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
+                                cloud.digitalocean.com/account/api/tokens
+                            </a>{" "}
+                            (scope: write).
+                        </>,
+                        <>
+                            <code>export DO_TOKEN=&lt;your-token&gt;</code> then run:
+                        </>,
+                        <div className="relative">
+                            <CopyButton text={doApiCmd} />
+                            <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-[var(--panel-strong)] p-2 pr-20 text-xs leading-5 text-[var(--accent)]">
+{doApiCmd}
+                            </pre>
+                        </div>,
+                        <>
+                            Browse sizes:{" "}
+                            <code>doctl compute size list</code> or see{" "}
+                            <a href="https://docs.digitalocean.com/reference/api/api-reference/#tag/Sizes" target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
+                                DO API docs
+                            </a>
+                            . The user_data field carries the same one-liner the
+                            UI flow does — node registers itself within ~2 min.
+                        </>
                     ]}
                 />
                 <ProviderCard

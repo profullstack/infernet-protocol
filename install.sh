@@ -859,69 +859,98 @@ EOF
 }
 
 check_path() {
+    # If $INFERNET_BIN is already on PATH, nothing to wire.
     case ":$PATH:" in
         *":$INFERNET_BIN:"*)
+            ok "$INFERNET_BIN is already on PATH"
             return 0
             ;;
     esac
 
-    _wired_one=0
+    # 1. Symlink onto a system bin dir that's already on the parent
+    #    shell's PATH. THIS is what makes `infernet` work in the same
+    #    terminal where the operator just ran `curl … | sh` — no
+    #    re-source dance, no new shell. Try the standard locations in
+    #    priority order; show what works and what doesn't (no silent
+    #    failures — operators on Vast.ai / RunPod hit "command not
+    #    found" because earlier versions of this code gagged the
+    #    error).
+    _systemlink=""
+    for _sysbin in /usr/local/bin /usr/bin /opt/bin; do
+        [ -d "$_sysbin" ] || { info "  $_sysbin: missing — skip"; continue; }
+        # Try direct write first.
+        if ln -sf "$WRAPPER" "$_sysbin/infernet" 2>/tmp/inf-ln-err.$$ ; then
+            _systemlink="$_sysbin/infernet"
+            ok "symlinked $_systemlink → $WRAPPER"
+            break
+        fi
+        _err="$(cat /tmp/inf-ln-err.$$ 2>/dev/null)"
+        rm -f /tmp/inf-ln-err.$$
+        # Try with sudo if available.
+        if [ -n "$SUDO" ] && $SUDO ln -sf "$WRAPPER" "$_sysbin/infernet" 2>/dev/null; then
+            _systemlink="$_sysbin/infernet"
+            ok "symlinked $_systemlink → $WRAPPER (via sudo)"
+            break
+        fi
+        info "  $_sysbin: ln failed — ${_err:-permission denied}"
+    done
+    unset _sysbin _err
 
-    # 1. Symlink at /usr/local/bin/infernet — on PATH for every standard
-    # distro and container image. Fails silently if /usr/local/bin is
-    # missing or unwritable.
-    if [ -d /usr/local/bin ] && [ -w /usr/local/bin ] \
-        && ln -sf "$WRAPPER" /usr/local/bin/infernet 2>/dev/null; then
-        ok "linked /usr/local/bin/infernet → $WRAPPER"
-        _wired_one=1
-    elif [ -n "$SUDO" ] && [ -d /usr/local/bin ] \
-        && $SUDO ln -sf "$WRAPPER" /usr/local/bin/infernet 2>/dev/null; then
-        ok "linked /usr/local/bin/infernet → $WRAPPER (via sudo)"
-        _wired_one=1
+    # 2. /etc/profile.d hook — sourced by every login shell system-
+    #    wide. Doesn't help THIS curl | sh session but covers every
+    #    future ssh/exec/new-shell into the box.
+    if [ -d /etc/profile.d ]; then
+        if printf 'export PATH="%s:$PATH"\n' "$INFERNET_BIN" > /etc/profile.d/infernet.sh 2>/dev/null; then
+            ok "wrote /etc/profile.d/infernet.sh"
+        elif [ -n "$SUDO" ] \
+            && printf 'export PATH="%s:$PATH"\n' "$INFERNET_BIN" \
+                | $SUDO tee /etc/profile.d/infernet.sh >/dev/null 2>&1; then
+            ok "wrote /etc/profile.d/infernet.sh (via sudo)"
+        else
+            info "  /etc/profile.d: write failed — skip"
+        fi
     fi
 
-    # 2. /etc/profile.d hook — sourced by every login shell system-wide.
-    # Doesn't help the current curl | sh session but covers every
-    # ssh/exec into the box from now on, regardless of operator's
-    # preferred shell.
-    if [ -d /etc/profile.d ] && [ -w /etc/profile.d ]; then
-        printf 'export PATH="%s:$PATH"\n' "$INFERNET_BIN" \
-            > /etc/profile.d/infernet.sh 2>/dev/null \
-            && { ok "wrote /etc/profile.d/infernet.sh"; _wired_one=1; }
-    elif [ -n "$SUDO" ] && [ -d /etc/profile.d ]; then
-        printf 'export PATH="%s:$PATH"\n' "$INFERNET_BIN" \
-            | $SUDO tee /etc/profile.d/infernet.sh >/dev/null 2>&1 \
-            && { ok "wrote /etc/profile.d/infernet.sh (via sudo)"; _wired_one=1; }
-    fi
-
-    # 3. Append to common shell rc files unconditionally (don't trust
-    # $SHELL — it's often unset during a curl | sh install). Each
-    # file is created if missing.
+    # 3. Append to common shell rc files (don't trust $SHELL — often
+    #    unset during a curl | sh install). Skip files that already
+    #    contain $INFERNET_BIN.
     for _rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
         if [ -e "$_rc" ] && grep -qF "$INFERNET_BIN" "$_rc" 2>/dev/null; then
-            continue   # already present
+            continue
         fi
         if printf '\n# Added by Infernet Protocol installer\nexport PATH="%s:$PATH"\n' \
             "$INFERNET_BIN" >> "$_rc" 2>/dev/null; then
             ok "appended PATH export to $_rc"
-            _wired_one=1
         fi
     done
     unset _rc
 
-    if [ "$_wired_one" = "1" ]; then
-        warn "PATH wired for future shells — for THIS session run:"
+    # Decide whether THIS shell will see `infernet` on the next prompt:
+    # only true if we successfully created a symlink in a dir that's
+    # already on PATH. /etc/profile.d and rc-file appends only kick in
+    # for new shells.
+    if [ -n "$_systemlink" ]; then
+        printf '\n%s ✓%s `infernet` is on PATH for ALL shells (including this one).\n' \
+            "$GREEN" "$RESET"
+        printf '   Verify: %sinfernet status%s\n\n' "$BOLD" "$RESET"
     else
-        warn "$INFERNET_BIN is not on PATH and couldn't be auto-wired — run:"
-    fi
-    cat <<EOF
+        warn "couldn't symlink onto a system bin dir (tried /usr/local/bin, /usr/bin, /opt/bin)"
+        cat <<EOF
+
+  To use 'infernet' in THIS shell session right now:
 
       export PATH="$INFERNET_BIN:\$PATH"
+      infernet status
 
-  Or invoke by full path: $WRAPPER
+  Or always invoke by absolute path:
+
+      $WRAPPER status
+
+  Future shells will pick it up automatically (rc files + profile.d).
 
 EOF
-    unset _wired_one
+    fi
+    unset _systemlink
 }
 
 # ---------------------------------------------------------------------------
@@ -1007,12 +1036,27 @@ main() {
 
     auto_bootstrap_native
 
+    # ---- Final verification — does `infernet` work from THIS shell? ----
+    # Operators were hitting `bash: infernet: command not found` immediately
+    # after a successful install on Vast.ai / RunPod because PATH wiring
+    # was best-effort and silent. Print the actual answer up-front, plus
+    # the absolute path as an unconditional fallback.
+    printf '\n'
+    if command -v infernet >/dev/null 2>&1; then
+        ok "verified: 'infernet' resolves to $(command -v infernet)"
+    else
+        warn "'infernet' is NOT on this shell's PATH — use one of:"
+        printf '\n      %sexport PATH="%s:$PATH" && infernet status%s\n' "$BOLD" "$INFERNET_BIN" "$RESET"
+        printf '      %s%s status%s\n\n' "$BOLD" "$WRAPPER" "$RESET"
+    fi
+
     printf '\nUse:\n'
     printf '  infernet status       # daemon state\n'
     printf '  infernet chat "hi"    # local + P2P inference\n'
     printf '  infernet debug        # diagnostic bundle for support\n'
     printf '  infernet help         # full command list\n'
-    printf '\nTo update later, just re-run this installer.\n'
+    printf '\nAbsolute path (always works):  %s\n' "$WRAPPER"
+    printf 'To update later, just re-run this installer.\n'
     if [ "$used_npm" = "1" ]; then
         printf 'To uninstall:    npm uninstall -g %s\n\n' "$NPM_PACKAGE"
     else

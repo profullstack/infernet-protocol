@@ -859,13 +859,14 @@ EOF
 }
 
 check_path() {
-    # If $INFERNET_BIN is already on PATH, nothing to wire.
-    case ":$PATH:" in
-        *":$INFERNET_BIN:"*)
-            ok "$INFERNET_BIN is already on PATH"
-            return 0
-            ;;
-    esac
+    # ALWAYS wire all three layers — early-returning when PATH appears
+    # to contain $INFERNET_BIN was a real bug: install.sh adds
+    # $INFERNET_BIN to its own PATH (via mise's bin dir) so that
+    # `mise`, `node`, etc. resolve during install. That made check_path
+    # think wiring was already done in the install.sh's process —
+    # but the operator's interactive shell never had $INFERNET_BIN on
+    # PATH, so `infernet: command not found` after install. Idempotent
+    # operations below; safe to always run.
 
     # 1. Symlink onto a system bin dir that's already on the parent
     #    shell's PATH. THIS is what makes `infernet` work in the same
@@ -1036,19 +1037,29 @@ main() {
 
     auto_bootstrap_native
 
-    # ---- Final verification — does `infernet` work from THIS shell? ----
-    # Operators were hitting `bash: infernet: command not found` immediately
-    # after a successful install on Vast.ai / RunPod because PATH wiring
-    # was best-effort and silent. Print the actual answer up-front, plus
-    # the absolute path as an unconditional fallback.
+    # ---- Final verification — will `infernet` work from a FRESH shell? ----
+    # `command -v infernet` against this script's own $PATH is unreliable:
+    # install.sh added $INFERNET_BIN to its PATH so mise/pnpm/etc. would
+    # resolve, but the operator's interactive shell doesn't inherit that.
+    # Verify by checking the actual disk locations a normal shell would
+    # find — a symlink in one of /usr/local/bin, /usr/bin, /opt/bin.
     printf '\n'
-    if command -v infernet >/dev/null 2>&1; then
-        ok "verified: 'infernet' resolves to $(command -v infernet)"
+    _system_link=""
+    for _sysbin in /usr/local/bin /usr/bin /opt/bin; do
+        if [ -e "$_sysbin/infernet" ] || [ -L "$_sysbin/infernet" ]; then
+            _system_link="$_sysbin/infernet"
+            break
+        fi
+    done
+    if [ -n "$_system_link" ]; then
+        ok "verified: 'infernet' is symlinked at $_system_link"
+        printf '   It will work in this shell and every future shell.\n'
     else
-        warn "'infernet' is NOT on this shell's PATH — use one of:"
+        warn "'infernet' is NOT on a system PATH dir — for THIS shell run:"
         printf '\n      %sexport PATH="%s:$PATH" && infernet status%s\n' "$BOLD" "$INFERNET_BIN" "$RESET"
         printf '      %s%s status%s\n\n' "$BOLD" "$WRAPPER" "$RESET"
     fi
+    unset _sysbin _system_link
 
     printf '\nUse:\n'
     printf '  infernet status       # daemon state\n'

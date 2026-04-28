@@ -331,25 +331,32 @@ check_disk_space() {
         _default_need=3072
     fi
     _need_mb="${INFERNET_MIN_DISK_MB:-$_default_need}"
-    _free_mb="$(free_mb_at "$HOME")"
+    # Measure the filesystem where the install will actually land. After
+    # detect_install_volume runs, INFERNET_HOME may point at a big volume
+    # while $HOME is on a tiny overlay — checking $HOME would warn
+    # spuriously about disk that doesn't matter for the install.
+    _check_path="$INFERNET_HOME"
+    [ -d "$_check_path" ] || _check_path="$(dirname "$_check_path")"
+    [ -d "$_check_path" ] || _check_path="$HOME"
+    _free_mb="$(free_mb_at "$_check_path")"
     # df unavailable / unknown filesystem — best-effort: don't block.
     if [ "${_free_mb:-0}" = "0" ]; then
-        warn "could not check disk space at \$HOME — continuing anyway"
-        unset _default_need _need_mb _free_mb
+        warn "could not check disk space at $_check_path — continuing anyway"
+        unset _default_need _need_mb _free_mb _check_path
         return 0
     fi
     if [ "$_free_mb" -lt "$_need_mb" ]; then
-        warn "low disk: ${_free_mb} MB free at \$HOME, need ~${_need_mb} MB"
+        warn "low disk: ${_free_mb} MB free at $_check_path, need ~${_need_mb} MB"
         warn "free up space (e.g. 'pnpm store prune', 'docker system prune') and re-run."
         warn "to override: INFERNET_MIN_DISK_MB=$_free_mb or INFERNET_SKIP_DISK_CHECK=1"
         fail "insufficient disk space"
     fi
     if [ "$_free_mb" -lt $((_need_mb * 2)) ]; then
-        warn "tight disk: ${_free_mb} MB free at \$HOME — recommended >$((_need_mb * 2)) MB"
+        warn "tight disk: ${_free_mb} MB free at $_check_path — recommended >$((_need_mb * 2)) MB"
     else
-        ok "disk: ${_free_mb} MB free at \$HOME"
+        ok "disk: ${_free_mb} MB free at $_check_path"
     fi
-    unset _default_need _need_mb _free_mb
+    unset _default_need _need_mb _free_mb _check_path
 }
 
 # ---------------------------------------------------------------------------
@@ -434,29 +441,41 @@ try_install_node_unattended() {
     fi
 
     info "installing Node.js 20 via mise (https://mise.jdx.dev)"
-    if ! command -v mise >/dev/null 2>&1; then
-        # Official one-liner. Drops the binary at ~/.local/bin/mise.
+    # Resolve where mise binary will land: $MISE_INSTALL_PATH if set
+    # by detect_install_volume (volume-relocation case), else default.
+    _mise_bin="${MISE_INSTALL_PATH:-$HOME/.local/bin/mise}"
+    if [ ! -x "$_mise_bin" ]; then
+        # Official one-liner. Honors $MISE_INSTALL_PATH for the binary
+        # location, $MISE_DATA_DIR for installed tools.
         curl -fsSL https://mise.run | sh >/dev/null 2>&1 || {
             warn "mise install failed (curl https://mise.run | sh)"
+            unset _mise_bin
             return 1
         }
     fi
-
-    # Make sure mise + its shims are on PATH for the rest of this
-    # script — without this, downstream `node` / `npm` calls would
-    # still resolve to the stale system version.
-    PATH="$HOME/.local/bin:$PATH"
-    if ! command -v mise >/dev/null 2>&1; then
-        warn "mise installed but not on PATH at $HOME/.local/bin"
+    if [ ! -x "$_mise_bin" ]; then
+        # mise.run sometimes defaults differently — fall back to common spots.
+        for _candidate in "$INFERNET_BIN/mise" "$HOME/.local/bin/mise" /usr/local/bin/mise; do
+            if [ -x "$_candidate" ]; then _mise_bin="$_candidate"; break; fi
+        done
+        unset _candidate
+    fi
+    if [ ! -x "$_mise_bin" ]; then
+        warn "mise installed but binary not found (tried $INFERNET_BIN, $HOME/.local/bin, /usr/local/bin)"
+        unset _mise_bin
         return 1
     fi
-    mise install node@20 >/dev/null 2>&1 || warn "mise install node@20 failed"
-    mise use --global node@20 >/dev/null 2>&1 || warn "mise use --global node@20 failed"
 
+    # Use mise by absolute path — no PATH dependency.
+    "$_mise_bin" install node@20 >/dev/null 2>&1 || warn "mise install node@20 failed"
+    "$_mise_bin" use --global node@20 >/dev/null 2>&1 || warn "mise use --global node@20 failed"
+
+    # Now expose the shims so plain `node` / `npm` works for the rest
+    # of the script and for the wrapper at runtime.
     _mise_data="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}"
-    PATH="$_mise_data/shims:$PATH"
+    PATH="$(dirname "$_mise_bin"):$_mise_data/shims:$PATH"
     export PATH
-    unset _mise_data
+    unset _mise_bin _mise_data
 
     command -v node >/dev/null 2>&1 && return 0
     return 1

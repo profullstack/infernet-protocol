@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/gpu",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Local hardware detection for the Infernet Protocol — GPUs (NVIDIA, AMD, Apple Silicon) via native tooling, plus CPUs / RAM / arch via node:os. Pure-JS for the CPU side, vendor-CLI shell-out for GPUs.",
   "license": "MIT",
   "type": "module",

@@ -26,7 +26,8 @@ import { DEFAULT_P2P_PORT, resolveP2pPort } from "../lib/network.js";
 import {
     detectGpus, formatGpuLine,
     detectCpus, detectHost, formatCpuLine,
-    detectInterconnects, formatInterconnectSummary
+    detectInterconnects, formatInterconnectSummary,
+    lastDetectionDiagnostics
 } from "@infernetprotocol/gpu";
 import { isDaemonAlive } from "../lib/ipc.js";
 import { createNodeClient } from "../lib/node-client.js";
@@ -351,10 +352,39 @@ export default async function setup(args) {
     }
     if (detectedGpus.length === 0) {
         warn("no GPUs detected — this node will register as CPU-only");
+        // Surface per-vendor "why" so an operator with hardware that
+        // SHOULD be detected (e.g. a desktop with an Nvidia card but
+        // no driver installed) gets an actionable hint instead of a
+        // mystery "CPU-only" verdict.
+        const diag = lastDetectionDiagnostics();
+        const lines = Object.entries(diag).map(([k, v]) => `${k}: ${v}`);
+        if (lines.length > 0) {
+            process.stdout.write("\n  Why detection came up empty:\n");
+            for (const line of lines) process.stdout.write(`    · ${line}\n`);
+            process.stdout.write(
+                "\n  If you have hardware that should be detected:\n" +
+                "    NVIDIA   → install drivers + nvidia-smi (https://www.nvidia.com/Download/index.aspx)\n" +
+                "    AMD      → install ROCm (https://rocm.docs.amd.com/en/latest/install/install.html)\n" +
+                "    Apple    → on macOS only — Linux can't read Apple Silicon GPUs\n" +
+                "    Intel    → integrated GPUs aren't queried (Arc/Iris support is roadmap)\n" +
+                "  Then re-run `infernet setup`.\n"
+            );
+        }
     } else {
         ok(`${detectedGpus.length} GPU${detectedGpus.length === 1 ? "" : "s"}`);
         for (const g of detectedGpus) {
             process.stdout.write(`    · ${formatGpuLine(g)}\n`);
+        }
+        // If we fell through to lspci, every entry has source: 'lspci' —
+        // we know the hardware is present but can't query its specs.
+        // Tell the operator how to upgrade detection.
+        const lspciOnly = detectedGpus.every((g) => g.source === "lspci");
+        if (lspciOnly) {
+            process.stdout.write(
+                "\n  Detected via lspci only (vendor tooling missing).\n" +
+                "  VRAM / utilization / temperature won't be reported until you install\n" +
+                "  the right CLI for your card (nvidia-smi for NVIDIA, rocm-smi for AMD).\n"
+            );
         }
     }
 

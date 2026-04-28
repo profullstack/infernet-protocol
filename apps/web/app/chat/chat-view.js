@@ -120,20 +120,44 @@ export default function ChatView({ initialModels = [] }) {
     });
 
     es.addEventListener("error", (e) => {
-      let msg = "Stream error";
+      let msg = null;
       try {
         const data = JSON.parse(e.data);
-        msg = data?.message ?? msg;
-      } catch { /* ignore */ }
-      failPending(msg);
+        msg = data?.message ?? null;
+      } catch { /* native EventSource error has no .data — we'll fetch */ }
+      if (msg) {
+        failPending(msg);
+      } else {
+        // Typed "error" event with no payload — pull persisted reason.
+        fetchPersistedFailure(jobId, "Stream error");
+      }
     });
 
-    // If the browser closes the EventSource on network loss, surface it.
+    // If the browser closes the EventSource on network loss, surface
+    // whatever the daemon recorded server-side. Without this fetch,
+    // the playground used to show "Connection to the provider was
+    // lost" even when the daemon had already written a specific
+    // error to job_events.
     es.onerror = () => {
       if (streaming && esRef.current === es) {
-        failPending("Connection to the provider was lost.");
+        fetchPersistedFailure(jobId, "Connection to the provider was lost.");
       }
     };
+  }
+
+  async function fetchPersistedFailure(jobId, fallback) {
+    try {
+      const res = await fetch(`/api/chat/${encodeURIComponent(jobId)}/status`);
+      if (res.ok) {
+        const body = await res.json();
+        const real = body?.latest_error_message ?? body?.error ?? null;
+        if (real) {
+          failPending(real);
+          return;
+        }
+      }
+    } catch { /* ignore */ }
+    failPending(fallback);
   }
 
   function failPending(message) {

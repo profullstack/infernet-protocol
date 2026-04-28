@@ -75,6 +75,64 @@ async function deleteModel(host, name) {
     }
 }
 
+/**
+ * Rough on-disk sizes (GB) for the model names we suggest. Used by
+ * the pre-pull capacity check. Unknown names pass through (we can't
+ * fit-check what we don't recognize; ollama will reject at pull/load
+ * time if the host genuinely can't handle it).
+ */
+const KNOWN_MODEL_SIZES = {
+    "qwen2.5:0.5b": 0.4,
+    "qwen2.5:1.5b": 1.0,
+    "qwen2.5:3b": 2.0,
+    "qwen2.5:7b": 4.4,
+    "qwen2.5:14b": 9.0,
+    "qwen2.5:32b": 20.0,
+    "qwen2.5:72b": 40.0,
+    "llama3.2:1b": 1.3,
+    "llama3.2:3b": 2.0,
+    "llama3.1:8b": 4.7,
+    "llama3.1:70b": 40.0,
+    "mistral:7b": 4.4,
+    "mixtral:8x7b": 26.0
+};
+
+async function detectCapacity() {
+    // Inline imports so this module stays usable from environments where
+    // @infernetprotocol/gpu can't shell out (e.g. tests).
+    try {
+        const { detectGpus, detectHost } = await import("@infernetprotocol/gpu");
+        const [gpus, host] = await Promise.all([detectGpus(), Promise.resolve(detectHost())]);
+        const vramGb = gpus.reduce((a, g) => a + (Number.isFinite(g.vram_mb) ? g.vram_mb / 1024 : 0), 0);
+        const ramGb = host.total_ram_mb / 1024;
+        return { vram_gb: vramGb, ram_gb: ramGb };
+    } catch {
+        return { vram_gb: 0, ram_gb: 0 };
+    }
+}
+
+function checkFits({ size_gb, vram_gb, ram_gb }) {
+    if (vram_gb > 0) {
+        const ceiling = vram_gb * 0.85;
+        return {
+            ok: size_gb <= ceiling,
+            mode: "gpu",
+            have_gb: +vram_gb.toFixed(2),
+            ceiling_gb: +ceiling.toFixed(2)
+        };
+    }
+    if (ram_gb > 0) {
+        const ceiling = ram_gb * 0.6;
+        return {
+            ok: size_gb <= ceiling,
+            mode: "cpu",
+            have_gb: +ram_gb.toFixed(2),
+            ceiling_gb: +ceiling.toFixed(2)
+        };
+    }
+    return { ok: true, mode: "unknown", have_gb: 0, ceiling_gb: null };
+}
+
 function streamPull(name) {
     return new Promise((resolve, reject) => {
         // Use the local `ollama` CLI for the pull because it gives a much
@@ -115,7 +173,7 @@ async function cmdList(host) {
     return 0;
 }
 
-async function cmdPull(host, name) {
+async function cmdPull(host, name, opts = {}) {
     if (!name) {
         process.stderr.write("error: pull requires a model name (e.g. qwen2.5:7b)\n");
         return 2;
@@ -123,6 +181,28 @@ async function cmdPull(host, name) {
     // Quick reachability check before spawning ollama, so we get a friendly
     // error rather than a confusing CLI-not-found if Ollama isn't installed.
     await fetchTags(host);
+
+    // Capacity check — if the model has a known size suggestion and
+    // it won't fit, refuse unless --force or in non-interactive mode.
+    if (!opts.force && !opts.yes) {
+        const known = KNOWN_MODEL_SIZES[name];
+        if (known) {
+            const cap = await detectCapacity();
+            const fits = checkFits({ size_gb: known, ...cap });
+            if (!fits.ok) {
+                process.stderr.write(
+                    `\n${name} (≈${known} GB) likely won't fit on this host:\n` +
+                    `  detected: ${fits.mode} with ${fits.have_gb} GB available\n` +
+                    `  ceiling:  ~${fits.ceiling_gb} GB (${fits.mode === "gpu" ? "85% of VRAM" : "60% of RAM"})\n` +
+                    `\nRefusing to pull. To override:\n` +
+                    `  infernet model pull ${name} --force\n` +
+                    `\nOr pick a smaller model — see https://ollama.com/library\n`
+                );
+                return 1;
+            }
+        }
+    }
+
     try {
         await streamPull(name);
     } catch (err) {
@@ -211,7 +291,10 @@ export default async function model(args) {
                 return await cmdList(host);
             case "pull":
             case "add":
-                return await cmdPull(host, arg);
+                return await cmdPull(host, arg, {
+                    force: args.has("force") || args.has("f"),
+                    yes: args.has("yes") || args.has("y") || process.env.INFERNET_NONINTERACTIVE === "1"
+                });
             case "remove":
             case "rm":
             case "delete":

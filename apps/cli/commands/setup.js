@@ -57,14 +57,45 @@ your system asks for confirmation first. Pass --confirm (or --yes) to
 skip the prompts.
 `;
 
+/**
+ * Each entry's `size_gb` is the rough on-disk size of the GGUF file.
+ * The actual working-set (RAM/VRAM the model occupies during inference)
+ * is ~1.2× that for a Q4_K_M quant + KV cache. The model picker uses
+ * this to decide whether a model fits the host.
+ */
 const MODEL_SUGGESTIONS = [
-    { name: "qwen2.5:0.5b", size: "≈400 MB", note: "smoke test, runs on CPU" },
-    { name: "qwen2.5:3b",   size: "≈2 GB",   note: "fits 6 GB+ GPU" },
-    { name: "qwen2.5:7b",   size: "≈4.4 GB", note: "fits 8 GB+ GPU — recommended" },
-    { name: "qwen2.5:14b",  size: "≈9 GB",   note: "fits 16 GB+ GPU" },
-    { name: "qwen2.5:32b",  size: "≈20 GB",  note: "fits 24 GB+ GPU" },
-    { name: "qwen2.5:72b",  size: "≈40 GB",  note: "fits 48 GB+ GPU" }
+    { name: "qwen2.5:0.5b", size_gb: 0.4,  size: "≈400 MB", note: "smoke test, runs on CPU" },
+    { name: "qwen2.5:3b",   size_gb: 2.0,  size: "≈2 GB",   note: "fits 6 GB+ GPU / 8 GB+ RAM" },
+    { name: "qwen2.5:7b",   size_gb: 4.4,  size: "≈4.4 GB", note: "fits 8 GB+ GPU / 12 GB+ RAM" },
+    { name: "qwen2.5:14b",  size_gb: 9.0,  size: "≈9 GB",   note: "fits 16 GB+ GPU / 24 GB+ RAM" },
+    { name: "qwen2.5:32b",  size_gb: 20.0, size: "≈20 GB",  note: "fits 24 GB+ GPU / 40 GB+ RAM" },
+    { name: "qwen2.5:72b",  size_gb: 40.0, size: "≈40 GB",  note: "fits 48 GB+ GPU / 80 GB+ RAM" }
 ];
+
+/**
+ * Pure helper — given a model size in GB and host capacity (VRAM gb,
+ * RAM gb), return whether the model fits. Same heuristic the
+ * register-time guard uses, exposed here so the model picker can
+ * filter the menu *before* the user starts a 40 GB download they
+ * can't actually run.
+ *
+ *   GPU box: model fits if size ≤ 0.85 × VRAM
+ *   CPU box: model fits if size ≤ 0.6 × RAM (OS + Ollama headroom)
+ *
+ * Exported so tests + `infernet model pull` can reuse it.
+ */
+export function modelFits({ size_gb, vram_gb, ram_gb }) {
+    if (!Number.isFinite(size_gb) || size_gb <= 0) return { fits: true, ceiling_gb: null, mode: "unknown" };
+    if (Number.isFinite(vram_gb) && vram_gb > 0) {
+        const ceiling = vram_gb * 0.85;
+        return { fits: size_gb <= ceiling, ceiling_gb: +ceiling.toFixed(2), mode: "gpu" };
+    }
+    if (Number.isFinite(ram_gb) && ram_gb > 0) {
+        const ceiling = ram_gb * 0.6;
+        return { fits: size_gb <= ceiling, ceiling_gb: +ceiling.toFixed(2), mode: "cpu" };
+    }
+    return { fits: true, ceiling_gb: null, mode: "unknown" };
+}
 
 function ok(msg)   { process.stdout.write(`  ✓ ${msg}\n`); }
 function warn(msg) { process.stdout.write(`  ! ${msg}\n`); }
@@ -269,24 +300,64 @@ async function verifyModelPulled(host, name) {
 }
 
 async function chooseModel(installed, opts) {
-    if (opts.preselected) return opts.preselected;
-    if (opts.yes) return MODEL_SUGGESTIONS[2].name; // qwen2.5:7b
+    const { vramGb, ramGb } = opts.capacity ?? { vramGb: 0, ramGb: 0 };
+
+    // Pre-evaluate fit so we can both annotate the menu AND auto-pick a
+    // sensible default for `--yes` mode.
+    const evaluated = MODEL_SUGGESTIONS.map((m) => {
+        const f = modelFits({ size_gb: m.size_gb, vram_gb: vramGb, ram_gb: ramGb });
+        return { ...m, fits: f.fits, mode: f.mode, ceiling_gb: f.ceiling_gb };
+    });
+    const fittingOnly = evaluated.filter((m) => m.fits);
+    // Default = largest fitting suggestion (or smallest non-fitting as fallback).
+    const defaultModel = fittingOnly.length > 0
+        ? fittingOnly[fittingOnly.length - 1].name
+        : MODEL_SUGGESTIONS[0].name;
+
+    if (opts.preselected) {
+        // Honor the preselect, but warn if it won't fit.
+        const m = evaluated.find((x) => x.name === opts.preselected);
+        if (m && !m.fits) {
+            warn(`preselected ${opts.preselected} (${m.size}) likely won't fit (${m.mode} ceiling ≈ ${m.ceiling_gb} GB)`);
+            warn("  Pulling anyway because --model overrides the fit check. Inference may OOM.");
+        }
+        return opts.preselected;
+    }
+    if (opts.yes) return defaultModel;
 
     process.stdout.write("\n  Which model should this node serve?\n");
-    MODEL_SUGGESTIONS.forEach((m, i) => {
+    evaluated.forEach((m, i) => {
         const installedFlag = installed.includes(m.name) ? "  [pulled]" : "";
-        process.stdout.write(`    ${i + 1}) ${m.name.padEnd(16)} ${m.size.padEnd(10)} ${m.note}${installedFlag}\n`);
+        const fitFlag = m.fits
+            ? ""
+            : `  [✗ won't fit on this host — ${m.mode} ceiling ≈ ${m.ceiling_gb} GB]`;
+        process.stdout.write(
+            `    ${i + 1}) ${m.name.padEnd(16)} ${m.size.padEnd(10)} ${m.note}${installedFlag}${fitFlag}\n`
+        );
     });
     process.stdout.write(`    ${MODEL_SUGGESTIONS.length + 1}) other (enter manually)\n`);
-    const def = "3";
-    const ans = await question("  Choice", { default: def });
+    const defaultIdx = MODEL_SUGGESTIONS.findIndex((m) => m.name === defaultModel) + 1;
+    const ans = await question("  Choice", { default: String(defaultIdx) });
     const n = Number.parseInt(ans, 10);
-    if (n >= 1 && n <= MODEL_SUGGESTIONS.length) return MODEL_SUGGESTIONS[n - 1].name;
+    if (n >= 1 && n <= MODEL_SUGGESTIONS.length) {
+        const picked = evaluated[n - 1];
+        if (!picked.fits) {
+            const cont = await question(
+                `  ${picked.name} likely won't fit (${picked.mode} ceiling ≈ ${picked.ceiling_gb} GB). Pull anyway?`,
+                { default: "n" }
+            );
+            if (!cont.toLowerCase().startsWith("y")) {
+                process.stdout.write("  Aborting model pick. Re-run setup and choose a smaller model.\n");
+                return null;
+            }
+        }
+        return picked.name;
+    }
     if (n === MODEL_SUGGESTIONS.length + 1) {
         const custom = await question("  Model name (e.g. mistral:7b)", {});
         return custom || null;
     }
-    return MODEL_SUGGESTIONS[2].name;
+    return defaultModel;
 }
 
 export default async function setup(args) {
@@ -469,7 +540,20 @@ export default async function setup(args) {
             chosenModel = installedNames[0];
             ok(`using already-installed ${chosenModel}`);
         } else {
-            chosenModel = await chooseModel(installedNames, { yes, preselected: preselectedModel });
+            // Compute host capacity (in GB) for the model fit-check. Sum
+            // VRAM across all detected GPUs (multi-GPU = tensor parallel
+            // via Ollama). RAM falls back to the host total when no GPU
+            // info is available.
+            const vramGb = detectedGpus.reduce(
+                (a, g) => a + (Number.isFinite(g.vram_mb) ? g.vram_mb / 1024 : 0),
+                0
+            );
+            const ramGb = hostInfo.total_ram_mb / 1024;
+            chosenModel = await chooseModel(installedNames, {
+                yes,
+                preselected: preselectedModel,
+                capacity: { vramGb, ramGb }
+            });
             if (!chosenModel) {
                 fail("no model selected — aborting");
                 return 1;

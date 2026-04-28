@@ -3,15 +3,25 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { isNimConfigured, nimVirtualProvider } from "@infernetprotocol/nim-adapter";
 
 /**
- * Pick a P2P provider to serve a chat job. Simplest policy:
- *   - status = 'available'
- *   - last_seen within the last 2 minutes (liveness check)
- *   - order by reputation DESC, price ASC
+ * Pick a P2P provider to serve a chat job.
  *
- * Returns null if the network has no live providers. Callers decide
- * whether to use the NIM fallback (see createChatJob).
+ * Filtering:
+ *   - status = 'available'
+ *   - last_seen within the last 2 minutes (liveness)
+ *   - if a model is requested, the provider's specs.served_models must
+ *     include it (so we don't route to a node that can't serve the
+ *     model — that 500s mid-stream and rots reputation)
+ *
+ * Selection from the filtered set:
+ *   - reputation-weighted random pick. Higher-reputation providers get
+ *     proportionally more traffic, but no single node monopolizes the
+ *     queue when several qualify. Reputation defaults to 50 so brand-
+ *     new providers still get tried.
+ *
+ * Returns null if no provider qualifies. Callers decide whether to use
+ * the NIM fallback (see createChatJob).
  */
-export async function pickChatProvider() {
+export async function pickChatProvider({ modelName } = {}) {
   const supabase = getSupabaseServerClient();
   const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
@@ -19,13 +29,48 @@ export async function pickChatProvider() {
     .from("providers")
     .select("id, node_id, name, reputation, price, gpu_model, specs")
     .eq("status", "available")
-    .gte("last_seen", twoMinAgo)
-    .order("reputation", { ascending: false })
-    .order("price", { ascending: true })
-    .limit(1);
+    .gte("last_seen", twoMinAgo);
 
   if (error) throw error;
-  return (data && data[0]) ?? null;
+
+  let candidates = data ?? [];
+
+  if (typeof modelName === "string" && modelName) {
+    candidates = candidates.filter((p) => {
+      const served = Array.isArray(p?.specs?.served_models) ? p.specs.served_models : [];
+      return served.includes(modelName);
+    });
+  }
+
+  if (candidates.length === 0) return null;
+  return reputationWeightedPick(candidates);
+}
+
+/**
+ * Pick one provider weighted by `reputation` (default 50). Pure-JS so
+ * it's testable without a DB. Exported for tests.
+ */
+export function reputationWeightedPick(candidates, rng = Math.random) {
+  if (!candidates || candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0];
+
+  // Floor at 1 so a 0-reputation provider can still occasionally win
+  // (and so the weight sum is never 0). Default to 50 only when the
+  // value is genuinely missing — `Number(0) || 50` would treat
+  // reputation=0 as missing and substitute 50, which is the wrong
+  // call: a literal zero is meaningful (brand-new or penalized node).
+  const weights = candidates.map((c) => {
+    const r = Number(c.reputation);
+    const fallback = Number.isFinite(r) ? r : 50;
+    return Math.max(1, fallback);
+  });
+  const total = weights.reduce((a, w) => a + w, 0);
+  let r = rng() * total;
+  for (let i = 0; i < candidates.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return candidates[i];
+  }
+  return candidates[candidates.length - 1];
 }
 
 /**
@@ -53,7 +98,7 @@ export async function createChatJob({ messages, modelName, maxTokens = 512, temp
   const supabase = getSupabaseServerClient();
   const now = new Date().toISOString();
 
-  const p2pProvider = await pickChatProvider();
+  const p2pProvider = await pickChatProvider({ modelName });
   const nimAvailable = !p2pProvider && isNimConfigured();
   const source = p2pProvider ? "p2p" : nimAvailable ? "nim" : "none";
 

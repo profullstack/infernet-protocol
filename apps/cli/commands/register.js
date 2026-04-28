@@ -14,9 +14,9 @@ import { resolveP2pPort, detectLocalAddress } from '../lib/network.js';
 import { detectGpus, detectInterconnects, detectCpus, detectHost } from '@infernetprotocol/gpu';
 
 /**
- * Probe Ollama for the actual list of models pulled locally. Empty
- * array on any failure — we still want to register the node even if
- * the engine isn't up at register time.
+ * Probe Ollama for the actual list of models pulled locally, with
+ * sizes. Empty array on any failure — we still want to register the
+ * node even if the engine isn't up at register time.
  */
 async function detectOllamaModels(host) {
     if (!host) return [];
@@ -25,10 +25,55 @@ async function detectOllamaModels(host) {
         if (!res.ok) return [];
         const json = await res.json();
         const models = Array.isArray(json?.models) ? json.models : [];
-        return models.map((m) => m.name ?? m.model).filter((s) => typeof s === 'string');
+        return models
+            .map((m) => ({
+                name: m.name ?? m.model,
+                size_bytes: typeof m.size === 'number' ? m.size : null
+            }))
+            .filter((m) => typeof m.name === 'string' && m.name);
     } catch {
         return [];
     }
+}
+
+/**
+ * Filter out models that physically can't fit on this node. A node
+ * advertising a model it can't actually serve is worse than not
+ * advertising at all — clients route there, the inference 500s mid-
+ * stream, the network's reputation rots.
+ *
+ * Heuristic (intentionally conservative — better to under-advertise):
+ *   - GPU box: model fits if size < 0.85 × total VRAM across all GPUs.
+ *     0.15 headroom covers KV cache + quantization overhead.
+ *   - CPU-only box: model fits if size < 0.6 × total RAM. Lower because
+ *     the OS, Ollama itself, and other processes need RAM too, and CPU
+ *     inference's working set is roughly the model size + activations.
+ *
+ * Models with no reported size pass through (we can't verify, so we
+ * trust the operator + Ollama's own load-time check).
+ */
+export function filterFittingModels(models, { totalVramBytes, totalRamBytes }) {
+    const hasGpu = Number.isFinite(totalVramBytes) && totalVramBytes > 0;
+    const ceiling = hasGpu
+        ? totalVramBytes * 0.85
+        : (Number.isFinite(totalRamBytes) ? totalRamBytes * 0.6 : Number.POSITIVE_INFINITY);
+
+    const fitting = [];
+    const rejected = [];
+    for (const m of models) {
+        if (!Number.isFinite(m.size_bytes)) {
+            // Unknown size — pass through. Ollama will reject at load time
+            // if it really can't fit; our heuristic is just a pre-filter.
+            fitting.push(m.name);
+            continue;
+        }
+        if (m.size_bytes <= ceiling) {
+            fitting.push(m.name);
+        } else {
+            rejected.push({ name: m.name, size_gb: +(m.size_bytes / 1024 ** 3).toFixed(2) });
+        }
+    }
+    return { fitting, rejected, ceiling_gb: +(ceiling / 1024 ** 3).toFixed(2), mode: hasGpu ? 'gpu' : 'cpu' };
 }
 
 const HELP = `infernet register — announce this node to the control plane
@@ -114,16 +159,42 @@ export async function gatherCoarseSpecs() {
         loadConfig().catch(() => ({}))
     ]);
 
-    // Models: union of (a) the model `infernet setup` chose and (b)
-    // every model Ollama currently has pulled. The control plane uses
-    // this for /chat model selection and routing; without it the
-    // network looks empty even when nodes are up.
+    // Models: every model Ollama has pulled, FILTERED to those that
+    // actually fit this box's RAM/VRAM. Advertising a model we can't
+    // serve is worse than not advertising it — clients route there,
+    // inference 500s mid-stream, network reputation tanks.
     const configuredModel = config?.engine?.model ?? null;
     const ollamaHost = config?.engine?.ollamaHost ?? null;
     const pulledModels = ollamaHost ? await detectOllamaModels(ollamaHost) : [];
+
+    // Capacity inputs in bytes — sum VRAM across all GPUs (multi-GPU
+    // boxes can fit a model larger than any single card via tensor
+    // parallelism, which Ollama handles automatically when it sees both).
+    const totalVramBytes = gpus.reduce(
+        (a, g) => a + (Number.isFinite(g.vram_mb) ? g.vram_mb * 1024 * 1024 : 0),
+        0
+    );
+    const host = detectHost();
+    const totalRamBytes = host.total_ram_mb * 1024 * 1024;
+
+    const { fitting, rejected } = filterFittingModels(pulledModels, {
+        totalVramBytes,
+        totalRamBytes
+    });
+
+    if (rejected.length > 0) {
+        const sizes = rejected.map((r) => `${r.name} (${r.size_gb} GB)`).join(', ');
+        process.stderr.write(
+            `\nNote: ${rejected.length} model(s) won't fit and will not be advertised: ${sizes}\n` +
+            `      Free up RAM/VRAM or remove with \`infernet model remove <name>\`.\n\n`
+        );
+    }
+
+    // Always include the configured model if it's pulled — even if our
+    // heuristic flagged it as too big, the operator explicitly chose it.
     const served_models = [...new Set([
-        ...(configuredModel ? [configuredModel] : []),
-        ...pulledModels
+        ...(configuredModel && pulledModels.some((m) => m.name === configuredModel) ? [configuredModel] : []),
+        ...fitting
     ])];
 
     return {

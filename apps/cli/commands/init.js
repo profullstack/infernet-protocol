@@ -123,18 +123,6 @@ export default async function init(args) {
         return 1;
     }
 
-    if (!name) {
-        // Default to user@host — operators recognize their own boxes
-        // by user@host; "provider@hostname" reads as ad-copy, not as
-        // an identifier they own.
-        const userPart = process.env.USER ?? (() => {
-            try { return os.userInfo().username; } catch { return null; }
-        })() ?? role;
-        name = await question('Human-readable node name', {
-            default: `${userPart}@${os.hostname()}`
-        });
-    }
-
     if (privkey && !isHex64(privkey)) {
         process.stderr.write('Nostr private key must be 64 hex characters.\n');
         return 1;
@@ -163,8 +151,26 @@ export default async function init(args) {
 
     const address = noAdvertise ? null : (addressArg ?? detectLocalAddress());
 
+    // Generate nodeId BEFORE defaulting the name so we can append its
+    // hash slug to the name (gives "user@host:0f44326c"-style identifiers
+    // that are both human-readable and unique across multiple nodes
+    // running on the same box).
     const nodeId = existing?.node?.nodeId ?? makeNodeId(role);
     const id = existing?.node?.id ?? null;
+
+    if (!name) {
+        // Default to user@host:slug — operators recognize their own
+        // boxes by user@host, and the trailing :slug disambiguates
+        // multiple nodes on the same machine. Slug is the hex tail
+        // of nodeId (e.g. "provider-0f44326c" → "0f44326c").
+        const userPart = process.env.USER ?? (() => {
+            try { return os.userInfo().username; } catch { return null; }
+        })() ?? role;
+        const slug = nodeId.includes('-') ? nodeId.split('-').slice(1).join('-') : nodeId.slice(0, 8);
+        name = await question('Human-readable node name', {
+            default: `${userPart}@${os.hostname()}:${slug}`
+        });
+    }
 
     // Merge with any existing config so engine.*, payment.*, and any
     // other top-level sections survive re-running init or running it

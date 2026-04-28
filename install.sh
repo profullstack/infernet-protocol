@@ -88,10 +88,11 @@ INFERNET_AUTOSTART="${INFERNET_AUTOSTART:-1}"
 INFERNET_CONTROL_PLANE="${INFERNET_CONTROL_PLANE:-https://infernetprotocol.com}"
 INFERNET_MODEL="${INFERNET_MODEL:-qwen2.5:7b}"
 INFERNET_NODE_ROLE="${INFERNET_NODE_ROLE:-provider}"
-# Default to user@host so operators recognize their own nodes in the
-# dashboard. Falls back to plain hostname if neither $USER nor whoami
-# resolves (rare — happens in scratch containers without /etc/passwd).
-INFERNET_NODE_NAME="${INFERNET_NODE_NAME:-${USER:-$(whoami 2>/dev/null || echo node)}@$(hostname 2>/dev/null || echo host)}"
+# Leave INFERNET_NODE_NAME unset by default so `infernet init` can
+# generate the user@host:slug default itself (it has access to nodeId,
+# we don't here). Operators who want a custom name set this env var
+# explicitly; otherwise auto_bootstrap_native skips passing --name.
+INFERNET_NODE_NAME="${INFERNET_NODE_NAME:-}"
 INFERNET_PUBLIC_PORT="${INFERNET_PUBLIC_PORT:-46337}"
 INFERNET_BIND_PORT="${INFERNET_BIND_PORT:-}"
 INFERNET_BEARER="${INFERNET_BEARER:-}"
@@ -928,10 +929,18 @@ auto_bootstrap_native() {
     if [ -n "$INFERNET_BEARER" ]; then
         info "running infernet init + login (bearer provided)"
         export INFERNET_NONINTERACTIVE=1
-        "$INFERNET_CMD" init --yes \
-            --role "$INFERNET_NODE_ROLE" \
-            --url "$INFERNET_CONTROL_PLANE" \
-            --name "$INFERNET_NODE_NAME" || warn "infernet init had issues"
+        # Only pass --name when operator set INFERNET_NODE_NAME explicitly;
+        # otherwise let init generate its own user@host:slug default.
+        if [ -n "$INFERNET_NODE_NAME" ]; then
+            "$INFERNET_CMD" init --yes \
+                --role "$INFERNET_NODE_ROLE" \
+                --url "$INFERNET_CONTROL_PLANE" \
+                --name "$INFERNET_NODE_NAME" || warn "infernet init had issues"
+        else
+            "$INFERNET_CMD" init --yes \
+                --role "$INFERNET_NODE_ROLE" \
+                --url "$INFERNET_CONTROL_PLANE" || warn "infernet init had issues"
+        fi
         "$INFERNET_CMD" login --token "$INFERNET_BEARER" || warn "infernet login --token failed"
     fi
 

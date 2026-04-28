@@ -137,7 +137,7 @@ export async function pollJobsForNode({ pubkey, limit = 5 }) {
 
     const { data, error } = await supabase
         .from("jobs")
-        .select("id, title, type, status, payment_offer, payment_coin, model_name, payload, created_at")
+        .select("id, title, type, status, payment_offer, payment_coin, model_name, input_spec, created_at")
         .eq("provider_id", provider.id)
         .in("status", ["assigned"])
         .order("created_at", { ascending: true })

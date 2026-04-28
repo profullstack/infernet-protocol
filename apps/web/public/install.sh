@@ -393,7 +393,7 @@ ensure_apt_prereqs() {
     fi
     info "installing system prereqs:$_missing"
     if command -v apt-get >/dev/null 2>&1; then
-        $SUDO apt-get update -y >/dev/null 2>&1 || true
+        $SUDO apt-get update -y || true
         # shellcheck disable=SC2086
         $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates $_missing
     elif command -v dnf >/dev/null 2>&1; then
@@ -565,7 +565,7 @@ ensure_pnpm() {
     fi
     info "installing pnpm…"
     if command -v npm >/dev/null 2>&1; then
-        npm install -g pnpm >/dev/null 2>&1 || fail "npm install -g pnpm failed"
+        npm install -g pnpm || fail "npm install -g pnpm failed"
         # If we installed node via mise, expose the freshly-installed
         # pnpm binary through mise's shim layer so it's found on PATH.
         command -v mise >/dev/null 2>&1 && mise reshim >/dev/null 2>&1 || true
@@ -573,7 +573,7 @@ ensure_pnpm() {
     else
         # corepack ships with Node 16+ and can enable pnpm without npm.
         if command -v corepack >/dev/null 2>&1; then
-            corepack enable pnpm >/dev/null 2>&1 || fail "corepack enable pnpm failed"
+            corepack enable pnpm || fail "corepack enable pnpm failed"
             command -v mise >/dev/null 2>&1 && mise reshim >/dev/null 2>&1 || true
             ok "pnpm enabled via corepack"
         else
@@ -589,37 +589,28 @@ clone_or_update() {
     mkdir -p "$INFERNET_HOME"
     if [ -d "$SOURCE_DIR/.git" ]; then
         info "updating existing install at $SOURCE_DIR"
-        git -C "$SOURCE_DIR" fetch --depth 1 origin "$INFERNET_REF" >/dev/null 2>&1 \
+        git -C "$SOURCE_DIR" fetch --depth 1 --progress origin "$INFERNET_REF" \
             || fail "git fetch failed"
-        git -C "$SOURCE_DIR" reset --hard "FETCH_HEAD" >/dev/null 2>&1 \
+        git -C "$SOURCE_DIR" reset --hard "FETCH_HEAD" \
             || fail "git reset failed"
         ok "fetched $INFERNET_REF"
     else
         info "cloning $REPO_URL to $SOURCE_DIR"
-        git clone --depth 1 --branch "$INFERNET_REF" "$REPO_URL" "$SOURCE_DIR" >/dev/null 2>&1 \
+        git clone --depth 1 --branch "$INFERNET_REF" --progress "$REPO_URL" "$SOURCE_DIR" \
             || fail "git clone failed"
         ok "cloned $INFERNET_REF"
     fi
 }
 
 run_install() {
-    info "running pnpm install (this may take a minute)"
-    # Run pnpm install and capture exit code via temp file (POSIX sh
-    # can't propagate exit through a pipe without `set -o pipefail`).
-    _pnpm_log="$(mktemp 2>/dev/null || echo "/tmp/inf-pnpm.$$.log")"
-    if (cd "$SOURCE_DIR" && pnpm install --prefer-offline) >"$_pnpm_log" 2>&1; then
-        # Print last few lines of summary on success for context.
-        tail -5 "$_pnpm_log" 2>/dev/null || true
-        rm -f "$_pnpm_log"
+    info "running pnpm install (downloads ~1.5 GB of node_modules; takes 1-3 min)"
+    # Stream pnpm output directly to the terminal so the operator can
+    # see download / link progress. Exit code propagates because no pipe.
+    if (cd "$SOURCE_DIR" && pnpm install --prefer-offline); then
         ok "dependencies installed"
-        unset _pnpm_log
         return 0
     fi
-    # Failure — print the tail so the operator can see what broke.
-    warn "pnpm install failed — last 30 lines below:"
-    tail -30 "$_pnpm_log" 2>/dev/null >&2 || true
-    printf '  full log: %s\n' "$_pnpm_log" >&2
-    fail "pnpm install failed (see log above)"
+    fail "pnpm install failed (see output above)"
 }
 
 # ---------------------------------------------------------------------------
@@ -743,8 +734,8 @@ auto_bootstrap_native() {
         "$INFERNET_CMD" init --yes \
             --role "$INFERNET_NODE_ROLE" \
             --url "$INFERNET_CONTROL_PLANE" \
-            --name "$INFERNET_NODE_NAME" >/dev/null 2>&1 || warn "infernet init had issues"
-        "$INFERNET_CMD" login --token "$INFERNET_BEARER" >/dev/null 2>&1 || warn "infernet login --token failed"
+            --name "$INFERNET_NODE_NAME" || warn "infernet init had issues"
+        "$INFERNET_CMD" login --token "$INFERNET_BEARER" || warn "infernet login --token failed"
     fi
 
     info "running infernet setup --yes (this takes a few minutes the first time)"

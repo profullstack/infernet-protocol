@@ -37,6 +37,7 @@ import { isDaemonAlive } from '../lib/ipc.js';
 import { resolveP2pPort, detectLocalAddress, formatEndpoint } from '../lib/network.js';
 import { executeChatJob, failChatJob, shutdownEngine } from '../lib/chat-executor.js';
 import { gatherCoarseSpecs } from './register.js';
+import { detectGpus, detectHost } from '@infernetprotocol/gpu';
 
 const HELP = `infernet start — run the node daemon
 
@@ -214,6 +215,51 @@ async function runDaemon(args, ctx) {
         };
     }
 
+    /**
+     * Live load snapshot — fresh on every heartbeat, NOT cached. The
+     * picker on the control plane uses this to skip saturated nodes
+     * and weight by remaining headroom. Cheap to compute (one
+     * nvidia-smi shellout, one os.freemem read) — well worth the
+     * cost on each 30s heartbeat compared to the cost of routing a
+     * job to a saturated provider that 504s mid-stream.
+     */
+    async function liveLoad() {
+        const host = detectHost();
+        const totalRamGb = host.total_ram_mb / 1024;
+        const freeRamGb = host.free_ram_mb / 1024;
+        let freeVramGb = 0;
+        let totalVramGb = 0;
+        let maxGpuUtilization = null;
+        try {
+            const gpus = await detectGpus();
+            for (const g of gpus) {
+                if (Number.isFinite(g.vram_mb)) totalVramGb += g.vram_mb / 1024;
+                if (Number.isFinite(g.vram_mb) && Number.isFinite(g.vram_used_mb)) {
+                    freeVramGb += Math.max(0, (g.vram_mb - g.vram_used_mb) / 1024);
+                }
+                if (Number.isFinite(g.utilization)) {
+                    maxGpuUtilization = Math.max(maxGpuUtilization ?? 0, g.utilization);
+                }
+            }
+        } catch {
+            // Best-effort; CPU-only boxes report zero GPU stats.
+        }
+        return {
+            active_jobs: stats.activeJobIds.size,
+            load_avg_1m: Array.isArray(host.load_avg) ? +host.load_avg[0]?.toFixed(2) : null,
+            ram: {
+                total_gb: +totalRamGb.toFixed(2),
+                free_gb: +freeRamGb.toFixed(2)
+            },
+            vram: {
+                total_gb: +totalVramGb.toFixed(2),
+                free_gb: +freeVramGb.toFixed(2)
+            },
+            gpu_utilization_max: maxGpuUtilization,
+            measured_at: new Date().toISOString()
+        };
+    }
+
     async function freshSpecs() {
         if (node.role !== 'provider') return null;
         const now = Date.now();
@@ -227,12 +273,15 @@ async function runDaemon(args, ctx) {
                 base = cachedSpecs;
             } catch (err) {
                 process.stderr.write(`specs detection failed: ${err?.message ?? err}\n`);
-                base = cachedSpecs; // fall back to last known good
+                base = cachedSpecs;
             }
         }
         if (!base) return null;
+        // Always re-read load (cheap, must be current). bench rolls
+        // independently as jobs complete.
         const bench = benchSummary();
-        return bench ? { ...base, bench } : base;
+        const load = await liveLoad();
+        return { ...base, ...(bench ? { bench } : {}), load };
     }
 
     async function heartbeat() {

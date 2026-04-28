@@ -42,29 +42,51 @@ export async function pickChatProvider({ modelName } = {}) {
     });
   }
 
+  // Hard filter: drop saturated nodes. A node with active_jobs at or
+  // above its concurrency cap shouldn't get more work — it's currently
+  // unable to serve. Default cap = 4 if the node didn't advertise one.
+  candidates = candidates.filter(notSaturated);
+
   if (candidates.length === 0) return null;
   return reputationWeightedPick(candidates);
 }
 
+const DEFAULT_CONCURRENCY_CAP = 4;
+const HIGH_GPU_UTILIZATION_PCT = 95;
+
+export function notSaturated(p) {
+  const load = p?.specs?.load;
+  if (!load) return true; // no load info → can't filter; trust the node
+  const cap = Number.isFinite(load.concurrency_cap) ? load.concurrency_cap : DEFAULT_CONCURRENCY_CAP;
+  if (Number.isFinite(load.active_jobs) && load.active_jobs >= cap) return false;
+  // GPU pegged at >95% util means a job is already streaming flat-out;
+  // adding another would queue inside Ollama.
+  if (Number.isFinite(load.gpu_utilization_max) && load.gpu_utilization_max >= HIGH_GPU_UTILIZATION_PCT) {
+    return false;
+  }
+  return true;
+}
+
 /**
- * Pick one provider, weighted by `reputation × tokens_per_second_avg`.
+ * Pick one provider, weighted by `reputation × throughput × headroom`.
  *
- * Why this composite weight:
- *   - reputation alone treats a fast new node identically to a slow
- *     veteran. We want to send most traffic to whichever can actually
- *     finish the job soonest.
- *   - tokens/sec alone would overlook history — a brand-new node could
- *     fluke a high t/s on its first prompt and then monopolize.
- *   - product of the two, with sane fallbacks, balances both.
+ *   - reputation: trust signal (CPR + history). Floor 1, default 50.
+ *   - throughput: rolling tokens_per_second_avg from the last N
+ *     completed chat jobs. Default 10 when missing (conservative
+ *     baseline so brand-new providers aren't stranded).
+ *   - headroom: live free-resource snapshot from the last heartbeat.
+ *     Free-RAM-gb plus free-VRAM-gb plus a slot bonus per unused
+ *     concurrency cap. Default 1 when missing — i.e. the picker
+ *     doesn't penalize providers that don't advertise load yet.
  *
- * Fallbacks:
- *   - reputation: floor at 1, default 50 when missing (so 0 is honored
- *     as a real "penalized" signal).
- *   - tokens/sec: default 10 when missing/null/zero (a conservative
- *     CPU-only baseline, so we don't strand new providers with no
- *     bench history).
+ * The product means: a fast node currently saturated loses to a
+ * mid-tier node with headroom. A slow node with lots of free RAM
+ * still loses to a fast node with even modest headroom. No single
+ * factor monopolizes the ranking.
  *
- * Exported for tests.
+ * Hard filtering (active_jobs ≥ cap, GPU util ≥ 95%) happens upstream
+ * in pickChatProvider — by the time we get here, every candidate is
+ * at least nominally available.
  */
 export function reputationWeightedPick(candidates, rng = Math.random) {
   if (!candidates || candidates.length === 0) return null;
@@ -75,7 +97,8 @@ export function reputationWeightedPick(candidates, rng = Math.random) {
     const reputation = Math.max(1, Number.isFinite(repNum) ? repNum : 50);
     const tps = Number(c?.specs?.bench?.tokens_per_second_avg);
     const speed = Number.isFinite(tps) && tps > 0 ? tps : 10;
-    return reputation * speed;
+    const headroom = headroomScore(c);
+    return reputation * speed * headroom;
   });
   const total = weights.reduce((a, w) => a + w, 0);
   let r = rng() * total;
@@ -84,6 +107,31 @@ export function reputationWeightedPick(candidates, rng = Math.random) {
     if (r <= 0) return candidates[i];
   }
   return candidates[candidates.length - 1];
+}
+
+/**
+ * Headroom score from the candidate's specs.load snapshot.
+ * Returns 1 when no load info is available (don't penalize), or a
+ * value > 0 representing "how much capacity does this provider have
+ * to spare right now":
+ *
+ *   free_vram_gb + free_ram_gb + slot_bonus
+ *
+ * where slot_bonus = 4 × (1 - active_jobs/cap), so a fully-idle
+ * 4-slot node gets +4, a half-busy one gets +2, fully-busy gets +0.
+ *
+ * Floor 1 so saturated-but-still-eligible nodes (e.g. one with no
+ * load info) get tried at minimal weight rather than zero.
+ */
+export function headroomScore(c) {
+  const load = c?.specs?.load;
+  if (!load) return 1;
+  const freeRam = Number.isFinite(load.ram?.free_gb) ? load.ram.free_gb : 0;
+  const freeVram = Number.isFinite(load.vram?.free_gb) ? load.vram.free_gb : 0;
+  const cap = Number.isFinite(load.concurrency_cap) ? load.concurrency_cap : 4;
+  const active = Number.isFinite(load.active_jobs) ? load.active_jobs : 0;
+  const slotBonus = cap > 0 ? 4 * Math.max(0, 1 - active / cap) : 0;
+  return Math.max(1, freeRam + freeVram + slotBonus);
 }
 
 /**

@@ -3,7 +3,7 @@ import { filterFittingModels } from "../apps/cli/commands/register.js";
 
 // Don't import server-only modules in vitest's node env. Re-export
 // reputationWeightedPick from the same file.
-import { reputationWeightedPick } from "../apps/web/lib/data/chat.js";
+import { reputationWeightedPick, headroomScore, notSaturated } from "../apps/web/lib/data/chat.js";
 
 const GB = 1024 ** 3;
 
@@ -67,6 +67,59 @@ describe("filterFittingModels", () => {
     });
 });
 
+describe("notSaturated", () => {
+    it("passes a node with no load info (don't penalize unknowns)", () => {
+        expect(notSaturated({ specs: {} })).toBe(true);
+        expect(notSaturated({})).toBe(true);
+    });
+
+    it("rejects a node at or above its concurrency cap", () => {
+        expect(notSaturated({ specs: { load: { active_jobs: 4, concurrency_cap: 4 } } })).toBe(false);
+        expect(notSaturated({ specs: { load: { active_jobs: 5, concurrency_cap: 4 } } })).toBe(false);
+        expect(notSaturated({ specs: { load: { active_jobs: 3, concurrency_cap: 4 } } })).toBe(true);
+    });
+
+    it("rejects a node with GPU pegged ≥ 95% even if active_jobs is low", () => {
+        expect(notSaturated({ specs: { load: { active_jobs: 0, gpu_utilization_max: 99 } } })).toBe(false);
+        expect(notSaturated({ specs: { load: { active_jobs: 0, gpu_utilization_max: 90 } } })).toBe(true);
+    });
+
+    it("uses default cap of 4 when not advertised", () => {
+        expect(notSaturated({ specs: { load: { active_jobs: 4 } } })).toBe(false);
+        expect(notSaturated({ specs: { load: { active_jobs: 3 } } })).toBe(true);
+    });
+});
+
+describe("headroomScore", () => {
+    it("returns 1 when no load info — don't penalize", () => {
+        expect(headroomScore({})).toBe(1);
+        expect(headroomScore({ specs: {} })).toBe(1);
+    });
+
+    it("sums free RAM + free VRAM + slot bonus", () => {
+        const score = headroomScore({
+            specs: { load: { active_jobs: 0, concurrency_cap: 4, ram: { free_gb: 32 }, vram: { free_gb: 24 } } }
+        });
+        // 32 + 24 + 4×(1-0/4) = 60
+        expect(score).toBe(60);
+    });
+
+    it("slot bonus shrinks as active_jobs approaches cap", () => {
+        const half = headroomScore({
+            specs: { load: { active_jobs: 2, concurrency_cap: 4, ram: { free_gb: 0 }, vram: { free_gb: 0 } } }
+        });
+        // 0 + 0 + 4×(1-2/4) = 2 → max(1, 2) = 2
+        expect(half).toBe(2);
+    });
+
+    it("floors at 1 (a still-eligible saturated node gets minimal weight, not zero)", () => {
+        const fullyBusy = headroomScore({
+            specs: { load: { active_jobs: 4, concurrency_cap: 4, ram: { free_gb: 0 }, vram: { free_gb: 0 } } }
+        });
+        expect(fullyBusy).toBe(1);
+    });
+});
+
 describe("reputationWeightedPick", () => {
     it("returns null on empty input", () => {
         expect(reputationWeightedPick([])).toBeNull();
@@ -124,6 +177,52 @@ describe("reputationWeightedPick", () => {
         expect(reputationWeightedPick(candidates, () => 0.5).id).toBe("fast");
         expect(reputationWeightedPick(candidates, () => 0.04).id).toBe("slow");
         expect(reputationWeightedPick(candidates, () => 0.05).id).toBe("fast");
+    });
+
+    it("saturated node loses traffic to a node with headroom (same rep + tps)", () => {
+        const saturated = {
+            id: "saturated", reputation: 50,
+            specs: {
+                bench: { tokens_per_second_avg: 50 },
+                load: { active_jobs: 4, ram: { free_gb: 0.1 }, vram: { free_gb: 0 }, concurrency_cap: 4 }
+            }
+        };
+        const idle = {
+            id: "idle", reputation: 50,
+            specs: {
+                bench: { tokens_per_second_avg: 50 },
+                load: { active_jobs: 0, ram: { free_gb: 32 }, vram: { free_gb: 24 }, concurrency_cap: 4 }
+            }
+        };
+        // Saturated weight: 50×50×max(1, 0.1+0+4×(1-1)) = 50×50×1 = 2500
+        // Idle weight:      50×50×(32+24+4)        = 50×50×60 = 150000
+        // Idle should win essentially always.
+        let idleWins = 0;
+        let seed = 7;
+        const rng = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0x100000000; };
+        for (let i = 0; i < 1000; i++) {
+            if (reputationWeightedPick([saturated, idle], rng).id === "idle") idleWins += 1;
+        }
+        expect(idleWins / 1000).toBeGreaterThan(0.95);
+    });
+
+    it("missing load.* falls back to headroom=1 (no provider stranded)", () => {
+        const candidates = [
+            { id: "no-load", reputation: 50, specs: { bench: { tokens_per_second_avg: 10 } } },
+            { id: "with-load", reputation: 50, specs: { bench: { tokens_per_second_avg: 10 }, load: { ram: { free_gb: 0 }, vram: { free_gb: 0 } } } }
+        ];
+        // Both end up with headroom 1+ (with-load: max(1, 0+0+slot=4)=4 vs no-load: 1)
+        // Actually: no-load = no load object → headroom 1. with-load has slot_bonus=4 (active=0,cap=4) → 4.
+        // Weights: 500 vs 2000. with-load should win ~80%.
+        let withLoadWins = 0;
+        let seed = 99;
+        const rng = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0x100000000; };
+        for (let i = 0; i < 1000; i++) {
+            if (reputationWeightedPick(candidates, rng).id === "with-load") withLoadWins += 1;
+        }
+        // Bound generous — point is no-load gets tried, just less.
+        expect(withLoadWins).toBeGreaterThan(700);
+        expect(withLoadWins).toBeLessThan(1000);
     });
 
     it("missing tokens_per_second_avg falls back to baseline 10 (no provider stranded)", () => {

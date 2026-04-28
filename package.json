@@ -9,6 +9,8 @@
     "build": "pnpm --filter @infernetprotocol/web build",
     "start": "pnpm --filter @infernetprotocol/web start",
     "cli": "pnpm --filter @infernetprotocol/cli exec infernet",
+    "cpr:canary": "node tooling/cpr-canary.mjs",
+    "secrets:generate": "node tooling/generate-secrets.mjs",
     "test": "pnpm -r --parallel test",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",

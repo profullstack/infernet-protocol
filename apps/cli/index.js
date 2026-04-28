@@ -21,6 +21,7 @@ import init from './commands/init.js';
 import login from './commands/login.js';
 import register from './commands/register.js';
 import update from './commands/update.js';
+import upgrade from './commands/upgrade.js';
 import remove from './commands/remove.js';
 import start from './commands/start.js';
 import status from './commands/status.js';
@@ -92,13 +93,15 @@ function parseArgs(argv) {
 }
 
 const COMMANDS = {
-    init, login, register, update, remove,
+    init, login, register, update, upgrade, remove,
     start, status, stop, stats, logs,
     payout, payments, gpu, firewall, chat, setup, model, tui, doctor, service, pubkey, debug, deploy, console: consoleCmd, help
 };
 
 // Commands that can run without a loaded config.
-const NO_CONFIG = new Set(['init', 'login', 'help', 'stats', 'logs', 'stop', 'gpu', 'firewall', 'chat', 'setup', 'model', 'tui', 'doctor', 'service', 'pubkey', 'debug', 'deploy', 'console']);
+// `upgrade` and `remove` both work even without config: upgrade can run
+// the installer cold, and remove can wipe a half-installed box.
+const NO_CONFIG = new Set(['init', 'login', 'help', 'stats', 'logs', 'stop', 'gpu', 'firewall', 'chat', 'setup', 'model', 'tui', 'doctor', 'service', 'pubkey', 'debug', 'deploy', 'console', 'upgrade', 'remove']);
 // Commands that need a config but not a control-plane client (none today
 // — kept as a future escape hatch).
 const NO_CLIENT = new Set();

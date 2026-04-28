@@ -18,7 +18,8 @@ Node lifecycle:
   login        Update the control-plane URL
   register     Register this node with the control plane (signed)
   update       Push current capability/status to the control plane (signed)
-  remove       Deregister this node and wipe local config (signed)
+  upgrade      Re-run the curl installer to pull the latest CLI, then re-register
+  remove       Deregister this node, wipe local config, and uninstall the CLI
 
 Daemon:
   start        Start the node daemon (detached by default)

@@ -20,8 +20,11 @@ A decentralized GPU inference marketplace. Rent a GPU anywhere, run one `docker`
 One line on Linux or macOS:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/profullstack/infernet-protocol/master/install.sh | sh
+curl -fsSL https://infernetprotocol.com/install.sh | sh
 ```
+
+(GitHub mirror, always pinned to master:
+`https://raw.githubusercontent.com/profullstack/infernet-protocol/master/install.sh`)
 
 This installs the `infernet` CLI to `~/.infernet/source` and drops a
 shim at `~/.local/bin/infernet`. Re-run anytime to update.

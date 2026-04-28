@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 const INSTALL_ONE_LINER =
-  "curl -fsSL https://raw.githubusercontent.com/profullstack/infernet-protocol/master/install.sh | sh";
+  "curl -fsSL https://infernetprotocol.com/install.sh | sh";
 
 export default function HomePage() {
   return (

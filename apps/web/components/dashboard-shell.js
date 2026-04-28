@@ -1,11 +1,11 @@
 import Link from "next/link";
 
 const navItems = [
-  { href: "/", label: "Overview" },
+  { href: "/", label: "Home" },
+  { href: "/status", label: "Status" },
+  { href: "/chat", label: "Chat" },
   { href: "/api/overview", label: "Overview API" },
-  { href: "/api/nodes?limit=10", label: "Nodes API" },
-  { href: "/api/jobs?limit=10", label: "Jobs API" },
-  { href: "/api/providers?limit=10", label: "Providers API" }
+  { href: "/api/peers?limit=10", label: "Peers API" }
 ];
 
 export default function DashboardShell({ eyebrow, title, description, children }) {

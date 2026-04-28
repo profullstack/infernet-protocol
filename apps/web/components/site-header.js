@@ -6,6 +6,7 @@ const PUBLIC_NAV = [
     { href: "/chat", label: "Chat" },
     { href: "/deploy", label: "Deploy" },
     { href: "/status", label: "Status" },
+    { href: "/careers", label: "Careers" },
     { href: "/contact", label: "Contact" }
 ];
 
@@ -14,7 +15,8 @@ const SIGNED_IN_NAV = [
     { href: "/deploy", label: "Deploy" },
     { href: "/docs", label: "Docs" },
     { href: "/chat", label: "Chat" },
-    { href: "/status", label: "Status" }
+    { href: "/status", label: "Status" },
+    { href: "/careers", label: "Careers" }
 ];
 
 export default async function SiteHeader() {

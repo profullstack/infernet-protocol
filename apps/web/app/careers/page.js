@@ -36,6 +36,17 @@ const ROLES = [
     }
 ];
 
+const PROFITABILITY_PERKS = [
+    "Free iPhone or Android phone",
+    "Free laptop — macOS or HP Envy",
+    "Free monthly API credits",
+    "Free Starlink Mini",
+    "Health care and dental coverage",
+    "Retirement account",
+    "Free coworking / cooking space",
+    "$50/week snack budget"
+];
+
 const COURSEWORK = [
     "MIT 6.824 / 6.5840 — Distributed Systems",
     "DelftX — Modern Distributed Systems",
@@ -66,6 +77,34 @@ export default function CareersPage() {
                 {ROLES.map((role) => (
                     <RoleCard key={role.title} role={role} />
                 ))}
+            </section>
+
+            <section className="mb-12 rounded-[1.5rem] border border-white/10 bg-[var(--panel-strong)] p-8 backdrop-blur">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--accent)]">
+                            Pending profitability
+                        </p>
+                        <h2 className="mt-2 text-lg font-semibold text-white">
+                            Planned perks
+                        </h2>
+                    </div>
+                    <span className="rounded-full border border-white/15 px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                        Post-profit
+                    </span>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+                    Once Infernet is profitable, we plan to layer in practical perks that
+                    make remote building easier and cheaper.
+                </p>
+                <ul className="mt-5 grid gap-3 text-sm text-[var(--muted)] sm:grid-cols-2">
+                    {PROFITABILITY_PERKS.map((perk) => (
+                        <li key={perk} className="flex gap-3 rounded-2xl border border-white/10 bg-black/10 p-3">
+                            <span aria-hidden="true" className="text-[var(--accent)]">·</span>
+                            <span>{perk}</span>
+                        </li>
+                    ))}
+                </ul>
             </section>
 
             <section className="rounded-[1.5rem] border border-white/10 bg-[var(--panel)] p-8 backdrop-blur">

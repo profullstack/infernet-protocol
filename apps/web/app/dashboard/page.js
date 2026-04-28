@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import AutoRefresh from "@/components/auto-refresh";
+import PushModelButton from "@/components/push-model-button";
 import { getCurrentUser } from "@/lib/supabase/auth-server";
 import {
     getEarningsSummary,
@@ -138,6 +139,7 @@ export default async function DashboardPage() {
                                         <th className="py-2 pr-3 font-medium">CPU</th>
                                         <th className="py-2 pr-3 font-medium">Status</th>
                                         <th className="py-2 pr-3 font-medium">Last seen</th>
+                                        <th className="py-2 pr-3 font-medium">Models</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -148,6 +150,9 @@ export default async function DashboardPage() {
                                             <td className="py-2 pr-3 text-[var(--muted)]">{nodeCpuLabel(p)}</td>
                                             <td className="py-2 pr-3"><StatusPill status={p.status} /></td>
                                             <td className="py-2 pr-3 text-[var(--muted)]">{relTime(p.last_seen)}</td>
+                                            <td className="relative py-2 pr-3">
+                                                {p.public_key ? <PushModelButton pubkey={p.public_key} /> : <span className="text-xs text-[var(--muted)]">—</span>}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>

@@ -4,12 +4,14 @@ import { getCurrentUser } from "@/lib/supabase/auth-server";
 const PUBLIC_NAV = [
     { href: "/docs", label: "Docs" },
     { href: "/chat", label: "Chat" },
+    { href: "/deploy", label: "Deploy" },
     { href: "/status", label: "Status" },
     { href: "/contact", label: "Contact" }
 ];
 
 const SIGNED_IN_NAV = [
     { href: "/dashboard", label: "Dashboard" },
+    { href: "/deploy", label: "Deploy" },
     { href: "/docs", label: "Docs" },
     { href: "/chat", label: "Chat" },
     { href: "/status", label: "Status" }

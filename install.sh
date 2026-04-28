@@ -463,12 +463,21 @@ try_install_node_unattended() {
         # location, $MISE_DATA_DIR for installed tools. Don't gag the
         # installer's output — it downloads ~30 MB and the user wants
         # to see progress, not stare at a silent terminal.
+        #
+        # Filter known-harmless mv warnings through awk so they read as
+        # "warn:" lines instead of looking like real failures. mise.run
+        # extracts to /tmp (overlay) and `mv`s to MISE_INSTALL_PATH; on
+        # network filesystems (RunPod's MooseFS, NFS, SMB) the chown
+        # step fails but the file copy succeeds, so the binary works
+        # fine. Exit-code check is the trailing -x test on $_mise_bin.
         info "  → downloading mise binary (~30 MB) from mise.run"
-        if ! curl -fsSL https://mise.run | sh; then
-            warn "mise install failed (curl https://mise.run | sh)"
-            unset _mise_bin
-            return 1
-        fi
+        curl -fsSL https://mise.run | sh 2>&1 | awk '
+            /failed to preserve ownership|cannot preserve ownership/ {
+                printf "  ! warn: %s (harmless on network FS — mv across mounts)\n", $0
+                next
+            }
+            { print }
+        '
     fi
     if [ ! -x "$_mise_bin" ]; then
         # mise.run sometimes defaults differently — fall back to common spots.

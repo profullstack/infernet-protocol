@@ -124,6 +124,113 @@ export function parseNvidiaTopo(text) {
 }
 
 // ---------------------------------------------------------------------------
+// AMD xGMI / Infinity Fabric — `rocm-smi --showtopo` shows GPU↔GPU links.
+//
+// Output looks roughly like:
+//   ============================ ROCm System Management Interface ============================
+//   ================================  Weight between two GPUs  ================================
+//          GPU0    GPU1    GPU2    GPU3
+//   GPU0    0       15      15      30
+//   GPU1    15      0       30      15
+//   ...
+// where lower weight = closer / higher-bandwidth (xGMI). Anything > 30
+// is typically PCIe.
+// ---------------------------------------------------------------------------
+async function detectXgmi() {
+    const empty = { available: false, topology: 'none', links: [] };
+
+    const out = await tryExec('rocm-smi', ['--showtopo']);
+    if (!out) return empty;
+
+    const links = parseRocmTopo(out);
+    if (links.length === 0) {
+        return { ...empty, raw_topo: out.length < 4096 ? out : undefined };
+    }
+
+    const gpuIds = new Set();
+    for (const l of links) {
+        gpuIds.add(l.from);
+        gpuIds.add(l.to);
+    }
+    const n = gpuIds.size;
+    const expectedAllToAll = n >= 2 ? (n * (n - 1)) / 2 : 0;
+    let topology = 'unknown';
+    if (n === 2) topology = 'pair';
+    else if (n > 2 && links.length >= expectedAllToAll) topology = 'all-to-all';
+    else if (n > 2) topology = 'mesh';
+
+    return { available: true, topology, links };
+}
+
+/**
+ * Parse rocm-smi --showtopo weight matrix → deduped xGMI edge list.
+ * Treats "weight ≤ XGMI_WEIGHT_THRESHOLD" as an xGMI link; higher
+ * weights mean PCIe / cross-socket and are ignored.
+ */
+const XGMI_WEIGHT_THRESHOLD = 30;
+export function parseRocmTopo(text, threshold = XGMI_WEIGHT_THRESHOLD) {
+    const lines = text.split('\n').map((s) => s.trim()).filter(Boolean);
+
+    // Find a line that starts with a GPU column header (e.g. "GPU0  GPU1 …")
+    let headerIdx = -1;
+    for (let i = 0; i < lines.length; i++) {
+        if (/^GPU\d+(\s+GPU\d+)+/.test(lines[i])) {
+            headerIdx = i;
+            break;
+        }
+    }
+    if (headerIdx < 0) return [];
+    const cols = lines[headerIdx].split(/\s+/).filter((c) => /^GPU\d+$/i.test(c));
+
+    const links = [];
+    const seen = new Set();
+    for (const line of lines.slice(headerIdx + 1)) {
+        const m = line.match(/^GPU(\d+)\s+(.*)$/i);
+        if (!m) continue;
+        const rowIdx = Number.parseInt(m[1], 10);
+        const cells = m[2].split(/\s+/);
+        for (let i = 0; i < cols.length && i < cells.length; i++) {
+            const colIdx = Number.parseInt(cols[i].replace(/^GPU/i, ''), 10);
+            if (rowIdx === colIdx) continue;
+            const weight = Number.parseInt(cells[i], 10);
+            if (!Number.isFinite(weight) || weight <= 0 || weight > threshold) continue;
+            const a = Math.min(rowIdx, colIdx);
+            const b = Math.max(rowIdx, colIdx);
+            const key = `${a}-${b}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            links.push({ from: a, to: b, weight });
+        }
+    }
+    return links;
+}
+
+// ---------------------------------------------------------------------------
+// AWS EFA — Elastic Fabric Adapter, AWS's NIC for HPC/distributed training.
+// Cheapest cross-distro detection: `lspci -d 1d0f:` (vendor 1d0f = Amazon)
+// and grep for an EFA device. EFA devices also expose themselves under
+// /sys/class/infiniband/ on properly-configured instances.
+// ---------------------------------------------------------------------------
+async function detectEfa() {
+    const empty = { available: false, devices: [] };
+    if (process.platform !== 'linux') return empty;
+
+    const out = await tryExec('lspci', ['-d', '1d0f:', '-mm']);
+    if (!out) return empty;
+
+    const devices = [];
+    for (const line of out.split('\n')) {
+        if (!/EFA|Elastic Fabric/i.test(line)) continue;
+        // -mm output is whitespace-tolerant CSV with quoted fields. We
+        // only need a coarse name + the PCI BDF.
+        const bdfMatch = line.match(/^([0-9a-f:.]+)\s/i);
+        const bdf = bdfMatch ? bdfMatch[1] : null;
+        devices.push({ bdf, raw: line.trim() });
+    }
+    return { available: devices.length > 0, devices };
+}
+
+// ---------------------------------------------------------------------------
 // InfiniBand — Linux exposes everything under /sys/class/infiniband/
 // ---------------------------------------------------------------------------
 const IB_SYSFS = '/sys/class/infiniband';
@@ -194,12 +301,19 @@ async function readSafe(path) {
 // Top-level
 // ---------------------------------------------------------------------------
 export async function detectInterconnects() {
-    const [nvlink, infiniband] = await Promise.all([detectNvlink(), detectInfiniband()]);
-    // RDMA is "we have something resembling an active IB or RoCE port".
+    const [nvlink, xgmi, infiniband, efa] = await Promise.all([
+        detectNvlink(),
+        detectXgmi(),
+        detectInfiniband(),
+        detectEfa()
+    ]);
+    // RDMA is "we have something resembling an active IB / RoCE port,
+    // or an EFA adapter present". RoCE shows up in /sys/class/infiniband
+    // with link_layer=Ethernet, so InfiniBand detection covers it.
     const rdma_capable =
-        infiniband.available &&
-        infiniband.devices.some((d) => d.state === 'active');
-    return { nvlink, infiniband, rdma_capable };
+        (infiniband.available && infiniband.devices.some((d) => d.state === 'active')) ||
+        efa.available;
+    return { nvlink, xgmi, infiniband, efa, rdma_capable };
 }
 
 /**
@@ -218,11 +332,16 @@ export async function detectInterconnects() {
  * Caller merges this object into the spawn env. Empty object when
  * nothing actionable is detected.
  */
-export function interconnectEnv({ nvlink, infiniband, rdma_capable }) {
+export function interconnectEnv({ nvlink, xgmi, infiniband, efa, rdma_capable }) {
     const env = {};
     if (nvlink?.available) {
         env.INFERNET_NVLINK = '1';
         env.INFERNET_NVLINK_TOPOLOGY = nvlink.topology ?? 'unknown';
+    }
+    if (xgmi?.available) {
+        // RCCL (AMD's NCCL) honors the same NCCL_* envs.
+        env.INFERNET_XGMI = '1';
+        env.INFERNET_XGMI_TOPOLOGY = xgmi.topology ?? 'unknown';
     }
     if (infiniband?.available) {
         const activeHcas = infiniband.devices
@@ -233,6 +352,12 @@ export function interconnectEnv({ nvlink, infiniband, rdma_capable }) {
             env.NCCL_IB_HCA = activeHcas.join(',');
         }
     }
+    if (efa?.available) {
+        // libfabric / AWS OFI NCCL plugin: prefer EFA provider.
+        env.FI_PROVIDER = 'efa';
+        env.NCCL_PROTO = 'simple';
+        env.INFERNET_EFA = '1';
+    }
     if (rdma_capable) {
         env.INFERNET_RDMA = '1';
     }
@@ -242,21 +367,28 @@ export function interconnectEnv({ nvlink, infiniband, rdma_capable }) {
 /**
  * Human one-liner for CLI output.
  */
-export function formatInterconnectSummary({ nvlink, infiniband, rdma_capable }) {
+export function formatInterconnectSummary({ nvlink, xgmi, infiniband, efa, rdma_capable }) {
     const parts = [];
-    if (nvlink.available) {
-        const links = nvlink.links.length;
-        parts.push(`NVLink ${nvlink.topology} (${links} link${links === 1 ? '' : 's'})`);
+    if (nvlink?.available) {
+        const n = nvlink.links.length;
+        parts.push(`NVLink ${nvlink.topology} (${n} link${n === 1 ? '' : 's'})`);
     } else {
         parts.push('NVLink: none');
     }
-    if (infiniband.available) {
+    if (xgmi?.available) {
+        const n = xgmi.links.length;
+        parts.push(`xGMI ${xgmi.topology} (${n} link${n === 1 ? '' : 's'})`);
+    }
+    if (infiniband?.available) {
         const active = infiniband.devices.filter((d) => d.state === 'active');
         parts.push(`InfiniBand ${active.length} active port${active.length === 1 ? '' : 's'}`);
-    } else if (infiniband.devices.length > 0) {
+    } else if (infiniband?.devices?.length > 0) {
         parts.push(`InfiniBand present (no active ports)`);
     } else {
         parts.push('InfiniBand: none');
+    }
+    if (efa?.available) {
+        parts.push(`EFA ${efa.devices.length} adapter${efa.devices.length === 1 ? '' : 's'}`);
     }
     if (rdma_capable) parts.push('RDMA-capable');
     return parts.join(' · ');

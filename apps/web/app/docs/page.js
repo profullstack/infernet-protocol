@@ -52,6 +52,16 @@ export default function DocsPage() {
                     </Link>{" "}
                     on GitHub.
                 </p>
+                <p className="max-w-2xl text-sm leading-6 text-[var(--muted)]">
+                    Workload note: Infernet targets single-GPU inference (7B–70B), embarrassingly
+                    parallel batch, LoRA fine-tunes, and async / federated distributed training.
+                    Tight-sync NVLink-bound training of 100B+ models stays on hyperscaler fleets —
+                    by design, not by accident. See the homepage{" "}
+                    <Link href="/#how-it-competes" className="text-[var(--accent)] hover:underline">
+                        positioning section
+                    </Link>{" "}
+                    for the full reasoning.
+                </p>
             </header>
 
             {/* TOC */}

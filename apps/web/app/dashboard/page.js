@@ -166,9 +166,23 @@ export default async function DashboardPage() {
                                         </span>
                                     </li>
                                     <li className="flex items-baseline justify-between gap-3">
+                                        <span className="text-white">xGMI / Infinity Fabric</span>
+                                        <span className="text-[var(--muted)]">
+                                            {fabric.any_xgmi
+                                                ? `yes${fabric.xgmi_topologies.length ? ` · ${fabric.xgmi_topologies.join(", ")}` : ""}`
+                                                : "no"}
+                                        </span>
+                                    </li>
+                                    <li className="flex items-baseline justify-between gap-3">
                                         <span className="text-white">InfiniBand</span>
                                         <span className="text-[var(--muted)]">
                                             {fabric.any_infiniband ? "yes" : "no"}
+                                        </span>
+                                    </li>
+                                    <li className="flex items-baseline justify-between gap-3">
+                                        <span className="text-white">AWS EFA</span>
+                                        <span className="text-[var(--muted)]">
+                                            {fabric.any_efa ? "yes" : "no"}
                                         </span>
                                     </li>
                                     <li className="flex items-baseline justify-between gap-3">

@@ -169,23 +169,34 @@ export function summarizeHardware(providers) {
  */
 export function summarizeInterconnects(providers) {
     let any_nvlink = false;
+    let any_xgmi = false;
     let any_infiniband = false;
+    let any_efa = false;
     let rdma_capable_providers = 0;
     const nvlink_topologies = new Set();
+    const xgmi_topologies = new Set();
     for (const p of providers) {
         const ic = (p.specs && typeof p.specs === "object" && p.specs.interconnects) || {};
         if (ic.nvlink?.available) {
             any_nvlink = true;
             if (ic.nvlink.topology) nvlink_topologies.add(ic.nvlink.topology);
         }
+        if (ic.xgmi?.available) {
+            any_xgmi = true;
+            if (ic.xgmi.topology) xgmi_topologies.add(ic.xgmi.topology);
+        }
         if (ic.infiniband?.available) any_infiniband = true;
+        if (ic.efa?.available) any_efa = true;
         if (ic.rdma_capable) rdma_capable_providers += 1;
     }
     return {
         any_nvlink,
+        any_xgmi,
         any_infiniband,
+        any_efa,
         rdma_capable_providers,
-        nvlink_topologies: [...nvlink_topologies]
+        nvlink_topologies: [...nvlink_topologies],
+        xgmi_topologies: [...xgmi_topologies]
     };
 }
 

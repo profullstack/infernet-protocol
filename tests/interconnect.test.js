@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
     parseNvidiaTopo,
+    parseRocmTopo,
     interconnectEnv,
     formatInterconnectSummary
 } from "../packages/gpu/src/interconnect.js";
@@ -52,6 +53,34 @@ GPU1    NV1      X      0-7
     });
 });
 
+describe("parseRocmTopo", () => {
+    it("extracts xGMI edges below the weight threshold", () => {
+        const text = `
+================================  Weight between two GPUs  ================================
+       GPU0    GPU1    GPU2    GPU3
+GPU0    0       15      15      30
+GPU1    15      0       30      15
+GPU2    15      30      0       15
+GPU3    30      15      15      0
+        `;
+        const links = parseRocmTopo(text);
+        // weight ≤ 30 keeps everything but self-loops; 30 stays since
+        // threshold is inclusive. There are 6 unique pairs in a 4-node
+        // graph; all six show up here.
+        expect(links).toHaveLength(6);
+        for (const l of links) expect(l.from).toBeLessThan(l.to);
+    });
+
+    it("ignores cross-socket weights above the threshold", () => {
+        const text = `
+       GPU0    GPU1
+GPU0    0       72
+GPU1    72      0
+        `;
+        expect(parseRocmTopo(text)).toEqual([]);
+    });
+});
+
 describe("interconnectEnv", () => {
     it("emits nothing when nothing is available", () => {
         expect(
@@ -99,6 +128,30 @@ describe("interconnectEnv", () => {
         });
         expect(env.NCCL_IB_HCA).toBeUndefined();
         expect(env.NCCL_IB_DISABLE).toBeUndefined();
+    });
+
+    it("flags xGMI when AMD topology was detected", () => {
+        const env = interconnectEnv({
+            nvlink: { available: false },
+            xgmi: { available: true, topology: "all-to-all" },
+            infiniband: { available: false, devices: [] },
+            rdma_capable: false
+        });
+        expect(env.INFERNET_XGMI).toBe("1");
+        expect(env.INFERNET_XGMI_TOPOLOGY).toBe("all-to-all");
+    });
+
+    it("turns on FI_PROVIDER=efa when an AWS EFA adapter is present", () => {
+        const env = interconnectEnv({
+            nvlink: { available: false },
+            infiniband: { available: false, devices: [] },
+            efa: { available: true, devices: [{ bdf: "00:06.0", raw: "..." }] },
+            rdma_capable: true
+        });
+        expect(env.FI_PROVIDER).toBe("efa");
+        expect(env.NCCL_PROTO).toBe("simple");
+        expect(env.INFERNET_EFA).toBe("1");
+        expect(env.INFERNET_RDMA).toBe("1");
     });
 });
 

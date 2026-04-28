@@ -75,6 +75,58 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* The honest version — workload positioning */}
+      <section id="how-it-competes" className="border-b border-white/10">
+        <div className="mx-auto max-w-6xl px-6 py-20 lg:px-10">
+          <p className="text-xs font-semibold uppercase tracking-[0.4em] text-[var(--accent)]">
+            The honest version
+          </p>
+          <h2 className="mt-4 max-w-3xl text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl">
+            Not a decentralized hyperscaler. The economic substrate for jobs that don&apos;t need NVLink.
+          </h2>
+          <p className="mt-6 max-w-3xl text-base leading-7 text-[var(--muted)]">
+            Hyperscalers earn their interconnect moat on one specific workload: synchronous
+            tensor-parallel training of frontier-scale models, where μs-level GPU-to-GPU
+            bandwidth matters. We don&apos;t try to compete there. The math doesn&apos;t work, and
+            we&apos;d be selling a fiction. Here&apos;s what <em>does</em> work on a peer-to-peer GPU network —
+            and why it&apos;s most of the market.
+          </p>
+
+          <div className="mt-10 grid gap-6 lg:grid-cols-3">
+            <Pillar
+              eyebrow="What works"
+              title="Single-GPU inference, 7B–70B models"
+              body="One model, one GPU, one request. Zero inter-GPU communication, zero NVLink penalty, throughput linear in network size. This is what AWS Bedrock, Together, Replicate, and Fireworks actually serve — the dominant inference pattern by request volume."
+            />
+            <Pillar
+              eyebrow="What works"
+              title="Embarrassingly parallel + async training"
+              body="Embeddings, image-grid generation, dataset cleaning, hyperparameter sweeps, LoRA fine-tunes, federated and DiLoCo-style training. Workloads where coordination cost is low and aggregate throughput is the metric. Network latency is invisible."
+            />
+            <Pillar
+              eyebrow="What we cede"
+              title="Tight-sync 100B+ training from scratch"
+              body="Maybe 20 organizations on Earth do this. They own their fleets and they&apos;re not your customers. NVLink + InfiniBand bandwidth is a real moat for that one workload — conceding it costs nothing and lets us build the protocol the rest of the market actually needs."
+            />
+          </div>
+
+          <div className="mt-10 max-w-3xl text-base leading-7 text-[var(--muted)] space-y-4">
+            <p>
+              <strong className="text-white">On the ASIC future.</strong> Every flagship phone
+              already ships with an inference accelerator. Apple Neural Engine, Qualcomm Hexagon,
+              Tenstorrent, Groq&apos;s LPU, Cerebras, AWS Trainium — silicon optimized for matmul keeps
+              getting cheaper, weirder, and more ubiquitous. Bitcoin&apos;s real lesson isn&apos;t that
+              ASICs killed CPU mining. It&apos;s that <em>the protocol survived three hardware
+                generations because it didn&apos;t depend on any of them</em>.
+            </p>
+            <p>
+              Infernet is the protocol layer. Whatever silicon shows up next, the matchmaking,
+              escrow, reputation (CPR), and payment routing don&apos;t change.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* Run a node */}
       <section id="run-a-node" className="border-b border-white/10">
         <div className="mx-auto grid w-full max-w-6xl gap-10 px-6 py-20 lg:grid-cols-[1.1fr_0.9fr] lg:px-10">

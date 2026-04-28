@@ -43,7 +43,9 @@ function vramTier(vramMb) {
  */
 function summarizeInterconnects(ic) {
     const nvlink = ic?.nvlink ?? { available: false, topology: 'none', links: [] };
+    const xgmi = ic?.xgmi ?? { available: false, topology: 'none', links: [] };
     const ib = ic?.infiniband ?? { available: false, devices: [] };
+    const efa = ic?.efa ?? { available: false, devices: [] };
     const activePorts = ib.devices.filter((d) => d.state === 'active');
     return {
         nvlink: {
@@ -51,9 +53,18 @@ function summarizeInterconnects(ic) {
             topology: nvlink.topology ?? 'none',
             link_count: Array.isArray(nvlink.links) ? nvlink.links.length : 0
         },
+        xgmi: {
+            available: !!xgmi.available,
+            topology: xgmi.topology ?? 'none',
+            link_count: Array.isArray(xgmi.links) ? xgmi.links.length : 0
+        },
         infiniband: {
             available: !!ib.available,
             active_port_count: activePorts.length
+        },
+        efa: {
+            available: !!efa.available,
+            adapter_count: Array.isArray(efa.devices) ? efa.devices.length : 0
         },
         rdma_capable: !!ic?.rdma_capable
     };

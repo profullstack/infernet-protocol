@@ -10,6 +10,8 @@
 
 A decentralized GPU compute marketplace for **inference and distributed training**. Rent a GPU anywhere, run one `docker` command, start earning crypto. The control plane is a Next.js dashboard; GPU nodes authenticate with **Nostr-signed HTTP requests** — they never hold a database credential, run as an unprivileged user, and can operate outbound-only. Scales horizontally — every new provider on the network is real, additional capacity.
 
+**What we are, what we aren't.** Infernet is the economic substrate for inference jobs that don't need NVLink — single-GPU inference (7B–70B), embarrassingly parallel batch (embeddings, image grids, sweeps), LoRA fine-tunes, and async / federated distributed training (DiLoCo-style). We don't try to match hyperscalers on tight-sync 100B+ training from scratch — that workload's interconnect moat is real and conceding it costs us nothing. The dominant inference market is request-level parallel, where per-job latency is dominated by GPU compute, not network hops. As inference ASICs (Apple Neural Engine, Qualcomm Hexagon, Tenstorrent, Groq, Cerebras, AWS Trainium) commoditize the silicon, the protocol layer is what stays valuable. Bitcoin's real lesson: the protocol survived three hardware generations because it didn't depend on any of them.
+
 [![Docker image](https://img.shields.io/badge/ghcr.io-infernet--provider-blue?logo=docker)](https://github.com/profullstack/infernet-protocol/pkgs/container/infernet-provider)
 [![Release](https://img.shields.io/github/v/release/profullstack/infernet-protocol)](https://github.com/profullstack/infernet-protocol/releases)
 

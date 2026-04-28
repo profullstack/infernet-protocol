@@ -31,6 +31,8 @@
 #   INFERNET_REF=branch           branch/tag/commit for git path (master)
 #   INFERNET_NPM_VERSION=X.Y.Z    pin npm version (latest)
 #   INFERNET_FORCE_GIT=1          skip npm, force git path
+#   INFERNET_MIN_DISK_MB=N        override disk-space threshold (3072 / 8192)
+#   INFERNET_SKIP_DISK_CHECK=1    skip the disk-space preflight
 #
 # Auto-bootstrap (everything below is optional — the script still works
 # without them, but with these set it leaves the node fully running
@@ -138,6 +140,64 @@ detect_os() {
         Darwin) OS=macos ;;
         *)      fail "unsupported OS: $UNAME_S (Linux and macOS only)" ;;
     esac
+}
+
+# ---------------------------------------------------------------------------
+# disk-space preflight
+#
+# pnpm install on this monorepo is ~1.5 GB, Node 20 via mise is ~80 MB,
+# and `infernet setup` will pull a model (qwen2.5:7b ≈ 4.4 GB) when a
+# bearer token is set. Failing halfway through a 4 GB model pull is a
+# bad UX — bail loudly up front instead.
+#
+# Override:
+#   INFERNET_MIN_DISK_MB=N      override threshold (default: 3072 / 8192)
+#   INFERNET_SKIP_DISK_CHECK=1  skip the check entirely
+# ---------------------------------------------------------------------------
+free_mb_at() {
+    _path="$1"
+    [ -d "$_path" ] || _path="$(dirname "$_path")"
+    # df -P prints sizes in 1K-blocks portably (linux + macOS + busybox).
+    _kb="$(df -P "$_path" 2>/dev/null | awk 'NR==2 {print $4}')"
+    if [ -z "$_kb" ] || [ "$_kb" = "0" ]; then
+        echo 0
+    else
+        echo "$((_kb / 1024))"
+    fi
+    unset _path _kb
+}
+
+check_disk_space() {
+    if [ "${INFERNET_SKIP_DISK_CHECK:-}" = "1" ]; then
+        return 0
+    fi
+    # Default 3 GB without bearer (just the install). 8 GB with bearer
+    # because the auto-bootstrap will pull a model after we exit.
+    if [ -n "$INFERNET_BEARER" ]; then
+        _default_need=8192
+    else
+        _default_need=3072
+    fi
+    _need_mb="${INFERNET_MIN_DISK_MB:-$_default_need}"
+    _free_mb="$(free_mb_at "$HOME")"
+    # df unavailable / unknown filesystem — best-effort: don't block.
+    if [ "${_free_mb:-0}" = "0" ]; then
+        warn "could not check disk space at \$HOME — continuing anyway"
+        unset _default_need _need_mb _free_mb
+        return 0
+    fi
+    if [ "$_free_mb" -lt "$_need_mb" ]; then
+        warn "low disk: ${_free_mb} MB free at \$HOME, need ~${_need_mb} MB"
+        warn "free up space (e.g. 'pnpm store prune', 'docker system prune') and re-run."
+        warn "to override: INFERNET_MIN_DISK_MB=$_free_mb or INFERNET_SKIP_DISK_CHECK=1"
+        fail "insufficient disk space"
+    fi
+    if [ "$_free_mb" -lt $((_need_mb * 2)) ]; then
+        warn "tight disk: ${_free_mb} MB free at \$HOME — recommended >$((_need_mb * 2)) MB"
+    else
+        ok "disk: ${_free_mb} MB free at \$HOME"
+    fi
+    unset _default_need _need_mb _free_mb
 }
 
 # ---------------------------------------------------------------------------
@@ -459,6 +519,11 @@ main() {
 
     detect_os
     ok "OS: $OS"
+
+    # Bail early if there isn't enough headroom to finish the install
+    # (and pull the model, if INFERNET_BEARER is set so auto-bootstrap
+    # will run setup afterwards).
+    check_disk_space
 
     # Idempotent — only installs missing packages. Cheap to call.
     ensure_apt_prereqs

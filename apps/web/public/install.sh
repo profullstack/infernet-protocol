@@ -31,7 +31,7 @@
 #   INFERNET_REF=branch           branch/tag/commit for git path (master)
 #   INFERNET_NPM_VERSION=X.Y.Z    pin npm version (latest)
 #   INFERNET_FORCE_GIT=1          skip npm, force git path
-#   INFERNET_MIN_DISK_MB=N        override disk-space threshold (3072 / 12288)
+#   INFERNET_MIN_DISK_MB=N        override disk-space threshold (3 / 10 / 15 GB)
 #   INFERNET_SKIP_DISK_CHECK=1    skip the disk-space preflight
 #
 # Auto-bootstrap (everything below is optional — the script still works
@@ -145,17 +145,24 @@ detect_os() {
 # ---------------------------------------------------------------------------
 # disk-space preflight
 #
-# pnpm install on this monorepo is ~1.5 GB, Node 20 via mise is ~80 MB,
-# and `infernet setup` will pull a model when a bearer token is set.
-# Larger model sizes to keep in mind:
-#   qwen2.5:7b              ≈ 4.4 GB
-#   qwen3.5-uncensored:9b   ≈ 7.4 GB
-#   llama3:70b              ≈ 40+ GB (operator handles their own)
-# Failing halfway through a multi-GB model pull is a bad UX — bail
-# loudly up front instead.
+# Realistic disk math for a zero-touch bearer install on a CUDA box:
+#   pnpm install (monorepo) ........ ~2.0 GB
+#   Node 20 via mise ............... ~0.1 GB
+#   Ollama base binary ............. ~1.0 GB
+#   Ollama mlx_cuda_v13 libs ....... ~3.0 GB  (only on CUDA hosts)
+#   Ollama vulkan libs ............. ~0.3 GB
+#   Model qwen2.5:7b ............... ~4.4 GB
+#   Model qwen3.5-uncensored:9b .... ~7.4 GB
+#   tar-extract peak (2x of one lib) ~1.0 GB headroom
+#                                    ───────
+#   minimum, CUDA host + 7B model ..  ~12 GB
+#   minimum, CUDA host + 9B model ..  ~15 GB
+#
+# Failing halfway through tar-extracting CUDA libs (or worse, a 7 GB
+# model pull) is a brutal UX — bail loudly up front instead.
 #
 # Override:
-#   INFERNET_MIN_DISK_MB=N      override threshold (default: 3072 / 12288)
+#   INFERNET_MIN_DISK_MB=N      override threshold (defaults below)
 #   INFERNET_SKIP_DISK_CHECK=1  skip the check entirely
 # ---------------------------------------------------------------------------
 free_mb_at() {
@@ -175,12 +182,16 @@ check_disk_space() {
     if [ "${INFERNET_SKIP_DISK_CHECK:-}" = "1" ]; then
         return 0
     fi
-    # Default 3 GB without bearer (just the install). 12 GB with bearer
-    # because the auto-bootstrap will pull a model after we exit, and
-    # comfortable models go up to ~7.5 GB (qwen3.5-uncensored:9b) plus
-    # ~2 GB install + headroom.
+    # Default 3 GB without bearer (just the install).
+    # With bearer + auto-bootstrap, the math depends on whether Ollama
+    # will pull CUDA libs (~3 GB extra). Detect by presence of nvidia-smi
+    # — if missing, the Ollama install path is the lighter CPU/Vulkan one.
     if [ -n "$INFERNET_BEARER" ]; then
-        _default_need=12288
+        if command -v nvidia-smi >/dev/null 2>&1; then
+            _default_need=15360   # 15 GB — install + Ollama+CUDA + ~7 GB model + headroom
+        else
+            _default_need=10240   # 10 GB — install + Ollama (no CUDA) + model + headroom
+        fi
     else
         _default_need=3072
     fi

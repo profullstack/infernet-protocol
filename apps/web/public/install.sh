@@ -45,6 +45,13 @@
 #   INFERNET_VLLM_MODEL=name      auto-start `vllm serve <name>` in background
 #                                 after install (e.g. Qwen/Qwen2.5-7B-Instruct)
 #
+# Ray cluster (optional, for multi-GPU / multi-node vLLM serving):
+#
+#   INFERNET_RAY_MODE=head        start a Ray head on this box (port 6379)
+#   INFERNET_RAY_MODE=worker      join an existing Ray cluster
+#   INFERNET_RAY_HEAD=host:port   address of the Ray head (when MODE=worker)
+#   INFERNET_RAY_PORT=6379        head port (default 6379)
+#
 # Auto-bootstrap (everything below is optional — the script still works
 # without them, but with these set it leaves the node fully running
 # without ever needing an interactive `infernet setup` afterwards):
@@ -699,7 +706,11 @@ try_install_vllm() {
     fi
 
     # Symlink vllm onto $INFERNET_BIN so operators can run it without
-    # remembering the venv path.
+    # remembering the venv path. Same for `ray` — vLLM ships with Ray
+    # as a transitive dep and uses it internally for tensor/pipeline
+    # parallelism, so operators with multi-GPU rigs need ray on PATH
+    # to spin up `ray start --head` / `ray start --address=...` for
+    # distributed serving.
     if [ -x "$_vllm_dir/bin/vllm" ]; then
         mkdir -p "$INFERNET_BIN"
         ln -sf "$_vllm_dir/bin/vllm" "$INFERNET_BIN/vllm"
@@ -709,6 +720,35 @@ try_install_vllm() {
         unset _vllm_dir _mise_bin
         return 1
     fi
+    if [ -x "$_vllm_dir/bin/ray" ]; then
+        ln -sf "$_vllm_dir/bin/ray" "$INFERNET_BIN/ray"
+        ok "Ray CLI linked to $INFERNET_BIN/ray (for distributed vLLM)"
+    fi
+
+    # Optional: bring up a Ray cluster head or join an existing one.
+    # Operators with one big GPU box leave INFERNET_RAY_MODE unset
+    # (vLLM still uses Ray internally for single-node TP). Operators
+    # with multi-node clusters set MODE=head on one box and MODE=worker
+    # + HEAD=<head>:<port> on the others before running vllm serve.
+    case "${INFERNET_RAY_MODE:-}" in
+        head)
+            _ray_port="${INFERNET_RAY_PORT:-6379}"
+            info "  → starting Ray head on :$_ray_port"
+            "$_vllm_dir/bin/ray" start --head --port="$_ray_port" \
+                --dashboard-host=0.0.0.0 --dashboard-port=8265 \
+                || warn "ray start --head failed"
+            unset _ray_port
+            ;;
+        worker)
+            if [ -z "${INFERNET_RAY_HEAD:-}" ]; then
+                warn "INFERNET_RAY_MODE=worker but INFERNET_RAY_HEAD not set — skip"
+            else
+                info "  → joining Ray cluster at $INFERNET_RAY_HEAD"
+                "$_vllm_dir/bin/ray" start --address="$INFERNET_RAY_HEAD" \
+                    || warn "ray start --address=$INFERNET_RAY_HEAD failed"
+            fi
+            ;;
+    esac
 
     # Auto-start a vllm serve daemon if INFERNET_VLLM_MODEL is set.
     if [ -n "${INFERNET_VLLM_MODEL:-}" ]; then

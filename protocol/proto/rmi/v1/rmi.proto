@@ -1,0 +1,54 @@
+// Infernet Remote Method Invocation — object-oriented RPC over the
+// P2P transport.
+//
+// Differences from plain RPC:
+//   - Calls target a specific object instance (ObjectRef), not a
+//     bare function. Objects carry state (job status, peer session,
+//     model shard, etc.) across calls.
+//   - Object ownership can migrate between peers. Stale calls get
+//     OBJECT_MIGRATED responses with the new owner's location.
+//   - The object registry (often DHT-backed) maps ObjectRef →
+//     current owner peer.
+//
+// See protocol/docs/rmi.md and protocol/docs/object-registry.md.
+
+syntax = "proto3";
+
+package infernet.rmi.v1;
+
+message ObjectRef {
+    string object_id     = 1; // stable id, e.g. "job:abc123"
+    string type_name     = 2; // versioned, e.g. "infernet.compute.ComputeJob.v1"
+    string owner_peer_id = 3; // current owner per the registry
+}
+
+message MethodArgument {
+    string name         = 1;
+    bytes  value        = 2;
+    string content_type = 3; // "application/json", "application/protobuf;type=...", etc.
+}
+
+message RmiRequest {
+    string request_id        = 1; // idempotency key (IPIP-0014 §1)
+    ObjectRef object_ref     = 2;
+    string method_name       = 3;
+    repeated MethodArgument args = 4;
+    int64  timestamp_unix    = 5; // replay protection
+    bytes  caller_signature  = 6; // over (request_id|object_ref|method|args|timestamp)
+}
+
+message RmiResponse {
+    string request_id         = 1;
+    bool   ok                 = 2;
+    bytes  return_value       = 3;
+    string return_content_type = 4;
+    string error_code         = 5; // OBJECT_NOT_FOUND | METHOD_NOT_FOUND | ...
+    string error_message      = 6;
+
+    // When error_code == OBJECT_MIGRATED, this carries the new owner.
+    ObjectRef migrated_to     = 7;
+}
+
+service RemoteObjectInvoker {
+    rpc Invoke(RmiRequest) returns (RmiResponse);
+}

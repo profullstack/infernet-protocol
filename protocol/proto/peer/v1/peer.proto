@@ -1,0 +1,45 @@
+// Infernet peer discovery — finding other peers in the network.
+//
+// Peers query bootstrap nodes, the DHT, or each other to discover
+// peers matching a namespace + protocol filter. Results carry enough
+// information to dial the peer directly (libp2p multiaddrs).
+//
+// See protocol/docs/discovery.md.
+
+syntax = "proto3";
+
+package infernet.peer.v1;
+
+message PeerInfo {
+    string peer_id = 1;
+
+    // libp2p multiaddrs (e.g. "/ip4/203.0.113.10/tcp/4001/p2p/QmFoo").
+    // Multiple are common (IPv4 + IPv6 + relay).
+    repeated string multiaddrs = 2;
+
+    // Protocols this peer reported during its last handshake.
+    repeated string protocols = 3;
+
+    // Last time the discovery layer saw this peer alive.
+    int64 last_seen_unix = 4;
+}
+
+message FindPeersRequest {
+    // Logical namespace, e.g. "providers/qwen2.5:7b" or "validators/cpr".
+    // Empty string = match any namespace.
+    string namespace = 1;
+
+    // Returned peers MUST claim every protocol in this list.
+    repeated string required_protocols = 2;
+
+    // Cap on returned peers; receiver MAY return fewer.
+    uint32 limit = 3;
+}
+
+message FindPeersResponse {
+    repeated PeerInfo peers = 1;
+}
+
+service PeerDiscovery {
+    rpc FindPeers(FindPeersRequest) returns (FindPeersResponse);
+}

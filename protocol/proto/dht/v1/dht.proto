@@ -1,0 +1,40 @@
+// Infernet DHT protocol — decentralized key-value lookup.
+//
+// Used to publish provider announcements, model fingerprint records,
+// and reputation snapshots into a Kademlia-style DHT (libp2p kad-dht
+// per IPIP-0016). Every value is a Nostr-signed envelope; receivers
+// verify before trusting any field.
+//
+// See protocol/docs/dht.md.
+
+syntax = "proto3";
+
+package infernet.dht.v1;
+
+message DhtKey {
+    bytes key = 1; // sha256 of the canonical record name
+}
+
+message DhtValue {
+    bytes  key                = 1;
+    bytes  value              = 2; // opaque payload — Nostr-signed envelope
+    string provider_peer_id   = 3; // who published it
+    int64  expires_at_unix    = 4; // record TTL
+    bytes  signature          = 5; // BIP-340 Schnorr over (key|value|expires)
+}
+
+message FindValueRequest {
+    bytes  key      = 1;
+    uint32 max_hops = 2; // bounds traversal cost
+}
+
+message FindValueResponse {
+    bool      found            = 1;
+    DhtValue  value            = 2; // present iff found
+    repeated string closer_peer_ids = 3; // for next-hop queries when not found
+}
+
+service DhtService {
+    rpc PutValue(DhtValue) returns (DhtValue);
+    rpc FindValue(FindValueRequest) returns (FindValueResponse);
+}

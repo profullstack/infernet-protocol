@@ -1,0 +1,27 @@
+// Infernet pubsub / gossip — broadcast-style messaging on topics.
+//
+// Used for job-announcement floods, reputation events, and any
+// future broadcast where every interested peer wants a copy. Every
+// envelope is signed; receivers dedupe by message_id and decrement
+// TTL on each forward hop.
+//
+// See protocol/docs/pubsub.md.
+
+syntax = "proto3";
+
+package infernet.pubsub.v1;
+
+message Envelope {
+    string message_id      = 1; // unique per (sender, payload); used for dedup
+    string topic           = 2; // e.g. "jobs/embedding/qwen2.5-7b"
+    string sender_peer_id  = 3;
+    int64  timestamp_unix  = 4;
+    bytes  payload         = 5; // application-defined
+    bytes  signature       = 6; // over (message_id|topic|sender|timestamp|sha256(payload))
+}
+
+message GossipMessage {
+    Envelope envelope = 1;
+    repeated string seen_by_peer_ids = 2; // forwarders so far — prevents loops
+    uint32   ttl = 3; // hops remaining; drop at 0
+}

@@ -1,0 +1,57 @@
+// Infernet handshake protocol — first contact between peers.
+//
+// Two peers connecting for the first time exchange a HandshakeRequest /
+// HandshakeResponse pair. Each side identifies itself, advertises the
+// protocol versions it supports, presents its public key, and the
+// receiver decides whether to accept the connection. After a successful
+// handshake the peers may open higher-level protocol streams (peer
+// discovery, DHT, pubsub, compute, etc.).
+//
+// Versioning: this is the v1 wire contract. Bumping any field number,
+// changing the meaning of an existing field, or removing a field is
+// a breaking change and requires a new package (handshake.v2).
+//
+// See protocol/docs/handshake.md for the flow, error behavior, and
+// security notes.
+
+syntax = "proto3";
+
+package infernet.handshake.v1;
+
+message HandshakeRequest {
+    // Stable peer identifier (e.g. Nostr pubkey, libp2p PeerID).
+    string peer_id = 1;
+
+    // Free-form daemon version, e.g. "infernet-cli/0.1.7".
+    string agent_version = 2;
+
+    // Versioned protocol identifiers this peer can speak, e.g.
+    // ["infernet.peer.v1", "infernet.dht.v1", "infernet.compute.v1"].
+    repeated string supported_protocols = 3;
+
+    // Sender's public key in the format identified by `peer_id`.
+    bytes public_key = 4;
+
+    // Sender's wall-clock at request time. Receiver MAY reject if
+    // skew exceeds a configured threshold.
+    int64 timestamp_unix = 5;
+}
+
+message HandshakeResponse {
+    // Receiver's peer ID.
+    string peer_id = 1;
+
+    // True if the receiver agrees to talk to this peer.
+    bool accepted = 2;
+
+    // Subset of the requester's supported_protocols the receiver also
+    // implements. Order is suggestive but not authoritative.
+    repeated string selected_protocols = 3;
+
+    // Free-form rejection reason when accepted == false.
+    string reason = 4;
+}
+
+service HandshakeService {
+    rpc Handshake(HandshakeRequest) returns (HandshakeResponse);
+}

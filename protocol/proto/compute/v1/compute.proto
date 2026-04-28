@@ -1,0 +1,50 @@
+// Infernet distributed compute — submitting jobs to worker peers.
+//
+// Workers advertise resource offers; clients submit JobRequest with
+// payment_intent_id (per IPIP-0014 §10 external causal token); workers
+// stream JobStatus updates back. Output artifacts are content-addressed
+// (CIDs) so downstream consumers can verify integrity without trusting
+// the worker.
+//
+// See protocol/docs/compute.md.
+
+syntax = "proto3";
+
+package infernet.compute.v1;
+
+message ResourceOffer {
+    string peer_id              = 1;
+    uint32 cpu_cores            = 2;
+    uint64 memory_mb            = 3;
+    repeated string gpu_models  = 4; // e.g. ["RTX 4090"]
+    uint64 gpu_memory_mb        = 5;
+    repeated string runtimes    = 6; // e.g. ["vllm", "ollama", "docker"]
+}
+
+message JobRequest {
+    string job_id                = 1;
+    string image                 = 2; // Docker image OR engine model id
+    repeated string args         = 3;
+    uint32 required_cpu_cores    = 4;
+    uint64 required_memory_mb    = 5;
+    uint64 required_gpu_memory_mb = 6;
+
+    // External causal token — threads this job to its payment record.
+    // See IPIP-0014 §10. Workers MUST refuse to start work if the
+    // payment_intent_id does not validate.
+    string payment_intent_id     = 7;
+}
+
+message JobStatus {
+    string job_id     = 1;
+    string state      = 2; // queued | running | complete | failed | canceled
+    int32  exit_code  = 3;
+    string stdout_cid = 4; // content-addressed (e.g. ipfs://...)
+    string stderr_cid = 5;
+}
+
+service ComputeNode {
+    rpc SubmitJob(JobRequest) returns (JobStatus);
+    rpc GetJobStatus(JobRequest) returns (JobStatus);
+    rpc StreamJobLogs(JobRequest) returns (stream JobStatus);
+}

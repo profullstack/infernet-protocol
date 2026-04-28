@@ -1,0 +1,45 @@
+// Infernet payment references — attach payment intent + settlement
+// context to compute jobs without putting payment ledger writes on
+// the P2P wire.
+//
+// The actual ledger lives on the centralized control plane (per
+// IPIP-0014 §8: payment subsystem is strict CP, never CRDT, never
+// P2P-replicated). These messages just carry references between
+// peers — workers verify a payment_intent_id is authorized before
+// running compute, and report settlement state back so clients know
+// when escrow released.
+
+syntax = "proto3";
+
+package infernet.payment.v1;
+
+message PaymentIntent {
+    string intent_id       = 1; // generated at invoice creation
+    string client_peer_id  = 2;
+    string worker_peer_id  = 3;
+    string job_id          = 4;
+    string coin            = 5; // "BTC", "ETH", "USDC", ...
+    string chain           = 6; // "ethereum", "polygon", "solana", "base"
+    uint64 amount_minor    = 7; // smallest-unit (sats / wei / ...) — avoid float
+    int64  expires_at_unix = 8;
+    bytes  signature       = 9; // signed by control plane
+}
+
+message PaymentVerifyRequest {
+    string intent_id      = 1;
+    string control_plane  = 2; // base URL of the issuing control plane
+}
+
+message PaymentVerifyResponse {
+    bool   valid       = 1;
+    string state       = 2; // "pending" | "authorized" | "settled" | "refunded" | "expired"
+    int64  verified_at = 3;
+    string error       = 4; // populated when valid = false
+}
+
+service PaymentService {
+    // Worker calls this against the control plane (or a peer that
+    // has cached the intent) before starting a job. Refusal MUST
+    // bubble up as a JobStatus error rather than silent acceptance.
+    rpc VerifyIntent(PaymentVerifyRequest) returns (PaymentVerifyResponse);
+}

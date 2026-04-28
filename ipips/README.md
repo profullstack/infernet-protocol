@@ -143,6 +143,7 @@ to the canonical conversation thread.
 | 0005  | [Data Access Architecture](./ipip-0005.md) | Standards Track | Draft  |
 | 0006  | [Peer Discovery and Bootstrap](./ipip-0006.md) | Standards Track | Draft  |
 | 0007  | [CoinPay Reputation Protocol Integration](./ipip-0007.md) | Standards Track | Draft  |
+| 0008  | [Hardware capability advertisement (NVLink / xGMI / IB / EFA)](./ipip-0008.md) | Standards Track | Draft  |
 
 ## Editors
 

@@ -21,6 +21,8 @@ const TOC = [
     { id: "cli-tui",       label: "infernet tui" },
     { id: "cli-service",   label: "infernet service (systemd)" },
     { id: "auth",          label: "Sign up / sign in / reset" },
+    { id: "dashboard",     label: "Dashboard" },
+    { id: "interconnects", label: "Interconnects (NVLink / xGMI / IB / EFA)" },
     { id: "api",           label: "Public API endpoints" },
     { id: "self-host",     label: "Self-host the control plane" },
     { id: "architecture",  label: "Architecture" },
@@ -433,6 +435,203 @@ curl -sS -X POST https://infernetprotocol.com/api/auth/login \\
                         docs/AUTH_EMAIL_TEMPLATES.md
                     </Link>
                     . Operators self-hosting paste those into their own Supabase dashboard.
+                </Aside>
+            </Section>
+
+            {/* DASHBOARD */}
+            <Section id="dashboard" title="Dashboard">
+                <p>
+                    Signing in lands you on <code>/dashboard</code>. It&apos;s your private, per-user
+                    view of the network: only resources linked to your account show up here.
+                    Network-wide stats live on{" "}
+                    <Link href="/status" className="text-[var(--accent)] hover:underline">
+                        /status
+                    </Link>{" "}
+                    instead.
+                </p>
+                <p>The dashboard surfaces, all queried server-side:</p>
+                <ul className="ml-5 list-disc space-y-1">
+                    <li>
+                        <strong>Earnings</strong> (last 30d / all-time / # confirmed payments) —
+                        sum of inbound <code>payment_transactions</code> joined to your providers.
+                    </li>
+                    <li>
+                        <strong>Spend</strong> on the same shape, joined to your clients.
+                    </li>
+                    <li>
+                        <strong>GPUs in use + models served</strong> — totals across the
+                        <code> providers.specs.gpus</code> /<code> .models</code> jsonb of every
+                        provider you operate.
+                    </li>
+                    <li>
+                        <strong>Provider-node table</strong> with status pills + last-seen timestamps.
+                    </li>
+                    <li>
+                        <strong>CPU pool</strong> — host CPU groups across your nodes.
+                    </li>
+                    <li>
+                        <strong>Interconnect summary</strong> — NVLink / xGMI / InfiniBand / EFA
+                        / RDMA capability across your providers (see the interconnects section
+                        below for what gets detected).
+                    </li>
+                    <li>
+                        <strong>Linked Nostr identities</strong> — which pubkeys you&apos;ve claimed
+                        for which roles (<code>provider</code>, <code>client</code>,
+                        <code>aggregator</code>).
+                    </li>
+                    <li>
+                        <strong>Recent jobs</strong> you submitted (best-effort match by client
+                        label until the jobs table grows a <code>client_id</code> FK).
+                    </li>
+                </ul>
+                <p>
+                    Empty cards print the exact CLI command that would populate them — e.g.{" "}
+                    <code>infernet register</code> for a node, <code>infernet pubkey link</code> for
+                    an identity. No fake numbers.
+                </p>
+                <p>
+                    The user-scoped joins go through <code>pubkey_links</code> (per IPIP-0003):
+                    <code> auth.users.id → pubkey_links.user_id → providers.public_key</code> /
+                    <code> clients.public_key</code>. Routes that need the current user import
+                    <code> getCurrentUser()</code> from{" "}
+                    <code>apps/web/lib/supabase/auth-server.js</code>; unauth&apos;d hits redirect
+                    to <code>/auth/login?next=/dashboard</code>.
+                </p>
+            </Section>
+
+            {/* INTERCONNECTS */}
+            <Section id="interconnects" title="Interconnects (NVLink / xGMI / InfiniBand / EFA)">
+                <p>
+                    Infernet auto-detects GPU-to-GPU and host-to-host fabric on every{" "}
+                    <code>infernet setup</code> and <code>infernet gpu</code> run, advertises a
+                    coarse capability summary at registration time, and emits the right
+                    environment variables when spawning an engine subprocess so NCCL / RCCL /
+                    libfabric actually use the fabric instead of silently falling back to TCP.
+                </p>
+
+                <h3 className="mt-6 text-lg font-semibold text-white">What gets detected</h3>
+                <table className="my-4 w-full border-collapse text-sm">
+                    <thead>
+                        <tr className="border-b border-white/15 text-left text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                            <th className="py-2 pr-3 font-medium">Fabric</th>
+                            <th className="py-2 pr-3 font-medium">Hardware</th>
+                            <th className="py-2 pr-3 font-medium">Detection source</th>
+                        </tr>
+                    </thead>
+                    <tbody className="text-[var(--muted)]">
+                        <tr className="border-b border-white/5">
+                            <td className="py-2 pr-3 text-white">NVLink</td>
+                            <td className="py-2 pr-3">NVIDIA datacenter + consumer multi-GPU</td>
+                            <td className="py-2 pr-3"><code>nvidia-smi topo -m</code></td>
+                        </tr>
+                        <tr className="border-b border-white/5">
+                            <td className="py-2 pr-3 text-white">xGMI / Infinity Fabric</td>
+                            <td className="py-2 pr-3">AMD MI200 / MI300 series</td>
+                            <td className="py-2 pr-3"><code>rocm-smi --showtopo</code></td>
+                        </tr>
+                        <tr className="border-b border-white/5">
+                            <td className="py-2 pr-3 text-white">InfiniBand / RoCE</td>
+                            <td className="py-2 pr-3">Mellanox / Nvidia ConnectX, RoCE NICs</td>
+                            <td className="py-2 pr-3"><code>/sys/class/infiniband/*</code> (Linux)</td>
+                        </tr>
+                        <tr className="border-b border-white/5">
+                            <td className="py-2 pr-3 text-white">AWS EFA</td>
+                            <td className="py-2 pr-3">AWS p4d / p5 / Trainium instances</td>
+                            <td className="py-2 pr-3"><code>lspci -d 1d0f:</code> (Linux)</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p>
+                    Detection is best-effort: any vendor command that&apos;s missing or fails is
+                    silently skipped — running on a CPU-only laptop or an AMD-only host doesn&apos;t
+                    error, the relevant detector just returns an empty result. Topology is
+                    classified <code>pair</code>, <code>mesh</code>, or <code>all-to-all</code> by
+                    counting deduped GPU-pair edges against the complete-graph upper bound.
+                </p>
+                <p>See it on your hardware:</p>
+                <CodeBlock>
+{`infernet gpu                           # human summary
+infernet gpu --json | jq .interconnects # raw detected shape`}
+                </CodeBlock>
+
+                <h3 className="mt-6 text-lg font-semibold text-white">What gets advertised</h3>
+                <p>
+                    <code>infernet register</code> includes a <em>coarsened</em> capability block
+                    in <code>specs.interconnects</code> — no device names, no board IDs, no PCI
+                    BDFs. Just enough for the matchmaker to route, not enough to fingerprint your
+                    hardware:
+                </p>
+                <CodeBlock>
+{`{
+  "specs": {
+    "interconnects": {
+      "nvlink":     { "available": true,  "topology": "all-to-all", "link_count": 6 },
+      "xgmi":       { "available": false, "topology": "none",       "link_count": 0 },
+      "infiniband": { "available": true,  "active_port_count": 2 },
+      "efa":        { "available": false, "adapter_count": 0 },
+      "rdma_capable": true
+    }
+  }
+}`}
+                </CodeBlock>
+
+                <h3 className="mt-6 text-lg font-semibold text-white">Engine-spawn env vars</h3>
+                <p>
+                    When the daemon launches an engine for a job, it merges the output of{" "}
+                    <code>interconnectEnv(capability)</code> into the child&apos;s environment.
+                    These are the standards downstream toolkits already honor — setting them is
+                    the difference between NCCL using IB at 200 Gbit/s and NCCL falling back to
+                    TCP at 10 Gbit/s.
+                </p>
+                <table className="my-4 w-full border-collapse text-sm">
+                    <thead>
+                        <tr className="border-b border-white/15 text-left text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                            <th className="py-2 pr-3 font-medium">When</th>
+                            <th className="py-2 pr-3 font-medium">Env vars set</th>
+                        </tr>
+                    </thead>
+                    <tbody className="text-[var(--muted)]">
+                        <tr className="border-b border-white/5">
+                            <td className="py-2 pr-3 text-white">NVLink available</td>
+                            <td className="py-2 pr-3"><code>INFERNET_NVLINK=1</code>, <code>INFERNET_NVLINK_TOPOLOGY=&lt;topo&gt;</code></td>
+                        </tr>
+                        <tr className="border-b border-white/5">
+                            <td className="py-2 pr-3 text-white">xGMI available</td>
+                            <td className="py-2 pr-3"><code>INFERNET_XGMI=1</code>, <code>INFERNET_XGMI_TOPOLOGY=&lt;topo&gt;</code></td>
+                        </tr>
+                        <tr className="border-b border-white/5">
+                            <td className="py-2 pr-3 text-white">≥1 active IB port with a name</td>
+                            <td className="py-2 pr-3"><code>NCCL_IB_DISABLE=0</code>, <code>NCCL_IB_HCA=mlx5_0:1,mlx5_1:1,…</code></td>
+                        </tr>
+                        <tr className="border-b border-white/5">
+                            <td className="py-2 pr-3 text-white">EFA adapter present</td>
+                            <td className="py-2 pr-3"><code>FI_PROVIDER=efa</code>, <code>NCCL_PROTO=simple</code>, <code>INFERNET_EFA=1</code></td>
+                        </tr>
+                        <tr className="border-b border-white/5">
+                            <td className="py-2 pr-3 text-white">RDMA-capable (any of IB / EFA active)</td>
+                            <td className="py-2 pr-3"><code>INFERNET_RDMA=1</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p>
+                    The <code>INFERNET_*</code> markers are advisory — useful for our adapters
+                    that branch on fabric (e.g. opting into tensor-parallel inference modes). The{" "}
+                    <code>NCCL_*</code> and <code>FI_*</code> are the load-bearing standards every
+                    distributed-training framework already reads. Job-level launch profiles can
+                    override any of these; the daemon won&apos;t clobber an explicit caller value.
+                </p>
+                <Aside>
+                    Full normative spec, including the client-side
+                    <code> requires.interconnects</code> matchmaking shape, lives in{" "}
+                    <Link
+                        href="https://github.com/profullstack/infernet-protocol/blob/master/ipips/ipip-0008.md"
+                        className="text-[var(--accent)] hover:underline"
+                        target="_blank"
+                        rel="noreferrer"
+                    >
+                        IPIP-0008
+                    </Link>
+                    .
                 </Aside>
             </Section>
 

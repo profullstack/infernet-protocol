@@ -192,44 +192,25 @@ ensure_apt_prereqs() {
 # dependency checks
 # ---------------------------------------------------------------------------
 need_node_install_hint() {
-    case "$OS" in
-        macos)
-            cat <<EOF
+    cat <<EOF
 
-  Install Node.js 18+ first:
+  Install Node.js 18+ first. Easiest path on any platform:
 
-    # via Homebrew:
-    brew install node
+    curl https://mise.run | sh
+    ~/.local/bin/mise use --global node@20
 
-    # or via nvm:
-    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
-    nvm install --lts
+  Then re-run this script.
 
 EOF
-            ;;
-        linux)
-            cat <<EOF
-
-  Install Node.js 18+ first:
-
-    # NodeSource (Ubuntu/Debian/RHEL):
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
-    sudo apt-get install -y nodejs
-
-    # or via nvm:
-    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
-    nvm install --lts
-
-EOF
-            ;;
-    esac
 }
 
 try_install_node_unattended() {
-    # Idempotent: skips if Node 18+ is already installed. Returns
-    # 0 if Node ends up usable, 1 if we couldn't install it (caller
-    # falls back to the manual hint). POSIX sh — function-scoped
-    # vars prefixed with _ to keep the global namespace clean.
+    # Idempotent: skips if Node 18+ is already on PATH. Otherwise
+    # installs Node 20 via mise (a polyglot version manager — single
+    # static binary, works on linux + macOS, lives entirely under
+    # $HOME so it doesn't fight any system-bundled `node` left over
+    # from a base image like RunPod's vllm-workspace, which ships
+    # node 12).
     if command -v node >/dev/null 2>&1; then
         _node_v="$(node -v | sed 's/^v//')"
         _node_major="$(echo "$_node_v" | cut -d. -f1)"
@@ -239,44 +220,33 @@ try_install_node_unattended() {
         fi
         unset _node_v _node_major
     fi
-    case "$OS" in
-        linux)
-            if command -v apt-get >/dev/null 2>&1; then
-                info "installing Node.js 20 via NodeSource (idempotent — only runs if missing)"
-                # NodeSource ships a setup script meant to be `curl | bash`.
-                # We CAN'T pipe it directly here because this whole installer
-                # is itself running under `curl … | sh`, so stdin is already
-                # attached to our own caller. Download to a temp file first,
-                # then exec it so it has its own stdin. (`bash -` reading
-                # from our outer pipe → "curl: (23) Failed writing body".)
-                _ns_tmp="$(mktemp 2>/dev/null || echo "/tmp/nodesource.$$.sh")"
-                if curl -fsSL https://deb.nodesource.com/setup_20.x -o "$_ns_tmp" 2>/dev/null; then
-                    $SUDO -E bash "$_ns_tmp" >/dev/null 2>&1 || true
-                    rm -f "$_ns_tmp"
-                fi
-                unset _ns_tmp
-                # If the apt repo got installed but Node didn't, install it now.
-                if ! command -v node >/dev/null 2>&1; then
-                    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs >/dev/null 2>&1 || true
-                fi
-                # Some distros ship `nodejs` but no `node` binary. Symlink.
-                if command -v nodejs >/dev/null 2>&1 && ! command -v node >/dev/null 2>&1; then
-                    $SUDO ln -sf "$(command -v nodejs)" /usr/local/bin/node 2>/dev/null || true
-                fi
-                command -v node >/dev/null 2>&1 && return 0
-            elif command -v dnf >/dev/null 2>&1; then
-                $SUDO dnf install -y nodejs >/dev/null 2>&1
-                command -v node >/dev/null 2>&1 && return 0
-            elif command -v apk >/dev/null 2>&1; then
-                $SUDO apk add --no-cache nodejs npm >/dev/null 2>&1
-                command -v node >/dev/null 2>&1 && return 0
-            fi
-            ;;
-        macos)
-            # Don't auto-install Homebrew. Operator deals with it.
+
+    info "installing Node.js 20 via mise (https://mise.jdx.dev)"
+    if ! command -v mise >/dev/null 2>&1; then
+        # Official one-liner. Drops the binary at ~/.local/bin/mise.
+        curl -fsSL https://mise.run | sh >/dev/null 2>&1 || {
+            warn "mise install failed (curl https://mise.run | sh)"
             return 1
-            ;;
-    esac
+        }
+    fi
+
+    # Make sure mise + its shims are on PATH for the rest of this
+    # script — without this, downstream `node` / `npm` calls would
+    # still resolve to the stale system version.
+    PATH="$HOME/.local/bin:$PATH"
+    if ! command -v mise >/dev/null 2>&1; then
+        warn "mise installed but not on PATH at $HOME/.local/bin"
+        return 1
+    fi
+    mise install node@20 >/dev/null 2>&1 || warn "mise install node@20 failed"
+    mise use --global node@20 >/dev/null 2>&1 || warn "mise use --global node@20 failed"
+
+    _mise_data="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}"
+    PATH="$_mise_data/shims:$PATH"
+    export PATH
+    unset _mise_data
+
+    command -v node >/dev/null 2>&1 && return 0
     return 1
 }
 
@@ -320,11 +290,15 @@ ensure_pnpm() {
     info "installing pnpm…"
     if command -v npm >/dev/null 2>&1; then
         npm install -g pnpm >/dev/null 2>&1 || fail "npm install -g pnpm failed"
+        # If we installed node via mise, expose the freshly-installed
+        # pnpm binary through mise's shim layer so it's found on PATH.
+        command -v mise >/dev/null 2>&1 && mise reshim >/dev/null 2>&1 || true
         ok "pnpm $(pnpm -v) (installed via npm)"
     else
         # corepack ships with Node 16+ and can enable pnpm without npm.
         if command -v corepack >/dev/null 2>&1; then
             corepack enable pnpm >/dev/null 2>&1 || fail "corepack enable pnpm failed"
+            command -v mise >/dev/null 2>&1 && mise reshim >/dev/null 2>&1 || true
             ok "pnpm enabled via corepack"
         else
             fail "neither npm nor corepack found — can't install pnpm"
@@ -366,6 +340,11 @@ write_wrapper() {
     cat > "$WRAPPER" <<EOF
 #!/bin/sh
 # Infernet CLI shim — points at the install at $SOURCE_DIR.
+# If node was installed via mise, prepend its shims so the right
+# version is picked up regardless of whether the user's shell
+# config has activated mise yet (containers, fresh logins, cron).
+_mise_data="\${MISE_DATA_DIR:-\${XDG_DATA_HOME:-\$HOME/.local/share}/mise}"
+[ -d "\$_mise_data/shims" ] && PATH="\$_mise_data/shims:\$PATH"
 exec node "$SOURCE_DIR/apps/cli/index.js" "\$@"
 EOF
     chmod +x "$WRAPPER"

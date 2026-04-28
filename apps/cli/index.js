@@ -14,6 +14,7 @@
 
 import { loadConfig, getConfigPath } from './lib/config.js';
 import { createNodeClientFromConfig } from './lib/node-client.js';
+import { decideRoute } from './lib/route.js';
 
 import help, { USAGE } from './commands/help.js';
 import init from './commands/init.js';
@@ -98,19 +99,25 @@ const NO_CONFIG = new Set(['init', 'login', 'help', 'stats', 'logs', 'stop', 'gp
 // — kept as a future escape hatch).
 const NO_CLIENT = new Set();
 
+const KNOWN_COMMAND_NAMES = new Set(Object.keys(COMMANDS));
+
 async function main() {
     const argv = process.argv.slice(2);
-    const sub = argv[0];
-    const rest = argv.slice(1);
+    const route = decideRoute(argv, KNOWN_COMMAND_NAMES, { isTTY: !!process.stdin.isTTY });
+    const sub = route.command;
+    const rest = route.rest;
 
-    if (!sub || sub === 'help' || sub === '--help' || sub === '-h') {
+    if (sub === 'help') {
         await help();
-        process.exit(sub ? 0 : 1);
+        // Bare `infernet` (no args) on a TTY → help, exit 1 so scripts
+        // notice the implicit nudge. Explicit `infernet help` → exit 0.
+        process.exit(argv.length === 0 ? 1 : 0);
     }
 
     const handler = COMMANDS[sub];
     if (!handler) {
-        process.stderr.write(`Unknown command: ${sub}\n\n`);
+        // Defensive — decideRoute should never return a name we don't have.
+        process.stderr.write(`Internal error: no handler for '${sub}'\n\n`);
         process.stderr.write(USAGE);
         process.exit(1);
     }

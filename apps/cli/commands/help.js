@@ -5,7 +5,9 @@
 const USAGE = `infernet — GPU node control plane for the Infernet Protocol
 
 Usage:
-  infernet <command> [args]
+  infernet [prompt]                     Chat with the network (default verb)
+  infernet <command> [args]             Run an explicit subcommand
+  echo "..." | infernet                 Chat with the piped input
 
 Setup:
   setup        Bootstrap environment (Ollama + model + firewall + config)

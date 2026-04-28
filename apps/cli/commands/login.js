@@ -19,6 +19,7 @@
 
 import { spawn } from "node:child_process";
 import { loadConfig, saveConfig, getConfigPath } from "../lib/config.js";
+import pubkeyCommand from "./pubkey.js";
 
 const HELP = `infernet login — sign in to the control plane
 
@@ -78,6 +79,32 @@ async function saveAuth(config, { token, userId, email, expiresAt }) {
     return path;
 }
 
+/**
+ * Best-effort: after a successful login, if this CLI also holds a
+ * Nostr keypair (i.e. the user ran `infernet init` / `setup` already),
+ * claim that pubkey under the freshly-authenticated user. Failures are
+ * logged and ignored — `infernet pubkey link` can be re-run any time.
+ */
+async function autoLinkPubkey() {
+    const config = (await loadConfig()) ?? {};
+    const hasNode = !!(config?.node?.publicKey && config?.node?.privateKey && config?.node?.role);
+    const hasAuth = !!config?.auth?.bearerToken;
+    if (!hasNode || !hasAuth) return;
+
+    const fakeArgs = {
+        positional: ["link"],
+        flags: new Map(),
+        has() { return false; },
+        get() { return undefined; }
+    };
+    process.stdout.write("\nLinking this node's pubkey to your account...\n  ");
+    try {
+        await pubkeyCommand(fakeArgs);
+    } catch (err) {
+        process.stderr.write(`(auto-link failed: ${err?.message ?? err}; run \`infernet pubkey link\` manually.)\n`);
+    }
+}
+
 async function statusCmd(config) {
     const a = config?.auth;
     if (!a?.bearerToken) {
@@ -127,6 +154,7 @@ async function tokenCmd(config, tokenStr) {
         expiresAt: claims.exp ? new Date(claims.exp * 1000).toISOString() : null
     });
     process.stdout.write(`✓ Signed in${claims.email ? ` as ${claims.email}` : ""}\n  saved to ${path}\n`);
+    await autoLinkPubkey();
     return 0;
 }
 
@@ -199,6 +227,7 @@ async function deviceCodeFlow(config) {
                 expiresAt: body.expiresAt ?? null
             });
             process.stdout.write(`\n✓ Signed in${body.email ? ` as ${body.email}` : ""}\n  saved to ${path}\n`);
+            await autoLinkPubkey();
             return 0;
         }
 

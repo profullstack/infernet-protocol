@@ -9,7 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Keep a global reference of the window object to avoid garbage collection
 let mainWindow;
 const isDev = process.env.NODE_ENV === 'development';
-const appUrl = process.env.NEXT_DESKTOP_URL || 'http://127.0.0.1:3000';
+const appUrl = process.env.NEXT_DESKTOP_URL || 'http://127.0.0.1:8080';
 
 // Create the browser window
 function createWindow() {

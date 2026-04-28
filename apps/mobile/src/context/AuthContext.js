@@ -176,7 +176,7 @@ export const AuthProvider = ({ children }) => {
       };
 
       // 4. Authenticate with the server
-      const response = await fetch('http://127.0.0.1:3000/api/nostr/auth', {
+      const response = await fetch('http://127.0.0.1:8080/api/nostr/auth', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -245,7 +245,7 @@ export const AuthProvider = ({ children }) => {
       };
 
       // 4. Register with the server
-      const response = await fetch('http://127.0.0.1:3000/api/nostr/register', {
+      const response = await fetch('http://127.0.0.1:8080/api/nostr/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

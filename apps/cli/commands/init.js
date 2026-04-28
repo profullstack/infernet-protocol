@@ -164,7 +164,7 @@ export default async function init(args) {
     let port = Number.parseInt(portArg ?? '', 10);
     if (!Number.isFinite(port) || port <= 0) port = DEFAULT_P2P_PORT;
 
-    const address = noAdvertise ? null : (addressArg ?? detectLocalAddress());
+    const address = noAdvertise ? null : (addressArg ?? await detectLocalAddress());
 
     // Generate nodeId BEFORE defaulting the name so we can append its
     // hash slug to the name (gives "user@host:0f44326c"-style identifiers

@@ -226,7 +226,7 @@ export default async function register(args, ctx) {
     const noAdvertise = args.has('no-advertise');
     const addressFlag = args.get('address');
     const portFlag = args.get('port') ?? args.get('p2p-port');
-    const address = noAdvertise ? undefined : (addressFlag ?? node.address ?? detectLocalAddress());
+    const address = noAdvertise ? undefined : (addressFlag ?? node.address ?? await detectLocalAddress());
     const portRaw = portFlag ?? node.port;
     const port = noAdvertise ? undefined
         : (portRaw ? Number.parseInt(portRaw, 10) : resolveP2pPort({ node }));

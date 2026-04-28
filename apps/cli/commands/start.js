@@ -154,7 +154,7 @@ async function runDaemon(args, ctx) {
     // since the rest of the file (P2P listener, formatEndpoint, etc.)
     // wants the bind value.
     const p2pPort = bindPort;
-    const advertisedAddress = noAdvertise ? null : (node.address ?? detectLocalAddress());
+    const advertisedAddress = noAdvertise ? null : (node.address ?? await detectLocalAddress());
 
     const startedAt = new Date();
     const stats = {

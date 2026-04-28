@@ -164,6 +164,38 @@ detect_hosting_platform_ports() {
         fi
         unset _bind_port _mapped_var _mapped
     fi
+
+    # Vast.ai exposes PUBLIC_IPADDR for the host's edge IP and
+    # VAST_TCP_PORT_<internal>=<external> for every port the operator
+    # opened in the Vast template. If the operator forgot to open
+    # 46337 we still set the public address so the CLI advertises a
+    # reachable IP — even if the port can't be reached, downstream
+    # clients see a non-Docker address and the bug is obvious in the
+    # dashboard ("provider X listed at <real-ip>:46337") instead of
+    # silently advertising a 172.17.0.4 nobody can route to.
+    if [ -n "${PUBLIC_IPADDR:-}" ] || [ -n "${VAST_INSTANCE_ID:-}" ] || [ -n "${VAST_CONTAINERLABEL:-}" ]; then
+        _bind_port="${INFERNET_PUBLIC_PORT:-46337}"
+        _mapped_var="VAST_TCP_PORT_${_bind_port}"
+        _mapped="$(eval "echo \${$_mapped_var:-}")"
+        _vast_ip="${PUBLIC_IPADDR:-}"
+        if [ -n "$_mapped" ]; then
+            : "${INFERNET_BIND_PORT:=$_bind_port}"
+            INFERNET_PUBLIC_PORT="$_mapped"
+            : "${INFERNET_PUBLIC_ADDRESS:=$_vast_ip}"
+            export INFERNET_BIND_PORT INFERNET_PUBLIC_PORT INFERNET_PUBLIC_ADDRESS
+            printf '  [hosting] Vast.ai detected — advertising %s:%s, daemon binds :%s\n' \
+                "$INFERNET_PUBLIC_ADDRESS" "$INFERNET_PUBLIC_PORT" "$INFERNET_BIND_PORT"
+        elif [ -n "$_vast_ip" ]; then
+            : "${INFERNET_PUBLIC_ADDRESS:=$_vast_ip}"
+            export INFERNET_PUBLIC_ADDRESS
+            printf '  [hosting] Vast.ai detected — public IP %s found, but port %s not exposed\n' \
+                "$INFERNET_PUBLIC_ADDRESS" "$_bind_port"
+            printf '            Open TCP %s in your Vast template (or set INFERNET_PUBLIC_PORT)\n' \
+                "$_bind_port"
+            printf '            so peers can reach this node.\n'
+        fi
+        unset _bind_port _mapped_var _mapped _vast_ip
+    fi
     # Other platforms can be added here as they're encountered. Default
     # is the no-op case where bind and advertise are the same port.
 }

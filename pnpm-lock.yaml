@@ -29,6 +29,9 @@ importers:
       '@infernetprotocol/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@infernetprotocol/deploy-providers':
+        specifier: workspace:*
+        version: link:../../packages/deploy-providers
       '@infernetprotocol/engine':
         specifier: workspace:*
         version: link:../../packages/engine

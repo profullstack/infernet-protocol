@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/desktop",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "Infernet Protocol Electron desktop application",
   "main": "electron/main.js",
   "type": "module",

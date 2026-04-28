@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/training",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Training orchestration for Infernet — pluggable backends (DeepSpeed/FSDP for trusted clusters, OpenDiLoCo for cross-provider async, Petals for trustless P2P fine-tunes) over a stable async-iterator API.",
   "license": "MIT",
   "type": "module",

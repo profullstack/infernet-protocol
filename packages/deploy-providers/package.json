@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/deploy-providers",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Adapters for deploying Infernet provider nodes to cloud GPU services (RunPod, vast.ai, Lambda, etc.).",
   "license": "MIT",
   "type": "module",

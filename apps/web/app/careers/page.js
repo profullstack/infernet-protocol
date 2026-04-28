@@ -1,7 +1,7 @@
 export const metadata = {
     title: "Careers — Infernet Protocol",
     description:
-        "Build a decentralized GPU compute marketplace. Open roles: DiPaC Architect (equity-only) and Internship (AI babysitter)."
+        "Build a decentralized GPU compute marketplace. Open roles: DiPaC Architect (equity-only), Internship (AI babysitter), and Sales Engineer (commission + equity)."
 };
 
 const ROLES = [
@@ -22,6 +22,16 @@ const ROLES = [
             "A code monkey with real engineering chops who manages AI agents (Claude Code, Codex, etc.) instead of typing every line by hand. You write the prompts, review the diffs, push the buttons, and own the outcome — the AI is your apprentice, not your replacement.",
             "Day-to-day: drive AI agents through real PRs (engine adapters, dashboards, daemon fixes), spot when they're hallucinating APIs, redirect when they go off-rails, and ship the result. You'll need enough engineering judgment to recognize bad code when an agent confidently produces it.",
             "Curiosity > credentials. We don't care if you're a CS junior or self-taught — we care that you can read a stack trace, write a correct prompt, and ship a fix the same day."
+        ]
+    },
+    {
+        title: "Sales Engineer",
+        compensation: "20% commission (year 1) + equity",
+        location: "Remote",
+        body: [
+            "Close enterprise GPU compute deals. Target customers are AI startups, agentic-app builders, batch-inference shops, RAG operators, and anyone running embeddings or fine-tunes at scale who's tired of hyperscaler markup. Deal sizes range from $1.5K/mo (single-team SaaS) to $20K/mo (production agent fleets, embedding pipelines, eval clusters).",
+            "Compensation: 20% commission on the first year of revenue for financed deals you close, plus equity. Uncapped — bring in a $20K/mo customer on an annual contract and you bank $48K on that one deal alongside the equity grant.",
+            "You'll need enough technical fluency to talk hardware (vLLM vs Ollama, NVIDIA vs AMD, batch vs real-time, why we don't shard live chat across the public internet) and enough business fluency to navigate procurement, security review, and multi-coin payment ops. Read /faq, /docs, and IPIPs 0009-0013 — that's the surface you'll be selling."
         ]
     }
 ];

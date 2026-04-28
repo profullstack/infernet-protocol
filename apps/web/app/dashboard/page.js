@@ -121,11 +121,11 @@ export default async function DashboardPage() {
 
                 {/* Two-column body */}
                 <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-                    {/* Provider nodes */}
-                    <Card title="GPU nodes (you operate)">
+                    {/* Nodes — CPU-only or GPU+CPU, both first-class */}
+                    <Card title="Nodes (you operate)">
                         {noProviders ? (
                             <Empty
-                                hint="You haven't linked a GPU node to this account yet."
+                                hint="You haven't linked a node to this account yet."
                                 cli={`infernet login\ninfernet register`}
                             />
                         ) : (
@@ -134,6 +134,7 @@ export default async function DashboardPage() {
                                     <tr className="text-left text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                                         <th className="py-2 pr-3 font-medium">Node</th>
                                         <th className="py-2 pr-3 font-medium">GPU</th>
+                                        <th className="py-2 pr-3 font-medium">CPU</th>
                                         <th className="py-2 pr-3 font-medium">Status</th>
                                         <th className="py-2 pr-3 font-medium">Last seen</th>
                                     </tr>
@@ -142,7 +143,8 @@ export default async function DashboardPage() {
                                     {providers.map((p) => (
                                         <tr key={p.id} className="border-t border-white/5">
                                             <td className="py-2 pr-3 text-white">{p.name}</td>
-                                            <td className="py-2 pr-3 text-[var(--muted)]">{p.gpu_model || "—"}</td>
+                                            <td className="py-2 pr-3 text-[var(--muted)]">{nodeGpuLabel(p)}</td>
+                                            <td className="py-2 pr-3 text-[var(--muted)]">{nodeCpuLabel(p)}</td>
                                             <td className="py-2 pr-3"><StatusPill status={p.status} /></td>
                                             <td className="py-2 pr-3 text-[var(--muted)]">{relTime(p.last_seen)}</td>
                                         </tr>
@@ -371,6 +373,26 @@ function relTime(iso) {
     if (h < 48) return `${h}h ago`;
     const d = Math.floor(h / 24);
     return `${d}d ago`;
+}
+
+function nodeGpuLabel(p) {
+    const specs = p?.specs && typeof p.specs === "object" ? p.specs : {};
+    if (Array.isArray(specs.gpus) && specs.gpus.length > 0) {
+        const first = specs.gpus[0];
+        const more = specs.gpus.length > 1 ? ` +${specs.gpus.length - 1}` : "";
+        return `${first.model ?? first.vendor ?? "GPU"}${more}`;
+    }
+    return p?.gpu_model || "—";
+}
+
+function nodeCpuLabel(p) {
+    const c = p?.specs?.cpu;
+    if (!c || typeof c !== "object") return "—";
+    const parts = [];
+    if (c.vendor) parts.push(c.vendor);
+    if (c.arch) parts.push(c.arch);
+    if (Number.isFinite(c.cores)) parts.push(`${c.cores} cores`);
+    return parts.length ? parts.join(" · ") : "—";
 }
 
 function fmtUsd(value) {

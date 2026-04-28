@@ -23,6 +23,7 @@ import { loadConfig, saveConfig, getConfigPath } from "../lib/config.js";
 import { question } from "../lib/prompt.js";
 import { applyFirewallRule, detectFirewall, describeFirewallHowTo } from "../lib/firewall.js";
 import { DEFAULT_P2P_PORT, resolveP2pPort } from "../lib/network.js";
+import { detectGpus, formatGpuLine, detectCpus, detectHost, formatCpuLine } from "@infernetprotocol/gpu";
 import { isDaemonAlive } from "../lib/ipc.js";
 import { createNodeClient } from "../lib/node-client.js";
 
@@ -283,9 +284,43 @@ export default async function setup(args) {
 
     process.stdout.write("\nInfernet setup — checking your environment\n");
 
-    let total = backend === "ollama" ? 4 : 3;
+    // Step count: hardware (1) + node (1) + ollama+model (0|2) + firewall (0|1)
+    // + config (1) + identity (0|1) + registration (0|1) + daemon (0|1).
+    // For simplicity over precision, just budget the maximum and we display
+    // the actual step number out of the running total.
+    let total = backend === "ollama" ? 5 : 4;
     if (!skipFirewall && process.platform === "linux") total += 1;
     let n = 0;
+
+    // ---- Hardware (always; first so the operator sees what setup sees) ----
+    n += 1;
+    step(n, total, "Hardware");
+    const hostInfo = detectHost();
+    process.stdout.write(`  platform:  ${hostInfo.platform}/${hostInfo.arch}\n`);
+    process.stdout.write(`  ram:       ${(hostInfo.total_ram_mb / 1024).toFixed(1)} GB total\n`);
+    const cpuList = detectCpus();
+    if (cpuList.length === 0) {
+        warn("no CPUs detected (this is unusual)");
+    } else {
+        ok(`${cpuList.length} CPU group${cpuList.length === 1 ? "" : "s"} (${hostInfo.cpu_count} logical cores)`);
+        for (const c of cpuList) {
+            process.stdout.write(`    · ${formatCpuLine(c)}\n`);
+        }
+    }
+    let detectedGpus = [];
+    try {
+        detectedGpus = await detectGpus();
+    } catch (err) {
+        warn(`gpu detection error: ${err?.message ?? err}`);
+    }
+    if (detectedGpus.length === 0) {
+        warn("no GPUs detected — this node will register as CPU-only");
+    } else {
+        ok(`${detectedGpus.length} GPU${detectedGpus.length === 1 ? "" : "s"}`);
+        for (const g of detectedGpus) {
+            process.stdout.write(`    · ${formatGpuLine(g)}\n`);
+        }
+    }
 
     n += 1;
     step(n, total, "Node.js");

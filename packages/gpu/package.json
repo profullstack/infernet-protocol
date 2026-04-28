@@ -1,13 +1,14 @@
 {
   "name": "@infernetprotocol/gpu",
   "version": "0.1.2",
-  "description": "GPU detection for the Infernet Protocol — NVIDIA (CUDA), AMD (ROCm), and Apple Silicon via native tooling.",
+  "description": "Local hardware detection for the Infernet Protocol — GPUs (NVIDIA, AMD, Apple Silicon) via native tooling, plus CPUs / RAM / arch via node:os. Pure-JS for the CPU side, vendor-CLI shell-out for GPUs.",
   "license": "MIT",
   "type": "module",
   "main": "./src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./detect": "./src/detect.js"
+    "./detect": "./src/detect.js",
+    "./cpu": "./src/cpu.js"
   },
   "files": ["src/**/*.js", "README.md"],
   "engines": { "node": ">=18" },

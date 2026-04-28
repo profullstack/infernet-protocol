@@ -25,6 +25,7 @@
 
 import fs from 'node:fs/promises';
 import net from 'node:net';
+import http from 'node:http';
 import { chmodSync, unlinkSync } from 'node:fs';
 
 import {
@@ -177,6 +178,7 @@ async function runDaemon(args, ctx) {
     let shuttingDown = false;
     let ipcServer = null;
     let p2pServer = null;
+    let healthServer = null;
     let p2pConnections = 0;
     let p2pLastConnectionAt = null;
 
@@ -558,6 +560,7 @@ async function runDaemon(args, ctx) {
         }
         if (ipcServer) { try { ipcServer.close(); } catch {} }
         if (p2pServer) { try { p2pServer.close(); } catch {} }
+        if (healthServer) { try { healthServer.close(); } catch {} }
         try { await shutdownEngine(); } catch {}
         removeSocketFile();
         await removePidFile();
@@ -573,6 +576,52 @@ async function runDaemon(args, ctx) {
         process.stdout.write(`IPC listening on ${socketPath}\n`);
     } catch (err) {
         process.stderr.write(`Failed to bind IPC socket at ${socketPath}: ${err?.message ?? err}\n`);
+    }
+
+    // /healthz — bind a tiny HTTP server on $PORT (default 8080) so
+    // Docker / Runpod / Kubernetes HEALTHCHECK probes can reach the
+    // daemon even though the main daemon's port is 46337 (P2P, often
+    // firewalled). Returns 200 + a JSON daemon snapshot.
+    const healthPort = Number.parseInt(process.env.PORT ?? '', 10) || 8080;
+    try {
+        healthServer = http.createServer((req, res) => {
+            if (req.url === '/healthz' || req.url === '/health' || req.url === '/') {
+                const snap = snapshot();
+                const body = JSON.stringify({
+                    ok: true,
+                    pid: snap.pid,
+                    uptime_ms: snap.uptimeMs,
+                    role: snap.node?.role ?? null,
+                    node_id: snap.node?.nodeId ?? null,
+                    control_plane: snap.controlPlaneUrl,
+                    heartbeats_ok: snap.stats?.heartbeatsOk ?? 0,
+                    heartbeats_failed: snap.stats?.heartbeatsFailed ?? 0,
+                    last_heartbeat_at: snap.stats?.lastHeartbeatAt ?? null,
+                    last_heartbeat_error: snap.stats?.lastHeartbeatError ?? null,
+                    jobs_completed: snap.stats?.jobsCompleted ?? 0,
+                    jobs_failed: snap.stats?.jobsFailed ?? 0,
+                    active_jobs: stats.activeJobIds.size
+                });
+                res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+                res.end(body);
+                return;
+            }
+            res.writeHead(404, { 'content-type': 'text/plain' });
+            res.end('not found\n');
+        });
+        await new Promise((resolve, reject) => {
+            healthServer.once('error', reject);
+            healthServer.listen(healthPort, '0.0.0.0', () => {
+                healthServer.removeListener('error', reject);
+                resolve();
+            });
+        });
+        process.stdout.write(`/healthz listening on 0.0.0.0:${healthPort}\n`);
+    } catch (err) {
+        // Health server failure is non-fatal — daemon still does its
+        // job, we just won't get container-level liveness probes.
+        process.stderr.write(`/healthz failed to bind on :${healthPort}: ${err?.message ?? err}\n`);
+        healthServer = null;
     }
 
     if (!p2pDisabled) {
@@ -596,6 +645,7 @@ async function runDaemon(args, ctx) {
     if (once) {
         if (ipcServer) { try { ipcServer.close(); } catch {} }
         if (p2pServer) { try { p2pServer.close(); } catch {} }
+        if (healthServer) { try { healthServer.close(); } catch {} }
         removeSocketFile();
         await removePidFile();
         return 0;

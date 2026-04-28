@@ -95,6 +95,49 @@ Operators can point **many GPU nodes at the same control plane** — each node h
 
 ---
 
+## Docker (provider image)
+
+Pre-built image on Docker Hub: **`chovy/infernetprotocol:<version>`** (and `:latest`). Run a provider node anywhere Docker runs — RunPod, DigitalOcean, AWS, bare metal:
+
+```sh
+docker run --rm \
+  --gpus all \
+  -p 8080:8080 -p 46337:46337 \
+  -e INFERNET_BEARER=<24h-token-from-/deploy> \
+  -e INFERNET_MODEL=qwen2.5:7b \
+  chovy/infernetprotocol:latest
+```
+
+What's in it: NVIDIA CUDA 12.4 base, Node.js 20, pre-installed Ollama, the `infernet` CLI workspace, and an entrypoint that runs `ollama serve` + `infernet setup --yes` + `infernet start --foreground`. Configuration is purely env-var driven — no secrets in the image.
+
+| Env var | Default | Notes |
+|---|---|---|
+| `INFERNET_BEARER` | _(none)_ | 24h CLI bearer minted at [/deploy](https://infernetprotocol.com/deploy). Auto-links the node to your account. |
+| `INFERNET_CONTROL_PLANE` | `https://infernetprotocol.com` | Override to point at your own self-hosted control plane. |
+| `INFERNET_MODEL` | `qwen2.5:7b` | Ollama model to pull and serve. |
+| `INFERNET_NODE_ROLE` | `provider` | `provider` / `aggregator` / `client`. |
+| `INFERNET_PUBLIC_PORT` | `46337` | Daemon's P2P port (only matters if you want IPIP-0002 direct P2P). |
+| `PORT` | `8080` | HTTP `/healthz` listener — Docker / RunPod healthcheck. |
+
+Health: `GET /healthz` on `$PORT` returns daemon stats as JSON.
+
+### Build + push from source
+
+```sh
+make build                # docker build → chovy/infernetprotocol:<cli-version>
+make run                  # run locally on :8080 + :46337 with qwen2.5:0.5b
+make healthz              # curl /healthz
+make login && make push   # docker login + docker push
+```
+
+CI pushes automatically on a `vX.Y.Z` git tag — see `.github/workflows/docker-publish-provider.yml`. Add `DOCKERHUB_USERNAME` + `DOCKERHUB_TOKEN` as repo secrets, then `git tag v0.1.2 && git push --tags`.
+
+### Reachability note
+
+The control-plane-mediated chat path **does not need inbound connectivity** — the daemon polls and posts outbound. Port 46337 only matters if you want IPIP-0002 direct P2P features. Residential operators behind NAT can skip the port-forwarding step and still earn.
+
+---
+
 ## Architecture (one page)
 
 ```

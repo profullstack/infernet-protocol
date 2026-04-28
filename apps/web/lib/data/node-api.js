@@ -20,13 +20,28 @@ export function sanitizeSpecs(input) {
     };
 }
 
+const ALLOWED_VRAM_TIERS = new Set([
+    "<8gb", "8-16gb", "16-24gb", "24-48gb", ">=48gb", "unknown"
+]);
+
 function sanitizeGpu(gpu) {
     if (!gpu || typeof gpu !== "object") return null;
     const vendor = typeof gpu.vendor === "string" ? gpu.vendor.toLowerCase() : null;
+    // The CLI ships an already-classified `vram_tier` string. Earlier
+    // versions of this sanitizer ignored it and re-derived from
+    // `gpu.vram_mb` — but the CLI never sends `vram_mb` (the whole point
+    // of pre-classifying client-side is to keep exact VRAM off the wire),
+    // so every register call landed with vram_tier="unknown". Trust the
+    // client tier when it matches the allowed enum, fall back to deriving
+    // from vram_mb if provided, else "unknown".
+    const clientTier = typeof gpu.vram_tier === "string" ? gpu.vram_tier.toLowerCase() : null;
     const vramMb = Number.isFinite(gpu.vram_mb) ? Number(gpu.vram_mb) : null;
+    const tier = clientTier && ALLOWED_VRAM_TIERS.has(clientTier)
+        ? clientTier
+        : vramTier(vramMb);
     return {
         vendor: vendor && ["nvidia", "amd", "apple", "intel"].includes(vendor) ? vendor : "unknown",
-        vram_tier: vramTier(vramMb),
+        vram_tier: tier,
         model: typeof gpu.model === "string" ? gpu.model.slice(0, 64) : null
     };
 }

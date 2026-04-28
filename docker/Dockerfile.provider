@@ -1,124 +1,64 @@
-# Infernet Protocol — provider node image.
+# Infernet Protocol — provider node image (thin shim).
 #
-# This is what an operator runs on a rented box (RunPod, DigitalOcean,
-# bare metal, anywhere) to participate as a GPU/CPU provider on the
-# Infernet network. The image bundles:
+# This image is deliberately minimal: ubuntu base + curl + bash + sudo,
+# nothing else. On container start, the entrypoint pipes the universal
+# cloud-init bootstrap from the control plane through bash, which:
 #
-#   - Ollama (the default inference engine, OpenAI-compatible)
-#   - Node.js 20 + the @infernetprotocol/cli workspace
-#   - An entrypoint that boots Ollama, runs `infernet setup --yes`,
-#     and tail-execs `infernet start --foreground` so the host's
-#     process supervisor (Runpod, systemd, Kubernetes) keeps it alive
+#   - installs Ollama
+#   - installs the Infernet CLI (via the official install.sh)
+#   - pulls the configured model
+#   - runs `infernet init`, `login --token`, `setup --yes`
+#   - tail-execs `infernet start --foreground`
 #
-# Configuration is purely env-var-driven — no secrets in the image:
+# Why a shim instead of baking everything in:
+#   - the cloud-init flow is the source of truth — one path for Docker,
+#     bare-metal, RunPod, DigitalOcean. Updating the bootstrap doesn't
+#     require rebuilding + republishing the image.
+#   - image stays small + fast to pull
+#   - operators always get the latest CLI on container restart, without
+#     us shipping a new image tag
 #
-#   INFERNET_BEARER          24h CLI bearer (mint via /deploy on the
-#                            control plane); auto-links the node to
-#                            the issuing user's account
+# Trade-off: ~2-5 min cold start (network installs Ollama + Node + CLI
+# + pulls the model). Once the container's running, restarts are fast
+# because Ollama and the CLI persist in the layer the cloud-init wrote.
+# For a faster cold-start tier, build a "fat" image variant later.
+#
+# Configuration is purely env-var driven (see cloud-init for the list):
+#
+#   INFERNET_BEARER          24h CLI bearer (mint at /deploy)
 #   INFERNET_CONTROL_PLANE   default: https://infernetprotocol.com
 #   INFERNET_MODEL           default: qwen2.5:7b
-#   INFERNET_PUBLIC_ADDRESS  default: auto (icanhazip.com)
-#   INFERNET_PUBLIC_PORT     default: 46337  (daemon's P2P port)
-#   PORT                     default: 8080   (HTTP /healthz port)
-#
-# Health: GET /healthz on $PORT returns a JSON snapshot of daemon
-# state (uptime, heartbeat counters, last error). Used by Runpod /
-# Kubernetes / Docker HEALTHCHECK to decide if the container is
-# alive.
-#
-# CUDA base so NVIDIA GPUs work out of the box. CPU-only operators
-# can run the same image — Ollama just falls back to CPU inference.
+#   INFERNET_NODE_ROLE       default: provider
+#   INFERNET_PUBLIC_PORT     default: 46337  (P2P listener)
+#   PORT                     default: 8080   (HTTP /healthz)
 
-# ---------------------------------------------------------------------------
-# Base — CUDA-capable Ubuntu 22.04 with system tooling
-# ---------------------------------------------------------------------------
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS base
+FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV NODE_VERSION=20
 
+# Minimal prerequisites the cloud-init expects to find. Everything
+# else (Node, Ollama, the CLI workspace) is installed at runtime.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        curl ca-certificates git \
-        gnupg lsb-release \
-        pciutils iproute2 \
-        sudo \
+        curl ca-certificates bash sudo \
+        pciutils iproute2 hostname \
     && rm -rf /var/lib/apt/lists/*
 
-# Node.js 20 (NodeSource)
-RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/*
-
-# pnpm via corepack so the version is pinned
-RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
-
-# Ollama — the inference engine. Detects NVIDIA + falls back to CPU.
-RUN curl -fsSL https://ollama.com/install.sh | sh
-
-# ---------------------------------------------------------------------------
-# Deps — install only the @infernetprotocol/cli workspace cone
-# ---------------------------------------------------------------------------
-FROM base AS deps
-WORKDIR /opt/infernet
-
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
-
-# Workspace member manifests. Listing every member's package.json so
-# pnpm can resolve `workspace:*` references even when filtering by the
-# CLI's dep cone.
-COPY apps/cli/package.json     ./apps/cli/package.json
-COPY apps/web/package.json     ./apps/web/package.json
-COPY apps/daemon/package.json  ./apps/daemon/package.json
-COPY apps/desktop/package.json ./apps/desktop/package.json
-COPY apps/mobile/package.json  ./apps/mobile/package.json
-
-COPY packages/api-schema/package.json       ./packages/api-schema/package.json
-COPY packages/auth/package.json             ./packages/auth/package.json
-COPY packages/config/package.json           ./packages/config/package.json
-COPY packages/db/package.json               ./packages/db/package.json
-COPY packages/deploy-providers/package.json ./packages/deploy-providers/package.json
-COPY packages/engine/package.json           ./packages/engine/package.json
-COPY packages/gpu/package.json              ./packages/gpu/package.json
-COPY packages/inference/package.json        ./packages/inference/package.json
-COPY packages/logger/package.json           ./packages/logger/package.json
-COPY packages/nim-adapter/package.json      ./packages/nim-adapter/package.json
-COPY packages/payments/package.json         ./packages/payments/package.json
-COPY packages/sdk-js/package.json           ./packages/sdk-js/package.json
-
-RUN pnpm install --frozen-lockfile --filter @infernetprotocol/cli...
-
-# ---------------------------------------------------------------------------
-# Runtime — copy installed workspace + source, wire up the binary
-# ---------------------------------------------------------------------------
-FROM base AS runtime
-WORKDIR /opt/infernet
-
-COPY --from=deps /opt/infernet /opt/infernet
-COPY apps/cli      ./apps/cli
-COPY packages      ./packages
-
-# Make `infernet` callable from PATH
-RUN chmod +x /opt/infernet/apps/cli/index.js \
-    && ln -s /opt/infernet/apps/cli/index.js /usr/local/bin/infernet
-
-# Entrypoint orchestrates Ollama + infernet setup + infernet start.
-COPY docker/provider-entrypoint.sh /usr/local/bin/infernet-entrypoint
-RUN chmod +x /usr/local/bin/infernet-entrypoint
-
-# Defaults — override at runtime via `docker run -e KEY=value`.
-ENV NODE_ENV=production \
-    PORT=8080 \
+ENV PORT=8080 \
     INFERNET_PUBLIC_PORT=46337 \
     INFERNET_CONTROL_PLANE=https://infernetprotocol.com \
     INFERNET_MODEL=qwen2.5:7b \
-    INFERNET_NODE_ROLE=provider
+    INFERNET_NODE_ROLE=provider \
+    INFERNET_NONINTERACTIVE=1
 
-# 8080 = HTTP /healthz, 46337 = daemon P2P listener
+# 8080 = HTTP /healthz (daemon-side), 46337 = P2P listener
 EXPOSE 8080 46337
 
-# Container health: probe /healthz every 30s.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+# Health: probe /healthz once the daemon comes up. start-period gives
+# cloud-init time to install everything before failing the probe.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=300s --retries=3 \
     CMD curl -fsS http://127.0.0.1:${PORT}/healthz || exit 1
 
-ENTRYPOINT ["/usr/local/bin/infernet-entrypoint"]
+# That's it. The whole bootstrap is one curl. Override via:
+#   docker run ... bash -i   # debug shell instead of bootstrap
+CMD ["bash", "-c", "curl -fsSL ${INFERNET_CONTROL_PLANE:-https://infernetprotocol.com}/api/deploy/cloud-init | bash"]

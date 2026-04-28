@@ -11,6 +11,12 @@ import "server-only";
  */
 export const CLOUD_INIT_SCRIPT_BODY = `set -euo pipefail
 
+# Force every Infernet CLI subcommand into non-interactive mode. There's
+# no user to say yes/no inside cloud-init — Docker entrypoints, RunPod
+# pod start commands, cron, headless droplet boot. The CLI's setup /
+# init / register / login paths all treat this as "auto-accept defaults."
+export INFERNET_NONINTERACTIVE=1
+
 log() { printf '\\n[infernet-provider] %s\\n' "$*"; }
 fail() { printf '\\n[infernet-provider] ERROR: %s\\n' "$*" >&2; exit 1; }
 

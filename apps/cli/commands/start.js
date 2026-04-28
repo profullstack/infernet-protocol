@@ -187,18 +187,52 @@ async function runDaemon(args, ctx) {
     let cachedSpecs = null;
     let cachedSpecsAt = 0;
 
+    // Rolling benchmark — last N completed chat jobs' (tokens, duration)
+    // pairs. Used to compute tokens_per_second_avg for the heartbeat,
+    // which feeds speed-aware routing on the control plane. Capped so
+    // memory stays bounded across long-running daemons.
+    const BENCH_RING_MAX = 32;
+    const benchRing = [];
+
+    function recordBench({ token_count, duration_ms }) {
+        if (!Number.isFinite(token_count) || !Number.isFinite(duration_ms) || duration_ms <= 0) return;
+        if (token_count <= 0) return;
+        benchRing.push({ tokens: token_count, ms: duration_ms, at: Date.now() });
+        while (benchRing.length > BENCH_RING_MAX) benchRing.shift();
+    }
+
+    function benchSummary() {
+        if (benchRing.length === 0) return null;
+        const totalTokens = benchRing.reduce((a, e) => a + e.tokens, 0);
+        const totalMs = benchRing.reduce((a, e) => a + e.ms, 0);
+        if (totalMs <= 0) return null;
+        const tps = (totalTokens / totalMs) * 1000;
+        return {
+            tokens_per_second_avg: +tps.toFixed(2),
+            samples: benchRing.length,
+            window_started_at: new Date(benchRing[0].at).toISOString()
+        };
+    }
+
     async function freshSpecs() {
         if (node.role !== 'provider') return null;
         const now = Date.now();
-        if (cachedSpecs && now - cachedSpecsAt < SPECS_TTL_MS) return cachedSpecs;
-        try {
-            cachedSpecs = await gatherCoarseSpecs();
-            cachedSpecsAt = now;
-            return cachedSpecs;
-        } catch (err) {
-            process.stderr.write(`specs detection failed: ${err?.message ?? err}\n`);
-            return cachedSpecs; // fall back to last known good
+        let base;
+        if (cachedSpecs && now - cachedSpecsAt < SPECS_TTL_MS) {
+            base = cachedSpecs;
+        } else {
+            try {
+                cachedSpecs = await gatherCoarseSpecs();
+                cachedSpecsAt = now;
+                base = cachedSpecs;
+            } catch (err) {
+                process.stderr.write(`specs detection failed: ${err?.message ?? err}\n`);
+                base = cachedSpecs; // fall back to last known good
+            }
         }
+        if (!base) return null;
+        const bench = benchSummary();
+        return bench ? { ...base, bench } : base;
     }
 
     async function heartbeat() {
@@ -235,8 +269,15 @@ async function runDaemon(args, ctx) {
         try {
             let resultPayload;
             if (job.type === 'chat') {
-                const text = await executeChatJob({ client, job, node });
-                resultPayload = { type: 'chat', text, completed_by: node.nodeId };
+                const result = await executeChatJob({ client, job, node });
+                recordBench(result);
+                resultPayload = {
+                    type: 'chat',
+                    text: result.text,
+                    token_count: result.token_count,
+                    duration_ms: result.duration_ms,
+                    completed_by: node.nodeId
+                };
             } else {
                 await new Promise((resolve) => setTimeout(resolve, 500));
                 resultPayload = { stub: true, completed_by: node.nodeId };

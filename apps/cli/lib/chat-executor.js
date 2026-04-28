@@ -97,7 +97,10 @@ export async function shutdownEngine() {
  * Run the chat executor for one job.
  *
  * @param {{ client: any, job: any, node: any }} ctx
- * @returns {Promise<string>} the full assistant response text.
+ * @returns {Promise<{ text: string, token_count: number, duration_ms: number }>}
+ *   Full assistant response + token count + wall-clock duration.
+ *   Caller (start.js) uses these to maintain a rolling tokens-per-second
+ *   benchmark advertised via heartbeat → enables speed-aware routing.
  */
 export async function executeChatJob({ client, job, node }) {
     const input = job?.input_spec ?? {};
@@ -106,6 +109,7 @@ export async function executeChatJob({ client, job, node }) {
     const engine = await getEngine();
     const buffer = new EventBuffer(client, job.id);
 
+    const t0 = Date.now();
     const generation = engine.generate({
         messages,
         model: job.model_name ?? null,
@@ -114,6 +118,7 @@ export async function executeChatJob({ client, job, node }) {
     });
 
     let accumulated = "";
+    let tokenCount = 0;
 
     for await (const ev of generation.stream) {
         switch (ev.type) {
@@ -128,6 +133,7 @@ export async function executeChatJob({ client, job, node }) {
                 break;
             case MSG.TOKEN:
                 accumulated += ev.text ?? "";
+                tokenCount += 1;
                 await buffer.push("token", { text: ev.text ?? "" });
                 break;
             case MSG.DONE:
@@ -152,7 +158,8 @@ export async function executeChatJob({ client, job, node }) {
     }
 
     await buffer.flush();
-    return accumulated;
+    const duration_ms = Date.now() - t0;
+    return { text: accumulated, token_count: tokenCount, duration_ms };
 }
 
 export async function failChatJob({ client, jobId, message }) {

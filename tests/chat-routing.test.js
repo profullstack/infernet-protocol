@@ -105,14 +105,41 @@ describe("reputationWeightedPick", () => {
     });
 
     it("zero-reputation provider still has a non-zero chance (floor at 1)", () => {
-        // With reputations {0, 50}, weights become {1, 50} (floor at 1).
-        // Total = 51 → fresh wins iff rng() ≤ 1/51 ≈ 0.0196. So a forced
-        // rng value of 0.01 must select fresh; 0.5 must select veteran.
+        // With reputations {0, 50}, weights become {1×10, 50×10} = {10, 500}
+        // (floor + default-tps=10). Total=510 → fresh wins iff rng()<10/510≈0.0196.
         const candidates = [
             { id: "fresh", reputation: 0 },
             { id: "veteran", reputation: 50 }
         ];
         expect(reputationWeightedPick(candidates, () => 0.01).id).toBe("fresh");
         expect(reputationWeightedPick(candidates, () => 0.5).id).toBe("veteran");
+    });
+
+    it("faster node (higher tokens_per_second_avg) wins more often at equal reputation", () => {
+        const candidates = [
+            { id: "slow", reputation: 50, specs: { bench: { tokens_per_second_avg: 5 } } },
+            { id: "fast", reputation: 50, specs: { bench: { tokens_per_second_avg: 100 } } }
+        ];
+        // Weights: 50×5=250 vs 50×100=5000. Total=5250. Fast wins iff rng()>250/5250≈0.0476.
+        expect(reputationWeightedPick(candidates, () => 0.5).id).toBe("fast");
+        expect(reputationWeightedPick(candidates, () => 0.04).id).toBe("slow");
+        expect(reputationWeightedPick(candidates, () => 0.05).id).toBe("fast");
+    });
+
+    it("missing tokens_per_second_avg falls back to baseline 10 (no provider stranded)", () => {
+        const candidates = [
+            { id: "no-bench", reputation: 50 },
+            { id: "with-bench", reputation: 50, specs: { bench: { tokens_per_second_avg: 10 } } }
+        ];
+        // Both end up with weight 50×10=500. 50/50 split.
+        const N = 1000;
+        let firstWins = 0;
+        let seed = 1;
+        const rng = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0x100000000; };
+        for (let i = 0; i < N; i++) {
+            if (reputationWeightedPick(candidates, rng).id === "no-bench") firstWins += 1;
+        }
+        expect(firstWins / N).toBeGreaterThan(0.4);
+        expect(firstWins / N).toBeLessThan(0.6);
     });
 });

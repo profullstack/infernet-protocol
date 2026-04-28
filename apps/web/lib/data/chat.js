@@ -47,22 +47,35 @@ export async function pickChatProvider({ modelName } = {}) {
 }
 
 /**
- * Pick one provider weighted by `reputation` (default 50). Pure-JS so
- * it's testable without a DB. Exported for tests.
+ * Pick one provider, weighted by `reputation × tokens_per_second_avg`.
+ *
+ * Why this composite weight:
+ *   - reputation alone treats a fast new node identically to a slow
+ *     veteran. We want to send most traffic to whichever can actually
+ *     finish the job soonest.
+ *   - tokens/sec alone would overlook history — a brand-new node could
+ *     fluke a high t/s on its first prompt and then monopolize.
+ *   - product of the two, with sane fallbacks, balances both.
+ *
+ * Fallbacks:
+ *   - reputation: floor at 1, default 50 when missing (so 0 is honored
+ *     as a real "penalized" signal).
+ *   - tokens/sec: default 10 when missing/null/zero (a conservative
+ *     CPU-only baseline, so we don't strand new providers with no
+ *     bench history).
+ *
+ * Exported for tests.
  */
 export function reputationWeightedPick(candidates, rng = Math.random) {
   if (!candidates || candidates.length === 0) return null;
   if (candidates.length === 1) return candidates[0];
 
-  // Floor at 1 so a 0-reputation provider can still occasionally win
-  // (and so the weight sum is never 0). Default to 50 only when the
-  // value is genuinely missing — `Number(0) || 50` would treat
-  // reputation=0 as missing and substitute 50, which is the wrong
-  // call: a literal zero is meaningful (brand-new or penalized node).
   const weights = candidates.map((c) => {
-    const r = Number(c.reputation);
-    const fallback = Number.isFinite(r) ? r : 50;
-    return Math.max(1, fallback);
+    const repNum = Number(c.reputation);
+    const reputation = Math.max(1, Number.isFinite(repNum) ? repNum : 50);
+    const tps = Number(c?.specs?.bench?.tokens_per_second_avg);
+    const speed = Number.isFinite(tps) && tps > 0 ? tps : 10;
+    return reputation * speed;
   });
   const total = weights.reduce((a, w) => a + w, 0);
   let r = rng() * total;

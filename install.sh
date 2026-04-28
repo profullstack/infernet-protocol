@@ -448,14 +448,19 @@ try_install_node_unattended() {
     # Resolve where mise binary will land: $MISE_INSTALL_PATH if set
     # by detect_install_volume (volume-relocation case), else default.
     _mise_bin="${MISE_INSTALL_PATH:-$HOME/.local/bin/mise}"
+    # Pre-create the install dir so mise.run doesn't have to.
+    mkdir -p "$(dirname "$_mise_bin")" 2>/dev/null || true
     if [ ! -x "$_mise_bin" ]; then
         # Official one-liner. Honors $MISE_INSTALL_PATH for the binary
-        # location, $MISE_DATA_DIR for installed tools.
-        curl -fsSL https://mise.run | sh >/dev/null 2>&1 || {
+        # location, $MISE_DATA_DIR for installed tools. Don't gag the
+        # installer's output — it downloads ~30 MB and the user wants
+        # to see progress, not stare at a silent terminal.
+        info "  → downloading mise binary (~30 MB) from mise.run"
+        if ! curl -fsSL https://mise.run | sh; then
             warn "mise install failed (curl https://mise.run | sh)"
             unset _mise_bin
             return 1
-        }
+        fi
     fi
     if [ ! -x "$_mise_bin" ]; then
         # mise.run sometimes defaults differently — fall back to common spots.
@@ -469,14 +474,19 @@ try_install_node_unattended() {
         unset _mise_bin
         return 1
     fi
+    ok "mise: $_mise_bin"
 
     # Auto-confirm any trust prompts (non-interactive install).
     MISE_YES=1
     export MISE_YES
 
-    # Use mise by absolute path — no PATH dependency.
-    "$_mise_bin" install node@20 >/dev/null 2>&1 || warn "mise install node@20 failed"
-    "$_mise_bin" use --global node@20 >/dev/null 2>&1 || warn "mise use --global node@20 failed"
+    # Use mise by absolute path — no PATH dependency. Stream output
+    # so the user can see what's happening (Node 20 download is ~80 MB
+    # and takes 30-60s on a fresh box; gagging it makes the script
+    # look hung).
+    info "  → installing Node 20 (~80 MB)"
+    "$_mise_bin" install node@20 || warn "mise install node@20 failed"
+    "$_mise_bin" use --global node@20 || warn "mise use --global node@20 failed"
 
     # Trust the config we just wrote. mise refuses to read untrusted
     # config.toml files (security feature) and `mise use --global`

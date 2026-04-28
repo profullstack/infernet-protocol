@@ -11,7 +11,7 @@
 
 import { saveConfig } from '../lib/config.js';
 import { resolveP2pPort, detectLocalAddress } from '../lib/network.js';
-import { detectGpus, detectInterconnects } from '@infernetprotocol/gpu';
+import { detectGpus, detectInterconnects, detectCpus, detectHost } from '@infernetprotocol/gpu';
 
 const HELP = `infernet register — announce this node to the control plane
 
@@ -70,9 +70,29 @@ function summarizeInterconnects(ic) {
     };
 }
 
+/**
+ * Coarse CPU summary: vendor, arch, total core count, and group count.
+ * Deliberately omits the exact CPU model string + clock speed (those
+ * fingerprint the SKU). Vendor + arch + core count is enough for
+ * matchmaking and dashboard display.
+ */
+function summarizeCpu() {
+    const host = detectHost();
+    const cpus = detectCpus();
+    const first = cpus[0] ?? {};
+    return {
+        vendor: first.vendor ?? null,        // intel | amd | apple | aws | ampere | null
+        arch: host.arch,                     // x64 | arm64 | ...
+        cores: host.cpu_count,               // logical cores
+        groups: cpus.length,                 // 1 for homogeneous boxes; >1 for P+E etc
+        ram_gb: Math.round(host.total_ram_mb / 1024)
+    };
+}
+
 async function gatherCoarseSpecs() {
     const [gpus, interconnects] = await Promise.all([detectGpus(), detectInterconnects()]);
     return {
+        cpu: summarizeCpu(),
         gpu_count: gpus.length,
         gpus: gpus.map((g) => ({
             vendor: (g.vendor ?? 'unknown').toLowerCase(),

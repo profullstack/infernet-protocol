@@ -86,9 +86,11 @@ export default async function DashboardPage() {
                         label="GPUs in use"
                         value={hardware.gpus.reduce((a, g) => a + g.count, 0)}
                         sub={
-                            hardware.gpus.length === 0
-                                ? "No registered providers yet"
-                                : hardware.gpus.map((g) => `${g.count}× ${g.model}`).join(" · ")
+                            hardware.gpus.length > 0
+                                ? hardware.gpus.map((g) => `${g.count}× ${g.model}`).join(" · ")
+                                : noProviders
+                                    ? "No registered providers yet"
+                                    : "CPU-only providers"
                         }
                     />
                     <Stat
@@ -140,7 +142,7 @@ export default async function DashboardPage() {
                         <Card title="CPU pool">
                             {hardware.cpus.length === 0 ? (
                                 <p className="text-sm text-[var(--muted)]">
-                                    No CPU specs reported. Re-run <code>infernet setup</code> to advertise host CPUs.
+                                    No CPU specs reported. Re-run <code>infernet register</code> to upload host CPU info.
                                 </p>
                             ) : (
                                 <ul className="space-y-1 text-sm">

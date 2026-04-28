@@ -121,19 +121,26 @@ export async function getSpendSummary(userId) {
 
 /**
  * Hardware in use across the user's providers — pulled from
- * providers.specs (jsonb). Schemas in the wild are inconsistent, so
- * we accept a few common shapes:
- *   { gpus: [{model, count}], cpu: {model, cores} }
- *   { gpu_model, gpu_count, cpu_model, cpu_cores }
+ * providers.specs (jsonb).
+ *
+ * Schema we send today (apps/cli/commands/register.js → gatherCoarseSpecs):
+ *   { cpu: { vendor, arch, cores, groups, ram_gb }, gpus: [{vendor, vram_tier, model}], gpu_count, interconnects: {...} }
+ *
+ * We also accept a couple of older / alternate shapes so dashboards
+ * built against a previous register payload don't go blank: legacy
+ * { specs.gpu_model, specs.cpu_model } and the providers.gpu_model
+ * column directly.
  */
 export function summarizeHardware(providers) {
-    const gpus = new Map(); // model → count
-    const cpus = new Map(); // model → cores
+    const gpus = new Map(); // label → count
+    const cpus = new Map(); // label → cores
     for (const p of providers) {
         const specs = p.specs && typeof p.specs === "object" ? p.specs : {};
-        if (Array.isArray(specs.gpus)) {
+
+        // GPUs
+        if (Array.isArray(specs.gpus) && specs.gpus.length > 0) {
             for (const g of specs.gpus) {
-                const model = String(g.model ?? "GPU").trim() || "GPU";
+                const model = String(g.model ?? g.vendor ?? "GPU").trim() || "GPU";
                 const count = Number(g.count ?? 1) || 1;
                 gpus.set(model, (gpus.get(model) ?? 0) + count);
             }
@@ -145,20 +152,34 @@ export function summarizeHardware(providers) {
             const model = String(p.gpu_model).trim();
             gpus.set(model, (gpus.get(model) ?? 0) + 1);
         }
-        if (specs.cpu?.model) {
-            const model = String(specs.cpu.model).trim();
-            const cores = Number(specs.cpu.cores ?? 0) || 0;
-            cpus.set(model, (cpus.get(model) ?? 0) + cores);
+
+        // CPUs — current shape: specs.cpu = { vendor, arch, cores, groups, ram_gb }
+        if (specs.cpu && typeof specs.cpu === "object") {
+            const c = specs.cpu;
+            const label = formatCpuLabel(c);
+            const cores = Number(c.cores ?? 0) || 0;
+            cpus.set(label, (cpus.get(label) ?? 0) + cores);
         } else if (specs.cpu_model) {
-            const model = String(specs.cpu_model).trim();
+            const label = String(specs.cpu_model).trim();
             const cores = Number(specs.cpu_cores ?? 0) || 0;
-            cpus.set(model, (cpus.get(model) ?? 0) + cores);
+            cpus.set(label, (cpus.get(label) ?? 0) + cores);
         }
     }
     return {
         gpus: [...gpus.entries()].map(([model, count]) => ({ model, count })),
         cpus: [...cpus.entries()].map(([model, cores]) => ({ model, cores }))
     };
+}
+
+function formatCpuLabel(c) {
+    const vendor = c.vendor ? String(c.vendor) : null;
+    const arch = c.arch ? String(c.arch) : null;
+    const ram = Number.isFinite(c.ram_gb) && c.ram_gb > 0 ? `${c.ram_gb} GB RAM` : null;
+    const parts = [];
+    if (vendor) parts.push(vendor);
+    if (arch) parts.push(arch);
+    if (ram) parts.push(ram);
+    return parts.length ? parts.join(" · ") : "CPU";
 }
 
 /**

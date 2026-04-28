@@ -111,13 +111,40 @@ export async function getJobWithEvents(jobId, sinceId = 0) {
   return { job, events: events ?? [] };
 }
 
+/**
+ * Models the playground can offer to clients = distinct
+ * specs.served_models across providers that are online right now.
+ * Falls back to the (manually curated) `models` table if no provider
+ * is advertising anything yet. The fallback exists so the playground
+ * isn't blank in dev when nothing is registered.
+ */
 export async function listChatModels() {
   const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
+  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+  const { data: provs, error: pErr } = await supabase
+    .from("providers")
+    .select("specs")
+    .eq("status", "available")
+    .gte("last_seen", tenMinAgo);
+  if (pErr) throw pErr;
+
+  const seen = new Set();
+  for (const p of provs ?? []) {
+    const served = Array.isArray(p?.specs?.served_models) ? p.specs.served_models : [];
+    for (const m of served) {
+      if (typeof m === "string" && m) seen.add(m);
+    }
+  }
+  if (seen.size > 0) {
+    return [...seen].sort().map((name) => ({ id: name, name, family: null, context_length: null }));
+  }
+
+  const { data: models, error: mErr } = await supabase
     .from("models")
     .select("id, name, family, context_length")
     .eq("visibility", "public")
     .order("name");
-  if (error) throw error;
-  return data ?? [];
+  if (mErr) throw mErr;
+  return models ?? [];
 }

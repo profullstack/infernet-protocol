@@ -94,19 +94,19 @@ export default function HomePage() {
 
           <div className="mt-10 grid gap-6 lg:grid-cols-3">
             <Pillar
-              eyebrow="What works"
-              title="Single-GPU inference, 7B–70B models"
-              body="One model, one GPU, one request. Zero inter-GPU communication, zero NVLink penalty, throughput linear in network size. This is what AWS Bedrock, Together, Replicate, and Fireworks actually serve — the dominant inference pattern by request volume."
+              eyebrow="Live today"
+              title="Single-GPU & CPU inference"
+              body="Run any chat model your hardware can serve — Qwen, Llama, Mistral — through Ollama on whatever GPU or CPU you have. One model, one box, one request. Zero NVLink penalty. The dominant inference pattern by request volume, and the one a peer network is actually best at."
             />
             <Pillar
-              eyebrow="What works"
-              title="Embarrassingly parallel + async training"
-              body="Embeddings, image-grid generation, dataset cleaning, hyperparameter sweeps, LoRA fine-tunes, federated and DiLoCo-style training. Workloads where coordination cost is low and aggregate throughput is the metric. Network latency is invisible."
+              eyebrow="Coming next"
+              title="vLLM + ComfyUI endpoints"
+              body="OpenAI-compatible chat/completions via vLLM (drops into every existing tool that already speaks OpenAI), and image generation via ComfyUI. Both slot into the same engine-adapter pattern Ollama uses today. Embarrassingly parallel batch + LoRA fine-tunes + federated/DiLoCo-style training round out the workload set."
             />
             <Pillar
-              eyebrow="What we cede"
-              title="Tight-sync 100B+ training from scratch"
-              body="Maybe 20 organizations on Earth do this. They own their fleets and they&apos;re not your customers. NVLink + InfiniBand bandwidth is a real moat for that one workload — conceding it costs nothing and lets us build the protocol the rest of the market actually needs."
+              eyebrow="Not our market"
+              title="Hyperscaler-only workloads"
+              body="Tight-sync 100B+ training, 64-node Slurm clusters, rent-a-Linux-box pod hosting. Maybe 20 orgs on Earth do those at scale; they own their fleets and they're not our customers. Conceding them costs nothing and frees us to build the protocol the rest of the market actually wants."
             />
           </div>
 

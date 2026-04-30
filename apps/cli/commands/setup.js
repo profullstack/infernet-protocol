@@ -451,13 +451,14 @@ export default async function setup(args) {
     process.stdout.write("\nInfernet setup — checking your environment\n");
 
     // Step count: hardware (1) + node (1) + ollama+model (0|2) + firewall (0|1)
-    //   + config (1) + identity (0|1) + registration (0|1) + daemon (0|1)
-    //   + login (0|1).
+    //   + logrotate (0|1) + config (1) + identity (0|1) + registration (0|1)
+    //   + daemon (0|1) + login (0|1).
     // Track the actual maximum so the printed counter never goes [7/6].
     const isProviderRole = (existing?.node?.role ?? "provider") === "provider";
     let total = 2; // hardware + node.js
     if (backend === "ollama") total += 2; // ollama + model
     if (!skipFirewall && process.platform === "linux") total += 1;
+    if (process.platform === "linux") total += 1; // logrotate
     total += 1; // config
     if (!skipIdentity) total += 1;
     if (!skipRegister && isProviderRole) total += 1;
@@ -670,6 +671,31 @@ export default async function setup(args) {
             } else {
                 process.stdout.write("  skipped — run `infernet firewall` to print the commands\n");
             }
+        }
+    }
+
+    // Logrotate — install /etc/logrotate.d/infernet on Linux if writable.
+    if (process.platform === "linux") {
+        n += 1;
+        step(n, total, "Log rotation");
+        const logrotatePath = "/etc/logrotate.d/infernet";
+        const logrotateConf = `/var/log/infernet/*.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    create 0640 root root
+}
+`;
+        try {
+            await fs.writeFile(logrotatePath, logrotateConf, { mode: 0o644 });
+            ok(`logrotate config written to ${logrotatePath} (daily, 14 days)`);
+        } catch {
+            warn(`could not write ${logrotatePath} (not root?) — logs won't rotate automatically`);
+            warn(`  run as root or manually add the config: https://infernetprotocol.com/book/02-node-operators/monitoring`);
         }
     }
 

@@ -24,6 +24,7 @@
  */
 
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
@@ -46,7 +47,17 @@ export function getDaemonSocketPath() {
 }
 
 export function getDaemonLogPath() {
-    return path.join(getConfigDir(), 'daemon.log');
+    // Prefer /var/log/infernet/ (standard syslog location, works with logrotate).
+    // Fall back to ~/.config/infernet/ if /var/log/infernet/ isn't writable
+    // (non-root installs, CI, etc.).
+    const dir = '/var/log/infernet';
+    try {
+        fsSync.mkdirSync(dir, { recursive: true, mode: 0o755 });
+        fsSync.accessSync(dir, fsSync.constants.W_OK);
+        return path.join(dir, 'daemon.log');
+    } catch {
+        return path.join(getConfigDir(), 'daemon.log');
+    }
 }
 
 /**

@@ -858,15 +858,18 @@ async function runDaemon(args, ctx) {
     // Self-update: check npm registry every 5 minutes. If a newer version is
     // available, pull the installer, re-generate any missing keys + re-register
     // specs (idempotent), then re-exec so the new code is running immediately.
+    let isUpgrading = false;
     const updateTimer = setInterval(async () => {
-        if (shuttingDown) return;
+        if (shuttingDown || isUpgrading) return;
         const latest = await fetchLatestVersion();
         if (!latest || !isNewerVersion(CURRENT_VERSION, latest)) return;
+        isUpgrading = true;
 
         process.stdout.write(`[update] v${latest} available (running v${CURRENT_VERSION}) — upgrading\n`);
         const ok = await pullLatestBinary();
         if (!ok) {
             process.stderr.write('[update] installer failed — will retry next check\n');
+            isUpgrading = false;
             return;
         }
 

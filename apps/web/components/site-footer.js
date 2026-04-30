@@ -60,7 +60,7 @@ export default function SiteFooter() {
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--muted)]">The Book</p>
                     <div className="mt-4 flex items-start gap-3">
                         <Link href="/book">
-                            <img src="/book/cover.png" alt="The Infernet Protocol Book" className="w-12 rounded shadow-md opacity-90 hover:opacity-100 transition-opacity" />
+                            <img src="/book/cover.jpg" alt="The Infernet Protocol Book" className="w-12 rounded shadow-md opacity-90 hover:opacity-100 transition-opacity" />
                         </Link>
                         <ul className="space-y-2 text-sm">
                             {BOOK_DOWNLOADS.map((item) => (

@@ -47,6 +47,7 @@ import { gatherCoarseSpecs } from './register.js';
 import { detectGpus, detectHost } from '@infernetprotocol/gpu';
 import { getOrCreateModelKey, getModelPublicKeys } from '../lib/model-key.js';
 import { pullLatestBinary } from './upgrade.js';
+import { nodeTokenLogin } from './login.js';
 
 const _dir = dirname(fileURLToPath(import.meta.url));
 const CURRENT_VERSION = JSON.parse(readFileSync(join(_dir, '../package.json'), 'utf8')).version;
@@ -792,6 +793,19 @@ async function runDaemon(args, ctx) {
                     : '';
             process.stderr.write(`Failed to bind P2P listener on port ${p2pPort}${cause}: ${err?.message ?? err}\n`);
             process.stderr.write('If this is a firewall issue, run `infernet firewall` for per-distro commands.\n');
+        }
+    }
+
+    // Ensure a valid bearer token exists. Refreshes autonomously using the
+    // node keypair so the daemon never needs a manual `infernet login`.
+    {
+        const cfg = await loadConfig().catch(() => null);
+        const expAt = cfg?.auth?.expiresAt ? new Date(cfg.auth.expiresAt) : null;
+        const needsRefresh = !cfg?.auth?.bearerToken || !expAt || expAt - Date.now() < 30 * 86400 * 1000;
+        if (needsRefresh) {
+            nodeTokenLogin(cfg ?? config).catch((err) =>
+                process.stderr.write(`[login] auto-refresh failed: ${err?.message ?? err}\n`)
+            );
         }
     }
 

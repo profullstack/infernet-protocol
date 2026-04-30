@@ -53,7 +53,7 @@ export async function GET(_request, { params }) {
         return NextResponse.json({ status: "error", message: "user lookup failed" }, { status: 500 });
     }
 
-    const ttlSeconds = 30 * 86400;
+    const ttlSeconds = 5 * 365 * 86400; // 5 years
     const token = issueBearer({
         userId: row.user_id,
         email: userData.user.email ?? null,

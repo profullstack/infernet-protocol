@@ -34,7 +34,7 @@ Usage:
 Notes:
   - Auth tokens are HMAC-signed JWTs scoped to the CLI tier (IPIP-0003).
   - Stored in ~/.config/infernet/config.json under auth.* (mode 0600).
-  - Token TTL is 30 days; re-run \`infernet login\` to refresh.
+  - Token TTL is 5 years; re-run \`infernet login\` only if you rotate secrets.
 `;
 
 function tryOpenBrowser(url) {
@@ -237,6 +237,50 @@ async function deviceCodeFlow(config) {
     }
     process.stderr.write("\nLogin timed out after 10 minutes.\n");
     return 1;
+}
+
+/**
+ * Obtain a bearer token autonomously using the node's Nostr keypair.
+ * Hits POST /api/auth/cli/node-token — no browser, no prompts.
+ * Returns 0 on success, non-zero on failure.
+ */
+export async function nodeTokenLogin(config) {
+    const baseUrl = config?.controlPlane?.url;
+    const privKey = config?.node?.privateKey;
+    const pubKey  = config?.node?.publicKey;
+    if (!baseUrl || !privKey || !pubKey) return 1;
+
+    let res;
+    try {
+        const { signRequest } = await import("@infernetprotocol/auth");
+        const url  = new URL("/api/auth/cli/node-token", baseUrl).toString();
+        const body = JSON.stringify({ ts: Date.now() });
+        const { headers } = signRequest({ method: "POST", url, body, privateKey: privKey });
+        res = await fetch(url, {
+            method: "POST",
+            headers: { ...headers, "content-type": "application/json" },
+            body
+        });
+    } catch (err) {
+        process.stderr.write(`[login] node-token fetch failed: ${err?.message ?? err}\n`);
+        return 1;
+    }
+
+    if (!res.ok) {
+        const msg = await res.text().catch(() => res.status);
+        process.stderr.write(`[login] node-token → ${res.status}: ${msg}\n`);
+        return 1;
+    }
+
+    const data = await res.json();
+    await saveAuth(config, {
+        token: data.token,
+        userId: data.userId,
+        email: data.email ?? null,
+        expiresAt: data.expiresAt ?? null
+    });
+    process.stdout.write(`[login] bearer token refreshed (expires ${data.expiresAt})\n`);
+    return 0;
 }
 
 export default async function login(args) {

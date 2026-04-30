@@ -15,7 +15,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * outstanding CLI token without touching browser sessions.
  */
 
-const TTL_DAYS = 30;
+const TTL_DAYS = 5 * 365; // 5 years — daemons run unattended for months
 const ALG = "HS256";
 
 function getSecret() {

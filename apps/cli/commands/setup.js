@@ -20,6 +20,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { loadConfig, saveConfig, getConfigPath, fixConfigPermissions } from "../lib/config.js";
+import { nodeTokenLogin } from "./login.js";
 import { question } from "../lib/prompt.js";
 import { applyFirewallRule, detectFirewall, describeFirewallHowTo } from "../lib/firewall.js";
 import { DEFAULT_P2P_PORT, resolveP2pPort } from "../lib/network.js";
@@ -797,20 +798,25 @@ export default async function setup(args) {
     if (alreadySignedIn) {
         ok(`signed in as ${configAfterId.auth.email ?? configAfterId.auth.userId}`);
     } else {
-        process.stdout.write("  Sign in to view your dashboard, manage payouts, and submit paid jobs.\n");
-        let proceed = false;
-        if (yes) {
-            process.stdout.write("  --yes set; skipping. Run `infernet login` when ready.\n");
+        // Try autonomous login using the node's Nostr keypair — no browser needed.
+        // Falls back to device-code (browser) flow only if the node isn't registered yet.
+        const autoCode = await nodeTokenLogin(configAfterId ?? {});
+        if (autoCode === 0) {
+            const fresh = await loadConfig();
+            ok(`signed in as ${fresh?.auth?.email ?? fresh?.auth?.userId ?? "node"} (auto)`);
+            didLogin = true;
+        } else if (yes) {
+            process.stdout.write("  auto-login failed — node may not be registered yet. Run `infernet login` when ready.\n");
         } else {
+            process.stdout.write("  Sign in to view your dashboard, manage payouts, and submit paid jobs.\n");
             const ans = await question("  Sign in now (opens browser)?", { default: "y" });
-            proceed = ans.toLowerCase().startsWith("y");
-        }
-        if (proceed) {
-            const code = await runSubcommand("login", []);
-            if (code !== 0) warn("  login did not complete — re-run `infernet login` later");
-            else { ok("signed in"); didLogin = true; }
-        } else if (!yes) {
-            process.stdout.write("  skipped — run `infernet login` later\n");
+            if (ans.toLowerCase().startsWith("y")) {
+                const code = await runSubcommand("login", []);
+                if (code !== 0) warn("  login did not complete — re-run `infernet login` later");
+                else { ok("signed in"); didLogin = true; }
+            } else {
+                process.stdout.write("  skipped — run `infernet login` later\n");
+            }
         }
     }
 

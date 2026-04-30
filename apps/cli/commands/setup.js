@@ -74,8 +74,14 @@ const MODEL_SUGGESTIONS = [
     { name: "qwen2.5:72b",  size_gb: 40.0, size: "≈40 GB",  note: "fits 48 GB+ GPU / 80 GB+ RAM" }
 ];
 
-// modelFits re-exported from shared lib for backwards compat with any callers.
-export { checkFits as modelFits } from "../lib/model-fit.js";
+// modelFits wraps checkFits: maps ok→fits and passes through unknown sizes.
+export function modelFits({ size_gb, vram_gb, ram_gb }) {
+    if (!Number.isFinite(size_gb) || size_gb <= 0) {
+        return { fits: true, mode: "unknown", have_gb: 0, ceiling_gb: null };
+    }
+    const r = checkFits({ size_gb, vram_gb, ram_gb });
+    return { ...r, fits: r.ok };
+}
 
 function ok(msg)   { process.stdout.write(`  ✓ ${msg}\n`); }
 function warn(msg) { process.stdout.write(`  ! ${msg}\n`); }

@@ -1,6 +1,7 @@
 import "server-only";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { isNimConfigured, nimVirtualProvider } from "@infernetprotocol/nim-adapter";
+import { encryptJSON, decryptJSON } from "@/lib/encrypt";
 
 /**
  * Pick a P2P provider to serve a chat job.
@@ -175,12 +176,12 @@ export async function createChatJob({ messages, modelName, maxTokens = 512, temp
   const { data: job, error } = await supabase
     .from("jobs")
     .insert({
-      title: firstUserPrompt(messages).slice(0, 80) || "chat",
+      title: modelName ? `chat:${modelName}` : "chat",
       type: "chat",
       status,
       provider_id: p2pProvider?.id ?? null,
       model_name: modelName ?? null,
-      input_spec: inputSpec,
+      input_spec: encryptJSON(inputSpec),
       payment_offer: 0,
       assigned_at: p2pProvider || nimAvailable ? now : null,
       updated_at: now
@@ -214,7 +215,13 @@ export async function getJobWithEvents(jobId, sinceId = 0) {
   ]);
   if (jobErr) throw jobErr;
   if (evErr) throw evErr;
-  return { job, events: events ?? [] };
+
+  const decryptedJob = job
+    ? { ...job, input_spec: decryptJSON(job.input_spec), result: decryptJSON(job.result) }
+    : null;
+  const decryptedEvents = (events ?? []).map((ev) => ({ ...ev, data: decryptJSON(ev.data) }));
+
+  return { job: decryptedJob, events: decryptedEvents };
 }
 
 /**

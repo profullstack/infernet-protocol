@@ -1,6 +1,7 @@
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getJobWithEvents } from "@/lib/data/chat";
 import { streamChatCompletion } from "@infernetprotocol/nim-adapter";
+import { encryptJSON, decryptJSON } from "@/lib/encrypt";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -96,7 +97,7 @@ export async function GET(_request, { params }) {
           const ev = payload?.new;
           if (!ev || ev.id <= lastId) return;
           lastId = ev.id;
-          safeEnqueue(sseFrame(ev.event_type, ev.data, ev.id));
+          safeEnqueue(sseFrame(ev.event_type, decryptJSON(ev.data), ev.id));
           if (ev.event_type === "done" || ev.event_type === "error") {
             try { supabase.removeChannel(channel); } catch { /* ignore */ }
             clearInterval(hb);
@@ -184,11 +185,12 @@ async function insertJobEvent(supabase, jobId, eventType, data) {
   try {
     const { data: row, error } = await supabase
       .from("job_events")
-      .insert({ job_id: jobId, event_type: eventType, data })
+      .insert({ job_id: jobId, event_type: eventType, data: encryptJSON(data) })
       .select("id, event_type, data, created_at")
       .single();
     if (error) return null;
-    return row;
+    // Return with data decrypted so callers can use it directly.
+    return row ? { ...row, data: decryptJSON(row.data) } : null;
   } catch {
     return null;
   }
@@ -197,7 +199,7 @@ async function insertJobEvent(supabase, jobId, eventType, data) {
 async function finalizeJob(supabase, jobId, { status, result, error }) {
   const now = new Date().toISOString();
   const patch = { status, updated_at: now, completed_at: now };
-  if (result !== undefined) patch.result = result;
+  if (result !== undefined) patch.result = encryptJSON(result);
   if (error !== undefined) patch.error = error;
   try {
     await supabase.from("jobs").update(patch).eq("id", jobId);

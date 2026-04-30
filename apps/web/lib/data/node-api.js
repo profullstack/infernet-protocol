@@ -2,6 +2,7 @@ import "server-only";
 
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { tableForRole } from "@/lib/auth/verify-signed-request";
+import { encryptJSON, decryptJSON } from "@/lib/encrypt";
 
 const MAX_SPECS_GPUS = 16;
 
@@ -167,7 +168,8 @@ export async function pollJobsForNode({ pubkey, limit = 5 }) {
         .limit(Math.min(Math.max(Number(limit) || 5, 1), 25));
 
     if (error) throw withStatus(error.message, 500);
-    return { provider_id: provider.id, jobs: data ?? [] };
+    const jobs = (data ?? []).map((j) => ({ ...j, input_spec: decryptJSON(j.input_spec) }));
+    return { provider_id: provider.id, jobs };
 }
 
 export async function completeJobForNode({ pubkey, jobId, body }) {
@@ -198,7 +200,7 @@ export async function completeJobForNode({ pubkey, jobId, body }) {
         updated_at: completedAt,
         completed_at: completedAt
     };
-    if (!failed && body.result !== undefined) patch.result = body.result;
+    if (!failed && body.result !== undefined) patch.result = encryptJSON(body.result);
     if (failed && typeof body.error === "string") patch.error = body.error.slice(0, 1024);
 
     const { error: markErr } = await supabase.from("jobs").update(patch).eq("id", job.id);
@@ -328,7 +330,7 @@ export async function emitJobEvents({ pubkey, jobId, events }) {
         return {
             job_id: jobId,
             event_type: e.event_type,
-            data: e.data ?? {}
+            data: encryptJSON(e.data ?? {})
         };
     });
 

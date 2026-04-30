@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getJobWithEvents } from "@/lib/data/chat";
 import { streamChatCompletion } from "@infernetprotocol/nim-adapter";
 import { makeStreamSanitizer, sanitizeText } from "@/lib/sanitize-stream";
+import { encryptJSON, decryptJSON } from "@/lib/encrypt";
 
 /**
  * Async generator that yields normalized job events for a given job:
@@ -87,7 +88,7 @@ export async function* streamJobEvents(jobId) {
                 const ev = payload?.new;
                 if (!ev || ev.id <= lastId) return;
                 lastId = ev.id;
-                queue.push({ type: ev.event_type, data: ev.data, id: ev.id });
+                queue.push({ type: ev.event_type, data: decryptJSON(ev.data), id: ev.id });
                 if (resolveNext) {
                     const r = resolveNext;
                     resolveNext = null;
@@ -211,11 +212,11 @@ async function insertJobEvent(supabase, jobId, eventType, data) {
     try {
         const { data: row, error } = await supabase
             .from("job_events")
-            .insert({ job_id: jobId, event_type: eventType, data })
+            .insert({ job_id: jobId, event_type: eventType, data: encryptJSON(data) })
             .select("id, event_type, data, created_at")
             .single();
         if (error) return null;
-        return row;
+        return row ? { ...row, data: decryptJSON(row.data) } : null;
     } catch {
         return null;
     }
@@ -224,7 +225,7 @@ async function insertJobEvent(supabase, jobId, eventType, data) {
 async function finalizeJob(supabase, jobId, { status, result, error }) {
     const now = new Date().toISOString();
     const patch = { status, updated_at: now, completed_at: now };
-    if (result !== undefined) patch.result = result;
+    if (result !== undefined) patch.result = encryptJSON(result);
     if (error !== undefined) patch.error = error;
     try {
         await supabase.from("jobs").update(patch).eq("id", jobId);

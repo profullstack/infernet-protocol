@@ -76,13 +76,16 @@ const UPDATE_CHECK_MS = 5 * 60 * 1000; // 5 minutes
 
 async function fetchLatestVersion() {
     try {
+        // Primary: GitHub releases (works without npm being published).
         const res = await fetch(
-            'https://registry.npmjs.org/@infernetprotocol/cli/latest',
-            { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(10_000) }
+            'https://api.github.com/repos/profullstack/infernet-protocol/releases/latest',
+            { headers: { accept: 'application/vnd.github+json', 'user-agent': 'infernet-daemon' }, signal: AbortSignal.timeout(10_000) }
         );
         if (!res.ok) return null;
         const data = await res.json();
-        return typeof data.version === 'string' ? data.version : null;
+        // tag_name is "v0.1.7" — strip the leading "v"
+        const tag = typeof data.tag_name === 'string' ? data.tag_name.replace(/^v/, '') : null;
+        return tag;
     } catch {
         return null;
     }

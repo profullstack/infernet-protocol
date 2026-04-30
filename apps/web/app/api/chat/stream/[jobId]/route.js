@@ -156,8 +156,9 @@ async function runNimFallback({ supabase, job, safeEnqueue, sseFrame }) {
     if (ev.type === "meta") continue; // we already emitted our own meta above
     if (ev.type === "token") {
       fullText += ev.data?.text ?? "";
-      const persisted = await insertJobEvent(supabase, job.id, "token", ev.data);
-      safeEnqueue(sseFrame("token", ev.data, persisted?.id));
+      // Enqueue to client immediately; DB insert is audit-only so fire-and-forget.
+      safeEnqueue(sseFrame("token", ev.data));
+      insertJobEvent(supabase, job.id, "token", ev.data).catch(() => {});
     } else if (ev.type === "done") {
       const data = { text: fullText, finished_at: ev.data?.finished_at ?? new Date().toISOString() };
       const persisted = await insertJobEvent(supabase, job.id, "done", data);

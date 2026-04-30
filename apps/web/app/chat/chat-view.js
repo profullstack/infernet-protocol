@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 const EXAMPLE_PROMPTS = [
   "Explain how Infernet's P2P GPU network scales compared to a centralized data center.",
@@ -293,6 +293,31 @@ function updateLastAssistant(list, mutator) {
   return next;
 }
 
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard not available (non-HTTPS context)
+    }
+  }, [text]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title="Copy to clipboard"
+      className="rounded-md border border-[var(--line)] bg-[var(--panel)] px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] text-[var(--muted)] transition hover:border-[var(--accent)] hover:text-white"
+    >
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
 function Bubble({ message }) {
   const { role, content, provider, pending, failed } = message;
   const isUser = role === "user";
@@ -313,6 +338,11 @@ function Bubble({ message }) {
         ) : null}
         {content || (pending ? <TypingDots /> : null)}
         {failed ? <span className="ml-2 text-xs text-[var(--warn)]">failed</span> : null}
+        {!isUser && content && !pending ? (
+          <div className="mt-2 flex justify-end">
+            <CopyButton text={content} />
+          </div>
+        ) : null}
       </div>
     </div>
   );

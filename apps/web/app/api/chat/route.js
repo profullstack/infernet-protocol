@@ -31,7 +31,7 @@ export async function POST(request) {
     return err(400, "Invalid JSON body");
   }
 
-  const { messages, encryptedMessages, clientPubkey, providerId, modelName, maxTokens, temperature } = payload ?? {};
+  const { messages, encryptedMessages, clientPubkey, modelPubkey, providerId, modelName, maxTokens, temperature } = payload ?? {};
 
   // Accept either plaintext messages[] or an encrypted NIP-44 payload.
   const hasPlain = Array.isArray(messages) && messages.length > 0;
@@ -52,6 +52,7 @@ export async function POST(request) {
       messages: hasPlain ? messages : undefined,
       encryptedMessages: hasEncrypted ? encryptedMessages : undefined,
       clientPubkey: typeof clientPubkey === "string" ? clientPubkey : undefined,
+      modelPubkey: typeof modelPubkey === "string" ? modelPubkey : undefined,
       providerId: typeof providerId === "string" ? providerId : undefined,
       modelName,
       maxTokens,

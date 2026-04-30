@@ -41,11 +41,15 @@ export async function GET(request) {
         );
     }
 
-    const pubkey = provider.public_key ?? null;
+    const providerPubkey = provider.public_key ?? null;
+    // IPIP-0028: prefer model-specific key so consumers encrypt to the model,
+    // not the node. Falls back to null (client uses providerPubkey instead).
+    const modelPubkey = modelName ? (provider.specs?.model_keys?.[modelName] ?? null) : null;
 
     return NextResponse.json({
         providerId: provider.id,
-        providerPubkey: pubkey,
+        providerPubkey,
+        modelPubkey,
         model: modelName ?? null,
         reservedUntil: new Date(Date.now() + 30_000).toISOString()
     });

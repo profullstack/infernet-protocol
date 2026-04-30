@@ -15,6 +15,7 @@
 import { createEngine, MSG } from "@infernetprotocol/engine";
 import { loadConfig } from "./config.js";
 import { getConversationKey, encrypt, decrypt } from "./nip44.js";
+import { getModelKeyPair } from "./model-key.js";
 
 // Flush the event buffer when it hits this many tokens OR when we haven't
 // flushed in this many ms. After merging (see mergeTokens), each flush
@@ -162,14 +163,19 @@ export async function executeChatJob({ client, job, node }) {
     // messages for legacy (unencrypted) jobs.
     let messages = input.messages ?? [];
     let convKey = null;
-    if (input.encrypted_messages && job.client_pubkey && node.privateKey) {
+    if (input.encrypted_messages && job.client_pubkey) {
+        // IPIP-0028: prefer model-specific key; fall back to node key (IPIP-0027).
+        const modelKP = job.model_name ? await getModelKeyPair(job.model_name) : null;
+        const decryptPrivKey = modelKP?.privateKey ?? node.privateKey ?? null;
+        if (!decryptPrivKey) {
+            throw new Error("No private key available to decrypt E2E messages");
+        }
         try {
-            convKey = getConversationKey(node.privateKey, job.client_pubkey);
+            convKey = getConversationKey(decryptPrivKey, job.client_pubkey);
             const plainJson = decrypt(convKey, input.encrypted_messages);
             messages = JSON.parse(plainJson);
         } catch (err) {
             process.stderr.write(`nip44 decrypt failed: ${err?.message ?? err}\n`);
-            // Don't proceed with empty messages — fail the job instead.
             throw new Error("Failed to decrypt E2E messages — key mismatch or corrupted payload");
         }
     }

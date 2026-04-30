@@ -83,15 +83,18 @@ export default function ChatView({ initialModels = [] }) {
       const provRes = await fetch(`/api/chat/provider${modelName ? `?modelName=${encodeURIComponent(modelName)}` : ""}`);
       if (provRes.ok) {
         const provData = await provRes.json();
-        if (provData.providerPubkey) {
+        // IPIP-0028: prefer model key over node key when available.
+        const pubkeyToUse = provData.modelPubkey ?? provData.providerPubkey ?? null;
+        if (pubkeyToUse) {
           const { privateKey, publicKey } = await getOrCreateEphemeralKey();
-          const convKey = getConversationKey(privateKey, provData.providerPubkey);
+          const convKey = getConversationKey(privateKey, pubkeyToUse);
           currentJobConvKey = convKey;
           const encryptedMessages = encrypt(convKey, JSON.stringify(outgoingMessages));
           postBody = {
             encryptedMessages,
             clientPubkey: publicKey,
             providerId: provData.providerId,
+            ...(provData.modelPubkey ? { modelPubkey: provData.modelPubkey } : {}),
             modelName,
             maxTokens: 512,
             temperature: 0.7

@@ -40,6 +40,7 @@ import { resolveP2pPort, detectLocalAddress, formatEndpoint } from '../lib/netwo
 import { executeChatJob, failChatJob, shutdownEngine } from '../lib/chat-executor.js';
 import { gatherCoarseSpecs } from './register.js';
 import { detectGpus, detectHost } from '@infernetprotocol/gpu';
+import { getOrCreateModelKey, getModelPublicKeys } from '../lib/model-key.js';
 
 const HELP = `infernet start — run the node daemon
 
@@ -345,11 +346,27 @@ async function runDaemon(args, ctx) {
         const bench = benchSummary();
         const load = await liveLoad();
         const reachable = await probeReachable();
+
+        // IPIP-0028: ensure a keypair exists for each served model and
+        // advertise their pubkeys so consumers can encrypt to model keys.
+        let modelKeys = {};
+        try {
+            const servedModels = Array.isArray(base.served_models) ? base.served_models : [];
+            for (const name of servedModels) {
+                const kp = await getOrCreateModelKey(name);
+                if (kp?.publicKey) modelKeys[name] = kp.publicKey;
+            }
+        } catch {
+            // non-fatal — fall back to empty model_keys
+        }
+
         return {
             ...base,
             ...(bench ? { bench } : {}),
             load,
-            ...(reachable ? { reachable } : {})
+            ...(reachable ? { reachable } : {}),
+            ...(Object.keys(modelKeys).length > 0 ? { model_keys: modelKeys } : {}),
+            public_key: config?.node?.publicKey ?? undefined
         };
     }
 

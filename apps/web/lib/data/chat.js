@@ -161,6 +161,7 @@ export function headroomScore(c) {
  * @param {Array}  [params.messages]          - plaintext messages (legacy / NIM path)
  * @param {string} [params.encryptedMessages] - NIP-44 ciphertext (E2E path, IPIP-0027)
  * @param {string} [params.clientPubkey]      - consumer's x-only pubkey hex (E2E path)
+ * @param {string} [params.modelPubkey]       - model's x-only pubkey hex (IPIP-0028; null → node-keyed)
  * @param {string} [params.providerId]        - pre-selected provider UUID (E2E path)
  * @param {string} [params.modelName]
  * @param {number} [params.maxTokens]
@@ -170,6 +171,7 @@ export async function createChatJob({
   messages,
   encryptedMessages,
   clientPubkey,
+  modelPubkey,
   providerId,
   modelName,
   maxTokens = 512,
@@ -223,6 +225,7 @@ export async function createChatJob({
   };
 
   if (e2e && clientPubkey) insertRow.client_pubkey = clientPubkey;
+  if (e2e && modelPubkey) insertRow.model_pubkey = modelPubkey;
 
   const { data: job, error } = await supabase
     .from("jobs")

@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Infernet Protocol" />
+  <meta name="dcterms.date" content="2026-01-01" />
+  <title>Infernet Protocol Whitepaper</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    div.abstract {
+      margin: 2em 2em 2em 2em;
+      text-align: left;
+      font-size: 85%;
+    }
+    div.abstract-title {
+      font-weight: bold;
+      text-align: center;
+      padding: 0;
+      margin-bottom: 0.5em;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {  background-color: #f8f8f8; }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ef2929; } /* Alert */
+    code span.an { color: #8f5902; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #204a87; } /* Attribute */
+    code span.bn { color: #0000cf; } /* BaseN */
+    code span.cf { color: #204a87; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4e9a06; } /* Char */
+    code span.cn { color: #8f5902; } /* Constant */
+    code span.co { color: #8f5902; font-style: italic; } /* Comment */
+    code span.cv { color: #8f5902; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #8f5902; font-weight: bold; font-style: italic; } /* Documentation */
+    code span.dt { color: #204a87; } /* DataType */
+    code span.dv { color: #0000cf; } /* DecVal */
+    code span.er { color: #a40000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #0000cf; } /* Float */
+    code span.fu { color: #204a87; font-weight: bold; } /* Function */
+    code span.im { } /* Import */
+    code span.in { color: #8f5902; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #204a87; font-weight: bold; } /* Keyword */
+    code span.op { color: #ce5c00; font-weight: bold; } /* Operator */
+    code span.ot { color: #8f5902; } /* Other */
+    code span.pp { color: #8f5902; font-style: italic; } /* Preprocessor */
+    code span.sc { color: #ce5c00; font-weight: bold; } /* SpecialChar */
+    code span.ss { color: #4e9a06; } /* SpecialString */
+    code span.st { color: #4e9a06; } /* String */
+    code span.va { color: #000000; } /* Variable */
+    code span.vs { color: #4e9a06; } /* VerbatimString */
+    code span.wa { color: #8f5902; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Infernet Protocol Whitepaper</h1>
+<p class="subtitle">Technical Whitepaper</p>
+<p class="author">Infernet Protocol</p>
+<p class="date">2026</p>
+<div class="abstract">
+<div class="abstract-title">Abstract</div>
+<p>Infernet Protocol is an open, permissionless marketplace for GPU
+inference. Operators install a single CLI tool, register their hardware,
+and immediately begin earning cryptocurrency for every inference job
+their node completes. Consumers pay per request in any supported coin
+with no account required. The network has no native token, no rent
+extraction, and no central coordinator — operators and consumers
+interact directly through a Nostr-signed HTTP protocol built on standard
+OpenAI-compatible endpoints. This paper describes the network’s
+architecture, economic model, security properties, and roadmap.</p>
+</div>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#introduction" id="toc-introduction">1 Introduction</a>
+<ul>
+<li><a href="#goals" id="toc-goals">1.1 Goals</a></li>
+</ul></li>
+<li><a href="#architecture-overview" id="toc-architecture-overview">2
+Architecture Overview</a>
+<ul>
+<li><a href="#control-plane" id="toc-control-plane">2.1 Control
+Plane</a></li>
+<li><a href="#node-daemon" id="toc-node-daemon">2.2 Node Daemon</a></li>
+<li><a href="#nostr-identity-and-request-signing"
+id="toc-nostr-identity-and-request-signing">2.3 Nostr Identity and
+Request Signing</a></li>
+<li><a href="#inference-engines" id="toc-inference-engines">2.4
+Inference Engines</a></li>
+</ul></li>
+<li><a href="#hardware-classification"
+id="toc-hardware-classification">3 Hardware Classification</a></li>
+<li><a href="#job-lifecycle" id="toc-job-lifecycle">4 Job
+Lifecycle</a></li>
+<li><a href="#payment-model" id="toc-payment-model">5 Payment Model</a>
+<ul>
+<li><a href="#no-native-token" id="toc-no-native-token">5.1 No Native
+Token</a></li>
+<li><a href="#supported-coins" id="toc-supported-coins">5.2 Supported
+Coins</a></li>
+<li><a href="#fee-structure" id="toc-fee-structure">5.3 Fee
+Structure</a></li>
+<li><a href="#reputation-cpr" id="toc-reputation-cpr">5.4 Reputation
+(CPR)</a></li>
+</ul></li>
+<li><a href="#security-model" id="toc-security-model">6 Security
+Model</a>
+<ul>
+<li><a href="#control-plane-compromise"
+id="toc-control-plane-compromise">6.1 Control Plane Compromise</a></li>
+<li><a href="#node-impersonation" id="toc-node-impersonation">6.2 Node
+Impersonation</a></li>
+<li><a href="#job-integrity" id="toc-job-integrity">6.3 Job
+Integrity</a></li>
+<li><a href="#model-key-hierarchy-ipip-0028"
+id="toc-model-key-hierarchy-ipip-0028">6.4 Model Key Hierarchy
+(IPIP-0028)</a></li>
+</ul></li>
+<li><a href="#decentralization-roadmap"
+id="toc-decentralization-roadmap">7 Decentralization Roadmap</a></li>
+<li><a href="#distributed-training" id="toc-distributed-training">8
+Distributed Training</a></li>
+<li><a href="#comparison" id="toc-comparison">9 Comparison</a></li>
+<li><a href="#getting-started" id="toc-getting-started">10 Getting
+Started</a></li>
+<li><a href="#conclusion" id="toc-conclusion">11 Conclusion</a></li>
+<li><a href="#references" id="toc-references">References</a></li>
+</ul>
+</nav>
+<h1 id="introduction">1 Introduction</h1>
+<p>The commoditization of large language models has outpaced the
+infrastructure for distributing their compute. Today’s GPU inference
+market is dominated by a handful of cloud hyperscalers and purpose-built
+inference startups, all of which extract a percentage of every API call,
+require account creation, and impose rate limits or geographic
+restrictions.</p>
+<p>Infernet Protocol eliminates these intermediaries. A node operator
+with an NVIDIA or AMD GPU runs one command:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-fsSL</span> https://infernetprotocol.com/install.sh <span class="kw">|</span> <span class="fu">bash</span></span></code></pre></div>
+<p>Within minutes the node is registered, its hardware fingerprinted,
+and it begins bidding on inference jobs. Consumers send standard
+OpenAI-compatible HTTP requests to the network endpoint; the protocol
+routes each request to a healthy provider node, returns the response,
+and records the transaction. Payment settles in the coin chosen by the
+consumer; the operator’s payout address is on-chain from day one.</p>
+<p>No native token is issued. No DAO governance is required. Fees are
+charged in the same coin the consumer pays — the protocol takes a small
+platform fee at settlement and passes the remainder directly to the
+operator.</p>
+<h2 id="goals">1.1 Goals</h2>
+<ol type="1">
+<li><strong>Zero-friction onboarding</strong> — a GPU node should be
+earning in under five minutes on any Linux server.</li>
+<li><strong>Neutral payment rails</strong> — consumers pay in BTC, ETH,
+SOL, USDC, USDT, or a dozen other coins; operators set their preferred
+payout coin.</li>
+<li><strong>No rent extraction</strong> — the protocol’s fee is fixed
+and transparent; operators keep the majority of every payment.</li>
+<li><strong>Open and auditable</strong> — the full stack (CLI, daemon,
+control plane, payment integration) is MIT-licensed on GitHub.</li>
+<li><strong>Hardware-agnostic</strong> — NVIDIA, AMD, and Apple Silicon
+nodes are all first-class citizens.</li>
+</ol>
+<hr />
+<h1 id="architecture-overview">2 Architecture Overview</h1>
+<p>Infernet Protocol has three layers: the <strong>control
+plane</strong>, the <strong>P2P network</strong>, and the
+<strong>inference engine</strong>.</p>
+<pre><code>┌─────────────────────────────────────────────────────────┐
+│                     Consumer                            │
+│  (browser / API / CLI / mobile app)                     │
+└───────────────────────┬─────────────────────────────────┘
+                        │  HTTPS  (OpenAI-compatible)
+┌───────────────────────▼─────────────────────────────────┐
+│               Control Plane  (Next.js + Supabase)        │
+│  job queue · node registry · payment ledger · routing   │
+└───────────┬─────────────────────────────┬───────────────┘
+            │  Nostr-signed HTTP          │
+┌───────────▼──────────┐   ┌─────────────▼───────────────┐
+│    Node A  (CLI)     │   │    Node B  (CLI)             │
+│  vLLM / Ollama /     │   │  vLLM / SGLang / Ollama      │
+│  SGLang backend      │   │  NVIDIA H100  80 GB          │
+│  NVIDIA RTX 4090     │   └─────────────────────────────┘
+└──────────────────────┘</code></pre>
+<h2 id="control-plane">2.1 Control Plane</h2>
+<p>The control plane is a Next.js application backed by Supabase
+(Postgres). It is the only centralized component, and its role is
+intentionally narrow:</p>
+<ul>
+<li><strong>Node registry</strong> — stores signed node records (pubkey,
+GPU specs, model list, endpoint, VRAM tier).</li>
+<li><strong>Job queue</strong> — matches incoming consumer requests to
+available nodes.</li>
+<li><strong>Payment ledger</strong> — records payment intents, on-chain
+confirmations, and payout instructions.</li>
+<li><strong>Routing</strong> — returns a healthy, capable node to the
+consumer for each request; consumers then talk directly to that
+node.</li>
+</ul>
+<p>The control plane never holds private keys, never proxies inference
+traffic, and never stores model weights. Operators may self-host the
+entire control plane using the open-source repository.</p>
+<h2 id="node-daemon">2.2 Node Daemon</h2>
+<p>Each operator node runs the <code>infernet</code> CLI as a background
+daemon. The daemon:</p>
+<ol type="1">
+<li><strong>Registers</strong> the node by POSTing a Nostr-signed record
+to the control plane.</li>
+<li><strong>Heartbeats</strong> every 30 seconds with current load and
+availability.</li>
+<li><strong>Accepts jobs</strong> forwarded by the control plane and
+proxies them to the local inference engine (Ollama, vLLM, or
+SGLang).</li>
+<li><strong>Reports completion</strong> with token counts and latency
+metrics.</li>
+<li><strong>Auto-upgrades</strong> by checking the npm registry for new
+CLI versions and re-registering after update.</li>
+</ol>
+<p>The daemon stores no secrets beyond the operator’s Nostr private key,
+which never leaves the node.</p>
+<h2 id="nostr-identity-and-request-signing">2.3 Nostr Identity and
+Request Signing</h2>
+<p>Node authentication uses <a href="https://nostr.com">Nostr</a>
+secp256k1 keypairs. Every node registration, heartbeat, and status
+update is signed with the node’s private key and verified by the control
+plane against the public key stored in the registry.</p>
+<p>This design has two properties we consider important:</p>
+<ul>
+<li><strong>No password database</strong> — the control plane stores
+public keys only. Compromise of the control plane’s database does not
+expose operator credentials.</li>
+<li><strong>Self-sovereign identity</strong> — an operator can migrate
+their node to a new server without contacting the platform; the keypair
+travels with them.</li>
+</ul>
+<p>CLI device-code login for the web dashboard uses a separate
+short-lived JWT derived from a server-side HMAC secret and the
+operator’s verified email.</p>
+<h2 id="inference-engines">2.4 Inference Engines</h2>
+<p>The daemon supports three local backends:</p>
+<table>
+<colgroup>
+<col style="width: 34%" />
+<col style="width: 38%" />
+<col style="width: 26%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Backend</th>
+<th>Best for</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Ollama</strong></td>
+<td>General-purpose LLMs up to ~70B</td>
+<td>Easiest setup; GGUF quantized</td>
+</tr>
+<tr class="even">
+<td><strong>vLLM</strong></td>
+<td>High-throughput, full-precision HuggingFace models</td>
+<td>Requires CUDA; PagedAttention</td>
+</tr>
+<tr class="odd">
+<td><strong>SGLang</strong></td>
+<td>Structured generation, long-context models</td>
+<td>Supports Llama, Mistral, Qwen</td>
+</tr>
+</tbody>
+</table>
+<p>All three expose an OpenAI-compatible
+<code>/v1/chat/completions</code> endpoint. The daemon auto-detects
+whichever is running on standard ports (11434 for Ollama, 8000 for vLLM,
+30000 for SGLang).</p>
+<p>Operators can also download HuggingFace models directly:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> model pull hf:NousResearch/Hermes-3-Llama-3.1-8B</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> uncensored   <span class="co"># auto-picks best uncensored model for available VRAM</span></span></code></pre></div>
+<hr />
+<h1 id="hardware-classification">3 Hardware Classification</h1>
+<p>Nodes self-report their hardware at registration time. The daemon
+uses <code>nvidia-smi</code>, <code>rocm-smi</code>, and
+<code>/proc/meminfo</code> to collect:</p>
+<ul>
+<li>GPU model, VRAM (MB), architecture generation</li>
+<li>CPU core count, RAM (MB)</li>
+<li>Operating system and CUDA version</li>
+</ul>
+<p>VRAM is bucketed into tiers for routing:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Tier</th>
+<th>VRAM</th>
+<th>Typical hardware</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>nano</code></td>
+<td>&lt; 4 GB</td>
+<td>Integrated / low-end mobile GPUs</td>
+</tr>
+<tr class="even">
+<td><code>small</code></td>
+<td>4–8 GB</td>
+<td>RTX 3060, RTX 4060</td>
+</tr>
+<tr class="odd">
+<td><code>medium</code></td>
+<td>8–16 GB</td>
+<td>RTX 3080, RTX 4080</td>
+</tr>
+<tr class="even">
+<td><code>large</code></td>
+<td>16–32 GB</td>
+<td>RTX 3090, RTX 4090, A100 40 GB</td>
+</tr>
+<tr class="odd">
+<td><code>xl</code></td>
+<td>32–80 GB</td>
+<td>A100 80 GB, H100 80 GB</td>
+</tr>
+<tr class="even">
+<td><code>xxl</code></td>
+<td>80 GB+</td>
+<td>Multi-GPU, H100 NVLink clusters</td>
+</tr>
+</tbody>
+</table>
+<p>The routing layer uses these tiers to filter nodes before matching a
+job. Operators on shared hosting platforms (Vast.ai, RunPod) are
+supported natively; the daemon automatically excludes Docker bridge IPs
+from its advertised endpoint.</p>
+<hr />
+<h1 id="job-lifecycle">4 Job Lifecycle</h1>
+<pre><code>Consumer                  Control Plane              Node
+   │                           │                      │
+   │── POST /v1/chat ─────────▶│                      │
+   │                           │── select node ──────▶│
+   │                           │                      │── local inference
+   │                           │◀── job accepted ─────│
+   │◀── stream response ───────│──────────────────────│
+   │                           │                      │
+   │── payment intent ────────▶│                      │
+   │                           │── confirm on-chain   │
+   │                           │── record payout ────▶│</code></pre>
+<ol type="1">
+<li><strong>Consumer submits</strong> a chat completion or embedding
+request to the control plane’s OpenAI-compatible endpoint.</li>
+<li><strong>Routing</strong> selects a healthy node with sufficient VRAM
+tier and the requested model. Selection prefers lower latency and higher
+completion rate.</li>
+<li><strong>Node executes</strong> the inference locally and streams the
+response back.</li>
+<li><strong>Metering</strong> records token counts (prompt + completion)
+and wall-clock latency for billing.</li>
+<li><strong>Payment</strong> is settled asynchronously: the consumer’s
+payment intent triggers a CoinPayPortal transaction, which webhooks back
+to the control plane on confirmation.</li>
+<li><strong>Payout</strong> accumulates in the operator’s ledger and can
+be withdrawn at any time to any address they configure via
+<code>infernet payout set</code>.</li>
+</ol>
+<hr />
+<h1 id="payment-model">5 Payment Model</h1>
+<h2 id="no-native-token">5.1 No Native Token</h2>
+<p>Infernet Protocol deliberately issues no native token. Token issuance
+creates misaligned incentives: the platform benefits from token price
+appreciation regardless of actual inference utility delivered. Instead,
+operators and consumers transact in established coins with deep
+liquidity.</p>
+<h2 id="supported-coins">5.2 Supported Coins</h2>
+<p>Payment is processed via <a
+href="https://coinpayportal.com">CoinPayPortal</a>, which supports:</p>
+<ul>
+<li><strong>Bitcoin</strong> (BTC) — on-chain and Lightning Network</li>
+<li><strong>Ethereum</strong> (ETH) and ERC-20 stablecoins (USDC,
+USDT)</li>
+<li><strong>Solana</strong> (SOL) and SPL tokens</li>
+<li><strong>Polygon</strong>, <strong>BNB Chain</strong>,
+<strong>XRP</strong>, <strong>ADA</strong>, <strong>DOGE</strong></li>
+<li>Multi-chain USDC and USDT</li>
+</ul>
+<p>Operators configure a payout address per coin:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> payout set <span class="at">--coin</span> BTC <span class="at">--address</span> bc1q...</span></code></pre></div>
+<p>The platform converts consumer payments to operator payouts at the
+prevailing exchange rate with no spread markup — the platform fee is the
+only deduction.</p>
+<h2 id="fee-structure">5.3 Fee Structure</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Party</th>
+<th>Amount</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Consumer</td>
+<td>Pays per 1 000 tokens (prompt + completion)</td>
+</tr>
+<tr class="even">
+<td>Operator</td>
+<td>Receives ~90% of consumer payment</td>
+</tr>
+<tr class="odd">
+<td>Platform</td>
+<td>Retains ~10% as protocol fee</td>
+</tr>
+</tbody>
+</table>
+<p>Exact per-token rates are set by operators within bounds published by
+the control plane. Operators competing for the same job tier drive rates
+toward the market equilibrium.</p>
+<h2 id="reputation-cpr">5.4 Reputation (CPR)</h2>
+<p>Completed jobs generate a signed receipt issued to CoinPay’s
+Reputation Protocol (CPR). Operators accumulate on-chain reputation
+scores that affect their routing priority. High-reputation nodes receive
+more job offers; nodes with repeated failures or timeouts are
+deprioritized automatically.</p>
+<hr />
+<h1 id="security-model">6 Security Model</h1>
+<h2 id="control-plane-compromise">6.1 Control Plane Compromise</h2>
+<p>If the control plane is compromised, an attacker gains access to:</p>
+<ul>
+<li>The node registry (public keys and endpoint URLs — both already
+public)</li>
+<li>The job queue and payment ledger (financial metadata, no private
+keys)</li>
+<li>Consumer email addresses (Supabase Auth)</li>
+</ul>
+<p>An attacker does <strong>not</strong> gain:</p>
+<ul>
+<li>Operator Nostr private keys (stored on-node only)</li>
+<li>Model weights (stored on-node only)</li>
+<li>Consumer payment credentials (handled by CoinPayPortal)</li>
+</ul>
+<h2 id="node-impersonation">6.2 Node Impersonation</h2>
+<p>A malicious actor cannot register a fake node under an existing
+operator’s identity without possessing the operator’s Nostr private key.
+All node mutations (register, heartbeat, update) must be signed; the
+control plane rejects unsigned or incorrectly signed requests.</p>
+<h2 id="job-integrity">6.3 Job Integrity</h2>
+<p>The control plane does not guarantee inference result integrity in
+v1. Output verification (challenge-response or ZK proof of execution) is
+on the roadmap (see §8). Operators with sustained low accuracy or high
+refusal rates are penalized in routing.</p>
+<h2 id="model-key-hierarchy-ipip-0028">6.4 Model Key Hierarchy
+(IPIP-0028)</h2>
+<p>Each model artifact published to the network is assigned a secp256k1
+keypair. This enables three-party encrypted payloads between consumer,
+node, and model — ensuring that sensitive prompts can be encrypted
+end-to-end with NIP-44 without the control plane being able to read
+them. IPIP-0028 is implemented in the CLI’s <code>model-key.js</code>
+module and will be extended as the protocol matures.</p>
+<hr />
+<h1 id="decentralization-roadmap">7 Decentralization Roadmap</h1>
+<p>Infernet Protocol ships today as a semi-decentralized system: the P2P
+network and payment rails are decentralized, but the job queue and node
+registry live on a centralized control plane. The phased roadmap moves
+progressively toward full decentralization:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Phase</th>
+<th>Description</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>0</td>
+<td>Centralized control plane (Supabase + Next.js)</td>
+<td><strong>Shipped</strong></td>
+</tr>
+<tr class="even">
+<td>1</td>
+<td>Nostr-signed node identity; no password database</td>
+<td><strong>Shipped</strong></td>
+</tr>
+<tr class="odd">
+<td>2</td>
+<td>Multi-coin payments via CoinPayPortal</td>
+<td><strong>In progress</strong></td>
+</tr>
+<tr class="even">
+<td>3</td>
+<td>Reputation protocol (CPR receipts per job)</td>
+<td><strong>Planned</strong></td>
+</tr>
+<tr class="odd">
+<td>4</td>
+<td>Decentralized job queue (Nostr relay or DHT)</td>
+<td><strong>Planned</strong></td>
+</tr>
+<tr class="even">
+<td>5</td>
+<td>ZK proof of inference execution</td>
+<td><strong>Research</strong></td>
+</tr>
+<tr class="odd">
+<td>6</td>
+<td>Fully P2P — no required central coordinator</td>
+<td><strong>Research</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The centralized control plane in Phase 0 is intentional. Eliminating
+it before the economic incentives are proven would sacrifice reliability
+without a corresponding user benefit. Each subsequent phase reduces
+trust assumptions while preserving the operator and consumer
+experience.</p>
+<hr />
+<h1 id="distributed-training">8 Distributed Training</h1>
+<p>Beyond inference, Infernet Protocol is designed to support
+distributed model training across the operator network. The
+<code>infernet train</code> command (in active development) will
+allow:</p>
+<ul>
+<li><strong>Data collection</strong> — operators contribute curated
+datasets to training runs.</li>
+<li><strong>Federated fine-tuning</strong> — gradient updates aggregated
+across nodes without sharing raw training data.</li>
+<li><strong>Model publishing</strong> — completed models pushed to the
+InfernetProtocol HuggingFace organization for public access.</li>
+</ul>
+<p>Training jobs will use the same payment model as inference: consumers
+pay per GPU-hour, operators earn per gradient step contributed.</p>
+<hr />
+<h1 id="comparison">9 Comparison</h1>
+<table>
+<colgroup>
+<col style="width: 1%" />
+<col style="width: 22%" />
+<col style="width: 39%" />
+<col style="width: 36%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th>Infernet Protocol</th>
+<th>Centralized API (OpenAI et al.)</th>
+<th>Other Decentralized Networks</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Native token required</td>
+<td>No</td>
+<td>No</td>
+<td>Often yes</td>
+</tr>
+<tr class="even">
+<td>Operator self-custody</td>
+<td>Yes</td>
+<td>No</td>
+<td>Varies</td>
+</tr>
+<tr class="odd">
+<td>OpenAI-compatible API</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Rarely</td>
+</tr>
+<tr class="even">
+<td>Multi-coin payments</td>
+<td>Yes</td>
+<td>No (card / credits)</td>
+<td>Single chain</td>
+</tr>
+<tr class="odd">
+<td>Open source</td>
+<td>MIT</td>
+<td>No</td>
+<td>Varies</td>
+</tr>
+<tr class="even">
+<td>Setup time</td>
+<td>&lt; 5 min</td>
+<td>Account + billing</td>
+<td>Hours–days</td>
+</tr>
+<tr class="odd">
+<td>GPU hardware agnostic</td>
+<td>Yes</td>
+<td>N/A</td>
+<td>Often NVIDIA only</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h1 id="getting-started">10 Getting Started</h1>
+<p><strong>As an operator:</strong></p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Install</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-fsSL</span> https://infernetprotocol.com/install.sh <span class="kw">|</span> <span class="fu">bash</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Configure</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> init</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Register and start earning</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> register</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> start</span></code></pre></div>
+<p><strong>As a consumer:</strong></p>
+<p>Send standard OpenAI-compatible requests to
+<code>https://infernetprotocol.com/v1/</code> with your API key. No
+account required for the public inference endpoint.</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> openai <span class="im">import</span> OpenAI</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>client <span class="op">=</span> OpenAI(</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    base_url<span class="op">=</span><span class="st">&quot;https://infernetprotocol.com/v1&quot;</span>,</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    api_key<span class="op">=</span><span class="st">&quot;your-api-key&quot;</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> client.chat.completions.create(</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>    model<span class="op">=</span><span class="st">&quot;qwen2.5:7b&quot;</span>,</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>    messages<span class="op">=</span>[{<span class="st">&quot;role&quot;</span>: <span class="st">&quot;user&quot;</span>, <span class="st">&quot;content&quot;</span>: <span class="st">&quot;Hello!&quot;</span>}]</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(response.choices[<span class="dv">0</span>].message.content)</span></code></pre></div>
+<hr />
+<h1 id="conclusion">11 Conclusion</h1>
+<p>Infernet Protocol demonstrates that a GPU inference marketplace can
+operate without a native token, without a centralized owner, and without
+compromising the operator or consumer experience. By grounding identity
+in Nostr keypairs, payments in established coins, and inference in
+standard OpenAI-compatible APIs, the protocol slots into existing
+workflows while laying the foundation for a fully decentralized compute
+layer.</p>
+<p>The source code is MIT-licensed at <a
+href="https://github.com/profullstack/infernet-protocol">github.com/profullstack/infernet-protocol</a>.
+Operators, consumers, and contributors are welcome.</p>
+<hr />
+<h1 id="references">References</h1>
+<ol type="1">
+<li>Nakamoto, S. (2008). Bitcoin: A Peer-to-Peer Electronic Cash
+System.</li>
+<li>Fiatjaf et al. (2020). Nostr Protocol. <a href="https://nostr.com"
+class="uri">https://nostr.com</a></li>
+<li>Kwon, J., Buchman, E. (2019). Cosmos: A Network of Distributed
+Ledgers.</li>
+<li>vLLM Project. PagedAttention: Efficient Memory Management for LLM
+Serving. <a href="https://vllm.ai" class="uri">https://vllm.ai</a></li>
+<li>Ollama. Run Large Language Models Locally. <a
+href="https://ollama.com" class="uri">https://ollama.com</a></li>
+<li>CoinPayPortal. Multi-Currency Payment Rails. <a
+href="https://coinpayportal.com"
+class="uri">https://coinpayportal.com</a></li>
+<li>Hugging Face. The AI Community Building the Future. <a
+href="https://huggingface.co"
+class="uri">https://huggingface.co</a></li>
+</ol>
+</body>
+</html>

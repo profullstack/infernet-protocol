@@ -28,6 +28,12 @@ jobs:
             fonts-liberation \
             fonts-noto
 
+      - name: Rewrite hardcoded cover path for runner
+        run: |
+          # cover-page.tex carries an absolute path from a dev box;
+          # replace it with the runner's workspace path.
+          sed -i "s|/home/ubuntu/src/infernet-protocol|${GITHUB_WORKSPACE}|g" docs/whitepaper/cover-page.tex
+
       - name: Build PDF
         run: |
           pandoc docs/whitepaper/whitepaper.md \

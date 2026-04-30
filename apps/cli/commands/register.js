@@ -185,17 +185,15 @@ export async function gatherCoarseSpecs() {
     if (rejected.length > 0) {
         const sizes = rejected.map((r) => `${r.name} (${r.size_gb} GB)`).join(', ');
         process.stderr.write(
-            `\nNote: ${rejected.length} model(s) won't fit and will not be advertised: ${sizes}\n` +
-            `      Free up RAM/VRAM or remove with \`infernet model remove <name>\`.\n\n`
+            `\nNote: ${rejected.length} model(s) may be tight on memory: ${sizes}\n` +
+            `      Advertising anyway — Ollama will handle it at load time.\n` +
+            `      Remove with \`infernet model remove <name>\` if you want to drop it.\n\n`
         );
     }
 
-    // Always include the configured model if it's pulled — even if our
-    // heuristic flagged it as too big, the operator explicitly chose it.
-    const served_models = [...new Set([
-        ...(configuredModel && pulledModels.some((m) => m.name === configuredModel) ? [configuredModel] : []),
-        ...fitting
-    ])];
+    // Advertise all pulled models — operator explicitly installed them so we
+    // trust they know their hardware. The fit check is informational only.
+    const served_models = [...new Set(pulledModels.map((m) => m.name))];
 
     return {
         cpu: summarizeCpu(),

@@ -27,6 +27,11 @@ const canonicalLinks = [
     description: "IPIPs for protocol changes, network behavior, identity, chat, and governance."
   },
   {
+    label: "The Infernet Protocol Book",
+    href: "https://infernetprotocol.com/book",
+    description: "Operator, developer, and protocol guide built from the open-source docs/book sources."
+  },
+  {
     label: "GitHub releases",
     href: "https://github.com/profullstack/infernet-protocol/releases",
     description: "Tagged source releases for operators, contributors, and downstream packagers."

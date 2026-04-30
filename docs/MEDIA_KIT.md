@@ -50,7 +50,7 @@ git clone https://github.com/profullstack/infernet-protocol.git
 
 Add stable public URLs here when available:
 
-- Book: TBD
+- Book: https://infernetprotocol.com/book
 - Discord: TBD
 - Independent articles: TBD
 - Interviews/podcasts: TBD

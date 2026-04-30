@@ -20,6 +20,7 @@ Canonical links:
 - Protocol landing page: https://infernetprotocol.com/protocol
 - GitHub: https://github.com/profullstack/infernet-protocol
 - Media/reference kit: [docs/MEDIA_KIT.md](./docs/MEDIA_KIT.md)
+- Book: https://infernetprotocol.com/book
 - Protocol spec: [INFERNET-PROTOCOL.md](./INFERNET-PROTOCOL.md)
 - Architecture: [INFERNET-ARCHITECTURE.md](./INFERNET-ARCHITECTURE.md)
 - IPIPs: [ipips/](./ipips)

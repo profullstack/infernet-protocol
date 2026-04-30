@@ -227,11 +227,28 @@ export async function createChatJob({
   if (e2e && clientPubkey) insertRow.client_pubkey = clientPubkey;
   if (e2e && modelPubkey) insertRow.model_pubkey = modelPubkey;
 
-  const { data: job, error } = await supabase
+  let { data: job, error } = await supabase
     .from("jobs")
     .insert(insertRow)
     .select()
     .single();
+
+  // Graceful degradation: if the migration adding E2E columns hasn't been
+  // applied yet, retry without them so the playground stays functional.
+  if (error?.message?.includes("client_pubkey") || error?.message?.includes("model_pubkey")) {
+    const fallbackRow = { ...insertRow };
+    delete fallbackRow.client_pubkey;
+    delete fallbackRow.model_pubkey;
+    // Also fall back to plaintext messages so the provider can read the job.
+    if (e2e && messages) {
+      fallbackRow.input_spec = encryptJSON({ messages, max_tokens: maxTokens, temperature });
+    }
+    ({ data: job, error } = await supabase
+      .from("jobs")
+      .insert(fallbackRow)
+      .select()
+      .single());
+  }
 
   if (error) throw error;
 

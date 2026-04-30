@@ -24,14 +24,19 @@
  */
 
 import fs from 'node:fs/promises';
+import { openSync } from 'node:fs';
 import net from 'node:net';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { chmodSync, unlinkSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 import {
     getDaemonPidPath,
     getDaemonSocketPath,
+    getDaemonLogPath,
     saveConfig
 } from '../lib/config.js';
 import { spawnDetachedDaemon } from '../lib/daemonize.js';
@@ -41,6 +46,10 @@ import { executeChatJob, failChatJob, shutdownEngine } from '../lib/chat-executo
 import { gatherCoarseSpecs } from './register.js';
 import { detectGpus, detectHost } from '@infernetprotocol/gpu';
 import { getOrCreateModelKey, getModelPublicKeys } from '../lib/model-key.js';
+import { pullLatestBinary } from './upgrade.js';
+
+const _dir = dirname(fileURLToPath(import.meta.url));
+const CURRENT_VERSION = JSON.parse(readFileSync(join(_dir, '../package.json'), 'utf8')).version;
 
 const HELP = `infernet start — run the node daemon
 
@@ -63,6 +72,30 @@ live queries (see \`infernet status\`, \`infernet stats\`, \`infernet logs\`).
 
 const DEFAULT_HEARTBEAT_MS = 30_000;
 const DEFAULT_POLL_MS = 15_000;
+const UPDATE_CHECK_MS = 5 * 60 * 1000; // 5 minutes
+
+async function fetchLatestVersion() {
+    try {
+        const res = await fetch(
+            'https://registry.npmjs.org/@infernetprotocol/cli/latest',
+            { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(10_000) }
+        );
+        if (!res.ok) return null;
+        const data = await res.json();
+        return typeof data.version === 'string' ? data.version : null;
+    } catch {
+        return null;
+    }
+}
+
+function isNewerVersion(current, candidate) {
+    const parse = (v) => String(v).split('.').map(Number);
+    const [cMaj, cMin, cPatch] = parse(current);
+    const [nMaj, nMin, nPatch] = parse(candidate);
+    if (nMaj !== cMaj) return nMaj > cMaj;
+    if (nMin !== cMin) return nMin > cMin;
+    return nPatch > cPatch;
+}
 
 async function writePidFile(pid) {
     const p = getDaemonPidPath();
@@ -193,6 +226,7 @@ async function runDaemon(args, ctx) {
         process.stdout.write('  p2p:       disabled\n');
     }
     if (noAdvertise) process.stdout.write('  advertise: off (outbound-only)\n');
+    process.stdout.write(`  version:   v${CURRENT_VERSION} (auto-update every ${UPDATE_CHECK_MS / 60_000}min)\n`);
 
     let heartbeatTimer = null;
     let pollTimer = null;
@@ -780,6 +814,58 @@ async function runDaemon(args, ctx) {
         );
     }, commandPollMs);
     if (typeof commandTimer.unref === 'function') commandTimer.unref();
+
+    // Self-update: check npm registry every 5 minutes. If a newer version is
+    // available, pull the installer, re-generate any missing keys + re-register
+    // specs (idempotent), then re-exec so the new code is running immediately.
+    const updateTimer = setInterval(async () => {
+        if (shuttingDown) return;
+        const latest = await fetchLatestVersion();
+        if (!latest || !isNewerVersion(CURRENT_VERSION, latest)) return;
+
+        process.stdout.write(`[update] v${latest} available (running v${CURRENT_VERSION}) — upgrading\n`);
+        const ok = await pullLatestBinary();
+        if (!ok) {
+            process.stderr.write('[update] installer failed — will retry next check\n');
+            return;
+        }
+
+        // Idempotent post-upgrade setup: refresh specs (which generates any
+        // missing model keypairs) and push a heartbeat with updated payload.
+        process.stdout.write('[update] re-initializing keys and specs\n');
+        try {
+            cachedSpecs = null; // force re-detection with new binary's logic
+            const specs = await freshSpecs();
+            await client.heartbeat({ status: 'available', specs });
+        } catch (err) {
+            process.stderr.write(`[update] post-upgrade setup: ${err?.message ?? err}\n`);
+        }
+
+        // Re-exec the daemon with the same args so the new code is live.
+        process.stdout.write('[update] restarting daemon with new version\n');
+        const logPath = getDaemonLogPath();
+        const logFd = openSync(logPath, 'a');
+        spawn(process.execPath, process.argv.slice(1), {
+            detached: true,
+            stdio: ['ignore', logFd, logFd],
+            env: process.env
+        }).unref();
+
+        // Shut down without sending 'offline' — we're restarting, not stopping.
+        shuttingDown = true;
+        clearInterval(heartbeatTimer);
+        clearInterval(pollTimer);
+        clearInterval(commandTimer);
+        clearInterval(updateTimer);
+        if (ipcServer)    try { ipcServer.close();    } catch {}
+        if (p2pServer)    try { p2pServer.close();    } catch {}
+        if (healthServer) try { healthServer.close(); } catch {}
+        try { await shutdownEngine(); } catch {}
+        removeSocketFile();
+        await removePidFile();
+        process.exit(0);
+    }, UPDATE_CHECK_MS);
+    if (typeof updateTimer.unref === 'function') updateTimer.unref();
 
     await new Promise(() => {});
     return 0;

@@ -1,38 +1,57 @@
 /**
- * `infernet update` — push current capability/status to the control plane.
+ * `infernet update` — pull the latest CLI and run autonomous post-upgrade setup.
  *
- * This is the lightweight verb: re-detect specs (CPU, GPUs, interconnects,
- * served models) and re-upload them. The CLI binary itself is not touched.
+ * Pulls the latest binary via the official installer, then runs
+ * `infernet setup --yes` to regenerate keys, re-register specs, and
+ * restart the daemon. No manual steps needed.
  *
- * For a binary upgrade (re-run the curl installer end-to-end), see
- * `infernet upgrade`.
+ * `infernet upgrade` is an alias for this command.
  */
 
-import register from './register.js';
-import upgrade from './upgrade.js';
+import { spawn } from 'node:child_process';
+import setup from './setup.js';
 
-const HELP = `infernet update — push current capability/status to the control plane
+const HELP = `infernet update — pull latest CLI + autonomous post-upgrade setup
 
 Usage:
   infernet update [flags]
 
 Flags:
-  --binary             Re-run the curl installer instead (alias for \`infernet upgrade\`).
-  --address <host>     Public address to advertise (passed to register).
-  --port <n>           Public port to advertise (passed to register).
-  --gpu-model <name>   GPU model override (providers only).
-  --price <n>          Price offer (providers only).
-  --no-advertise       Don't send address / port.
-  --help               Show this help.
+  --skip-setup   Just re-run the installer; don't run setup afterward.
+  --help         Show this help.
 
-What it does:
-  Re-runs \`infernet register\` so the CLI re-uploads its freshly-detected
-  specs (CPU, GPUs, interconnects, served models). The binary itself is
-  not touched.
+What it does (fully autonomous, no manual steps):
+  1. Re-runs the official installer — pulls the latest source from
+     infernetprotocol.com/install.sh, refreshes node_modules, re-writes
+     the wrapper. Idempotent.
+  2. Runs \`infernet setup --yes\` which:
+       - Generates any missing model keypairs (IPIP-0028)
+       - Re-registers specs with the control plane
+       - Restarts the daemon so the new code is live
+       - Verifies the heartbeat reaches the control plane
 
-  To pull the latest CLI from infernetprotocol.com/install.sh, run:
-    infernet upgrade
+\`infernet upgrade\` is an alias for this command.
 `;
+
+const INSTALLER_URL = "https://infernetprotocol.com/install.sh";
+
+function runShell(cmd) {
+    return new Promise((resolve) => {
+        const child = spawn("sh", ["-c", cmd], { stdio: "inherit" });
+        child.on("exit", (code) => resolve(code ?? 1));
+        child.on("error", () => resolve(1));
+    });
+}
+
+export async function pullLatestBinary() {
+    process.stdout.write(`\n→ Pulling latest CLI from ${INSTALLER_URL}\n\n`);
+    const code = await runShell(`curl -fsSL ${INSTALLER_URL} | sh`);
+    if (code !== 0) {
+        process.stderr.write(`\nerror: installer exited ${code}.\n`);
+        return false;
+    }
+    return true;
+}
 
 export default async function update(args, ctx) {
     if (args.has('help') || args.has('h')) {
@@ -40,13 +59,22 @@ export default async function update(args, ctx) {
         return 0;
     }
 
-    // Back-compat: older docs / muscle memory used `infernet update` as
-    // the binary upgrade verb. Keep it routable via --binary.
-    if (args.has('binary')) {
-        return upgrade(args, ctx);
+    const ok = await pullLatestBinary();
+    if (!ok) return 1;
+
+    if (args.has('skip-setup')) {
+        process.stdout.write("\n✓ Binary updated (skipped setup).\n");
+        return 0;
     }
 
-    return register(args, ctx);
+    process.stdout.write("\n→ Running post-upgrade setup (keys + register + daemon restart)\n");
+
+    const setupArgs = new Map([['yes', true], ['confirm', true], ['skip-pull', true]]);
+    for (const k of ['port', 'address', 'no-advertise']) {
+        if (args.has(k)) setupArgs.set(k, args.get(k) ?? true);
+    }
+
+    return setup(setupArgs, ctx);
 }
 
-export { HELP };
+export { HELP, INSTALLER_URL };

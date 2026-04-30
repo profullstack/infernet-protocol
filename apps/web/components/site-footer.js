@@ -2,6 +2,7 @@ import Link from "next/link";
 
 const PRODUCT = [
     { href: "/docs", label: "Docs" },
+    { href: "/book", label: "Book" },
     { href: "/faq", label: "FAQ" },
     { href: "/chat", label: "Chat" },
     { href: "/deploy", label: "Deploy" },
@@ -20,10 +21,15 @@ const COMPANY = [
     }
 ];
 
+const BOOK_DOWNLOADS = [
+    { href: "/book/infernet-book.pdf", label: "PDF", external: true },
+    { href: "/book/infernet-book.epub", label: "EPUB", external: true }
+];
+
 export default function SiteFooter() {
     return (
         <footer className="mx-auto w-full max-w-6xl px-6 py-12 lg:px-10">
-            <div className="grid gap-10 border-t border-white/10 pt-10 sm:grid-cols-[1.4fr_1fr_1fr]">
+            <div className="grid gap-10 border-t border-white/10 pt-10 sm:grid-cols-[1.4fr_1fr_1fr_auto]">
                 <div className="space-y-3">
                     <Link href="/" aria-label="Infernet Protocol home" className="inline-flex">
                         <img src="/logo.svg" alt="Infernet Protocol" className="h-14 w-auto" />
@@ -50,6 +56,7 @@ export default function SiteFooter() {
 
                 <FooterColumn title="Product" items={PRODUCT} />
                 <FooterColumn title="Company" items={COMPANY} />
+                <FooterColumn title="The Book" items={BOOK_DOWNLOADS} />
             </div>
 
             <div className="mt-10 flex flex-col gap-3 border-t border-white/10 pt-6 text-sm text-[var(--muted)] sm:flex-row sm:items-center sm:justify-between">

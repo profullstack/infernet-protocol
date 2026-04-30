@@ -1,0 +1,104 @@
+name: Build book (PDF + EPUB)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "docs/book/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pandoc + LaTeX
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y pandoc texlive-xetex texlive-fonts-recommended fonts-liberation
+
+      - name: Collect chapters in order
+        run: |
+          # Build a single concatenated markdown file from chapters in order.
+          # Each chapter gets a horizontal rule separator so Pandoc can split
+          # them cleanly in the output.
+          OUT=docs/book/_combined.md
+          echo "---" > $OUT
+          echo "title: 'The Infernet Protocol Book'" >> $OUT
+          echo "subtitle: 'The complete guide to decentralized GPU inference'" >> $OUT
+          echo "author: 'Infernet Protocol'" >> $OUT
+          echo "date: '$(date +%Y)'" >> $OUT
+          echo "lang: en-US" >> $OUT
+          echo "---" >> $OUT
+          echo "" >> $OUT
+
+          # Root index
+          if [ -f docs/book/index.md ]; then
+            cat docs/book/index.md >> $OUT
+            echo -e "\n\n---\n" >> $OUT
+          fi
+
+          # Sections in sorted order
+          for section_dir in $(ls -d docs/book/[0-9]*/ | sort); do
+            if [ -f "${section_dir}index.md" ]; then
+              cat "${section_dir}index.md" >> $OUT
+              echo -e "\n\n---\n" >> $OUT
+            fi
+            for chapter in $(ls ${section_dir}*.md 2>/dev/null | grep -v index.md | sort); do
+              cat "$chapter" >> $OUT
+              echo -e "\n\n---\n" >> $OUT
+            done
+          done
+
+      - name: Build PDF
+        run: |
+          pandoc docs/book/_combined.md \
+            --pdf-engine=xelatex \
+            --toc \
+            --toc-depth=2 \
+            --highlight-style=tango \
+            -V geometry:margin=1in \
+            -V fontsize=11pt \
+            -V mainfont="Liberation Serif" \
+            -V monofont="Liberation Mono" \
+            -o docs/book/infernet-book.pdf
+
+      - name: Build EPUB
+        run: |
+          pandoc docs/book/_combined.md \
+            --toc \
+            --toc-depth=2 \
+            --highlight-style=tango \
+            --epub-cover-image=docs/book/cover.png \
+            -o docs/book/infernet-book.epub 2>/dev/null || \
+          pandoc docs/book/_combined.md \
+            --toc \
+            --toc-depth=2 \
+            --highlight-style=tango \
+            -o docs/book/infernet-book.epub
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: infernet-book
+          path: |
+            docs/book/infernet-book.pdf
+            docs/book/infernet-book.epub
+
+      - name: Copy to web public dir
+        run: |
+          mkdir -p apps/web/public/book
+          cp docs/book/infernet-book.pdf apps/web/public/book/
+          cp docs/book/infernet-book.epub apps/web/public/book/
+
+      - name: Commit generated files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add apps/web/public/book/infernet-book.pdf apps/web/public/book/infernet-book.epub || true
+          git diff --cached --quiet || git commit -m "ci(book): regenerate PDF + EPUB [skip ci]"
+          git push || true

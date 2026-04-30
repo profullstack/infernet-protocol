@@ -760,10 +760,14 @@ export default async function setup(args) {
             fail(`start exited ${startCode}`);
             warn("  check `infernet logs` and `infernet status`");
         } else {
-            await new Promise((r) => setTimeout(r, 1500));
-            const aliveNow = await isDaemonAlive(800);
+            // Poll up to 15 s — ESM cold-start can take a while on slow machines.
+            let aliveNow = false;
+            for (let i = 0; i < 30 && !aliveNow; i++) {
+                await new Promise((r) => setTimeout(r, 500));
+                aliveNow = await isDaemonAlive(500);
+            }
             if (aliveNow) ok(wasAlive ? "daemon restarted" : "daemon started");
-            else warn("daemon spawned but not yet responding — check `infernet status`");
+            else warn("daemon spawned but not yet responding — check `infernet logs`");
         }
 
         // Heartbeat verification — alive locally isn't enough; the control

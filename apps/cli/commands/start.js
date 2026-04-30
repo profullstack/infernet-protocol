@@ -51,9 +51,7 @@ import { detectGpus, detectHost } from '@infernetprotocol/gpu';
 import { getOrCreateModelKey, getModelPublicKeys } from '../lib/model-key.js';
 import { pullLatestBinary } from './upgrade.js';
 import { nodeTokenLogin } from './login.js';
-
-const _dir = dirname(fileURLToPath(import.meta.url));
-const CURRENT_VERSION = JSON.parse(readFileSync(join(_dir, '../package.json'), 'utf8')).version;
+import { CURRENT_VERSION, fetchLatestVersion, isNewerVersion } from '../lib/version.js';
 
 const HELP = `infernet start — run the node daemon
 
@@ -77,32 +75,6 @@ live queries (see \`infernet status\`, \`infernet stats\`, \`infernet logs\`).
 const DEFAULT_HEARTBEAT_MS = 30_000;
 const DEFAULT_POLL_MS = 15_000;
 const UPDATE_CHECK_MS = 5 * 60 * 1000; // 5 minutes
-
-async function fetchLatestVersion() {
-    try {
-        // Primary: GitHub releases (works without npm being published).
-        const res = await fetch(
-            'https://api.github.com/repos/profullstack/infernet-protocol/releases/latest',
-            { headers: { accept: 'application/vnd.github+json', 'user-agent': 'infernet-daemon' }, signal: AbortSignal.timeout(10_000) }
-        );
-        if (!res.ok) return null;
-        const data = await res.json();
-        // tag_name is "v0.1.7" — strip the leading "v"
-        const tag = typeof data.tag_name === 'string' ? data.tag_name.replace(/^v/, '') : null;
-        return tag;
-    } catch {
-        return null;
-    }
-}
-
-function isNewerVersion(current, candidate) {
-    const parse = (v) => String(v).split('.').map(Number);
-    const [cMaj, cMin, cPatch] = parse(current);
-    const [nMaj, nMin, nPatch] = parse(candidate);
-    if (nMaj !== cMaj) return nMaj > cMaj;
-    if (nMin !== cMin) return nMin > cMin;
-    return nPatch > cPatch;
-}
 
 async function writePidFile(pid) {
     const p = getDaemonPidPath();

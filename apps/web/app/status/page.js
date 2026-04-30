@@ -13,14 +13,29 @@ import {
 
 export const dynamic = "force-dynamic";
 
+async function fetchLatestCliVersion() {
+  try {
+    const res = await fetch(
+      "https://api.github.com/repos/profullstack/infernet-protocol/releases/latest",
+      { headers: { accept: "application/vnd.github+json", "user-agent": "infernet-web" }, next: { revalidate: 300 } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data.tag_name === "string" ? data.tag_name : null;
+  } catch {
+    return null;
+  }
+}
+
 export default async function HomePage() {
-  const [overview, jobs, providers, models, clients, aggregators] = await Promise.all([
+  const [overview, jobs, providers, models, clients, aggregators, latestCli] = await Promise.all([
     getDashboardOverview(),
     getJobs({ limit: 6 }),
     getProviders({ limit: 6 }),
     getServedModelsAcrossProviders(),
     getClients({ limit: 6 }),
-    getAggregators({ limit: 6 })
+    getAggregators({ limit: 6 }),
+    fetchLatestCliVersion()
   ]);
 
   return (
@@ -30,7 +45,14 @@ export default async function HomePage() {
       title="Infernet network status"
       description="Live snapshot of nodes, jobs, providers, models, clients, and aggregators on the network."
     >
-      <div className="flex justify-end"><AutoRefresh intervalMs={10000} /></div>
+      <div className="flex items-center justify-between">
+        {latestCli && (
+          <span className="text-xs text-[var(--muted)]">
+            Latest CLI: <span className="font-mono text-white">{latestCli}</span>
+          </span>
+        )}
+        <AutoRefresh intervalMs={10000} />
+      </div>
       <OverviewGrid cards={overview.cards} />
       <div className="grid gap-6 xl:grid-cols-2">
         <ResourceTable

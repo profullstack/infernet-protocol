@@ -15,6 +15,7 @@
 import { loadConfig, getConfigPath } from './lib/config.js';
 import { createNodeClientFromConfig } from './lib/node-client.js';
 import { decideRoute } from './lib/route.js';
+import { CURRENT_VERSION, fetchLatestVersion, isNewerVersion } from './lib/version.js';
 
 import help, { USAGE } from './commands/help.js';
 import init from './commands/init.js';
@@ -109,24 +110,39 @@ const NO_CLIENT = new Set();
 
 const KNOWN_COMMAND_NAMES = new Set(Object.keys(COMMANDS));
 
+async function printVersion() {
+    process.stdout.write(`infernet v${CURRENT_VERSION}\n`);
+    const latest = await fetchLatestVersion();
+    if (!latest) {
+        process.stdout.write(`  update check failed (offline?)\n`);
+    } else if (isNewerVersion(CURRENT_VERSION, latest)) {
+        process.stdout.write(`  update available: v${latest}  →  run \`infernet upgrade\`\n`);
+    } else {
+        process.stdout.write(`  up to date\n`);
+    }
+}
+
 async function main() {
     const argv = process.argv.slice(2);
+
+    // --version / -v / -V  (checked before full routing)
+    if (argv[0] === '--version' || argv[0] === '-v' || argv[0] === '-V') {
+        await printVersion();
+        process.exit(0);
+    }
+
     const route = decideRoute(argv, KNOWN_COMMAND_NAMES, { isTTY: !!process.stdin.isTTY });
     const sub = route.command;
     const rest = route.rest;
 
     if (sub === 'help') {
-        // Bare `infernet` on a TTY → drop into the interactive console
-        // (modeled on `claude` / `codex` / `hermes` no-arg behavior).
-        // Bare `infernet` on a non-TTY (script / pipe) → print help and
-        // exit 1 so callers notice. Explicit `infernet help` → help + 0.
-        if (argv.length === 0 && process.stdin.isTTY) {
-            const config = await loadConfig();
-            const code = await consoleCmd({ positional: [], has: () => false, get: () => undefined }, { config });
-            process.exit(code ?? 0);
+        // Bare `infernet` → show version + up-to-date status, then help.
+        if (argv.length === 0) {
+            await printVersion();
+            process.stdout.write('\n');
         }
         await help();
-        process.exit(argv.length === 0 ? 1 : 0);
+        process.exit(argv.length === 0 ? 0 : 0);
     }
 
     const handler = COMMANDS[sub];

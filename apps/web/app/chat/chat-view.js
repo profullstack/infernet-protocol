@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { getConversationKey, encrypt, decrypt } from "@/lib/nip44";
+import { scanForSecrets } from "@/lib/secret-patterns";
 
 const EXAMPLE_PROMPTS = [
   "Explain how Infernet's P2P GPU network scales compared to a centralized data center.",
@@ -29,6 +30,7 @@ export default function ChatView({ initialModels = [] }) {
   const [error, setError] = useState(null);
   const [provider, setProvider] = useState(null);
   const [e2eActive, setE2eActive] = useState(false);
+  const [secretWarning, setSecretWarning] = useState(null);
 
   const esRef = useRef(null);
   const scrollRef = useRef(null);
@@ -62,9 +64,18 @@ export default function ChatView({ initialModels = [] }) {
     return ephemeralRef.current;
   }
 
-  async function sendMessage() {
+  async function sendMessage({ skipSecretCheck = false } = {}) {
     const text = input.trim();
     if (!text || streaming) return;
+
+    if (!skipSecretCheck) {
+      const detected = scanForSecrets(text);
+      if (detected.length > 0) {
+        setSecretWarning({ matches: detected });
+        return;
+      }
+    }
+    setSecretWarning(null);
 
     setError(null);
     setInput("");
@@ -247,6 +258,7 @@ export default function ChatView({ initialModels = [] }) {
     setError(null);
     setProvider(null);
     setE2eActive(false);
+    setSecretWarning(null);
     ephemeralRef.current = null; // fresh keypair for next session
     convKeysRef.current.clear();
   }
@@ -299,6 +311,14 @@ export default function ChatView({ initialModels = [] }) {
           <div className="rounded-2xl border border-[var(--warn)]/40 bg-[var(--warn)]/10 px-4 py-3 text-sm text-[var(--warn)]">
             {error}
           </div>
+        ) : null}
+
+        {secretWarning ? (
+          <SecretWarning
+            matches={secretWarning.matches}
+            onEdit={() => setSecretWarning(null)}
+            onSendAnyway={() => sendMessage({ skipSecretCheck: true })}
+          />
         ) : null}
 
         <footer className="rounded-[2rem] border border-white/10 bg-[var(--panel)] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.25)]">
@@ -421,6 +441,34 @@ function TypingDots() {
       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--muted)] [animation-delay:120ms]" />
       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--muted)] [animation-delay:240ms]" />
     </span>
+  );
+}
+
+function SecretWarning({ matches, onEdit, onSendAnyway }) {
+  return (
+    <div className="rounded-2xl border border-[var(--warn)]/50 bg-[var(--warn)]/10 px-4 py-3 text-sm text-[var(--warn)]">
+      <p className="font-semibold mb-1">Your message may contain a secret</p>
+      <p className="text-xs text-[var(--muted)] mb-2">
+        Detected: {matches.map((m) => m.label).join(", ")}.
+        {" "}P2P providers are independent operators who receive your prompt in plaintext.
+      </p>
+      <div className="flex gap-2 mt-2">
+        <button
+          type="button"
+          onClick={onEdit}
+          className="rounded-full border border-[var(--warn)]/50 px-3 py-1 text-xs hover:bg-white/5 transition"
+        >
+          Edit message
+        </button>
+        <button
+          type="button"
+          onClick={onSendAnyway}
+          className="rounded-full border border-white/20 px-3 py-1 text-xs text-[var(--muted)] hover:text-white transition"
+        >
+          Send anyway — I understand the risk
+        </button>
+      </div>
+    </div>
   );
 }
 

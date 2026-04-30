@@ -3,7 +3,7 @@
 ## Install the CLI
 
 ```bash
-curl -sSL https://infernet.sh/install | bash
+curl -sSL https://infernetprotocol.com/install | bash
 ```
 
 The installer:
@@ -32,7 +32,7 @@ If you prefer not to pipe to bash:
 
 ```bash
 # Check latest version
-INFERNET_VERSION=$(curl -s https://infernet.sh/version)
+INFERNET_VERSION=$(curl -s https://infernetprotocol.com/version)
 
 # Download binary for your platform
 curl -sSL "https://github.com/infernetprotocol/infernet/releases/download/${INFERNET_VERSION}/infernet-linux-x86_64" \
@@ -55,7 +55,7 @@ infernet setup
 
 **1. Collect registration token**
 
-You'll be prompted for the one-time registration token from the dashboard. Get it at **Nodes → Add Node** in the [Infernet Dashboard](https://app.infernet.sh).
+You'll be prompted for the one-time registration token from the dashboard. Get it at **Nodes → Add Node** in the [Infernet Dashboard](https://infernetprotocol.com).
 
 **2. Detect hardware**
 
@@ -95,7 +95,7 @@ Config is written to `~/.infernet/config.json`:
 {
   "node_id": "node_8f3a2c1d",
   "public_key": "npub1abc123...",
-  "control_plane_url": "https://app.infernet.sh",
+  "control_plane_url": "https://infernetprotocol.com",
   "backend": "ollama",
   "ollama_host": "http://localhost:11434",
   "served_models": ["qwen2.5:14b"],

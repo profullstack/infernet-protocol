@@ -148,7 +148,7 @@ infernet status | grep "Last heartbeat"
 Or query it directly:
 
 ```bash
-curl -s https://app.infernet.sh/api/v1/nodes/node_8f3a2c1d \
+curl -s https://infernetprotocol.com/api/v1/nodes/node_8f3a2c1d \
   -H "Authorization: Bearer $INFERNET_BEARER_TOKEN" | jq '.last_heartbeat'
 ```
 
@@ -157,7 +157,7 @@ curl -s https://app.infernet.sh/api/v1/nodes/node_8f3a2c1d \
 For production nodes, consider setting up uptime monitoring on your node's heartbeat. The control plane exposes a public status endpoint:
 
 ```
-GET https://app.infernet.sh/api/v1/nodes/{node_id}/status
+GET https://infernetprotocol.com/api/v1/nodes/{node_id}/status
 ```
 
 Returns `{"status": "online"}` or `{"status": "offline"}` — easy to wire into any uptime monitoring tool (UptimeRobot, Healthchecks.io, etc.).

@@ -133,7 +133,7 @@ interface IInfernetPayment {
 You can verify any CPR on-chain. The control plane also provides a verification endpoint:
 
 ```bash
-curl https://app.infernet.sh/api/v1/cprs/cpr_7x2a1b3c \
+curl https://infernetprotocol.com/api/v1/cprs/cpr_7x2a1b3c \
   -H "Authorization: Bearer $TOKEN"
 ```
 

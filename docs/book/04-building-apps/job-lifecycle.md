@@ -24,7 +24,7 @@ For non-streaming use cases, poll the job status endpoint until the job is compl
 
 ```javascript
 async function waitForJob(jobId, token, pollIntervalMs = 500) {
-  const url = `https://app.infernet.sh/api/v1/jobs/${jobId}`;
+  const url = `https://infernetprotocol.com/api/v1/jobs/${jobId}`;
   
   while (true) {
     const response = await fetch(url, {
@@ -46,7 +46,7 @@ async function waitForJob(jobId, token, pollIntervalMs = 500) {
 }
 
 // Usage
-const jobResponse = await fetch('https://app.infernet.sh/api/v1/jobs', {
+const jobResponse = await fetch('https://infernetprotocol.com/api/v1/jobs', {
   method: 'POST',
   headers: {
     'Authorization': `Bearer ${TOKEN}`,
@@ -69,7 +69,7 @@ import time
 import httpx
 
 def wait_for_job(job_id: str, token: str, poll_interval: float = 0.5) -> str:
-    url = f"https://app.infernet.sh/api/v1/jobs/{job_id}"
+    url = f"https://infernetprotocol.com/api/v1/jobs/{job_id}"
     headers = {"Authorization": f"Bearer {token}"}
     
     with httpx.Client() as client:
@@ -111,7 +111,7 @@ const controller = new AbortController();
 const timeoutId = setTimeout(() => controller.abort(), 6 * 60 * 1000); // 6 min
 
 try {
-  const response = await fetch('https://app.infernet.sh/api/v1/jobs', {
+  const response = await fetch('https://infernetprotocol.com/api/v1/jobs', {
     signal: controller.signal,
     // ...
   });
@@ -137,7 +137,7 @@ async function submitWithRetry(payload, token, maxRetries = 3) {
     }
     
     try {
-      const response = await fetch('https://app.infernet.sh/api/v1/jobs', {
+      const response = await fetch('https://infernetprotocol.com/api/v1/jobs', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -192,7 +192,7 @@ The time a job spends in `pending` depends on network load and model availabilit
 You can check how many nodes are available for a model before submitting:
 
 ```javascript
-const models = await fetch('https://app.infernet.sh/api/v1/models', {
+const models = await fetch('https://infernetprotocol.com/api/v1/models', {
   headers: { 'Authorization': `Bearer ${TOKEN}` },
 }).then(r => r.json());
 
@@ -214,7 +214,7 @@ async function batchInference(prompts, model, token) {
   // Submit all jobs
   const jobIds = await Promise.all(
     prompts.map(prompt =>
-      fetch('https://app.infernet.sh/api/v1/jobs', {
+      fetch('https://infernetprotocol.com/api/v1/jobs', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

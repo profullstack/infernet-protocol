@@ -14,7 +14,7 @@ If you're on a GPU machine, make sure your GPU drivers are installed before star
 ## Step 1: Install the CLI
 
 ```bash
-curl -sSL https://infernet.sh/install | bash
+curl -sSL https://infernetprotocol.com/install | bash
 ```
 
 This script installs the `infernet` binary to `~/.local/bin` (or `/usr/local/bin` if you have write access) and adds it to your PATH. It takes about 30 seconds.
@@ -28,7 +28,7 @@ infernet --version
 
 ## Step 2: Get Your Registration Token
 
-Open the [Infernet Dashboard](https://app.infernet.sh), sign in, and navigate to **Nodes → Add Node**. Copy the one-time registration token shown on that page. It looks like:
+Open the [Infernet Dashboard](https://infernetprotocol.com), sign in, and navigate to **Nodes → Add Node**. Copy the one-time registration token shown on that page. It looks like:
 
 ```
 inft_reg_7x9k2mNpQwRsLvTbY4cJ

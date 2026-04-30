@@ -15,6 +15,16 @@ A decentralized GPU compute marketplace for **inference and distributed training
 [![Docker image](https://img.shields.io/badge/ghcr.io-infernet--provider-blue?logo=docker)](https://github.com/profullstack/infernet-protocol/pkgs/container/infernet-provider)
 [![Release](https://img.shields.io/github/v/release/profullstack/infernet-protocol)](https://github.com/profullstack/infernet-protocol/releases)
 
+Canonical links:
+- Site: https://infernetprotocol.com
+- Protocol landing page: https://infernetprotocol.com/protocol
+- GitHub: https://github.com/profullstack/infernet-protocol
+- Media/reference kit: [docs/MEDIA_KIT.md](./docs/MEDIA_KIT.md)
+- Protocol spec: [INFERNET-PROTOCOL.md](./INFERNET-PROTOCOL.md)
+- Architecture: [INFERNET-ARCHITECTURE.md](./INFERNET-ARCHITECTURE.md)
+- IPIPs: [ipips/](./ipips)
+- Contact: protocol@infernetprotocol.com
+
 ---
 
 ## Getting started

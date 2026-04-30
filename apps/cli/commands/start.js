@@ -37,6 +37,7 @@ import {
     getDaemonPidPath,
     getDaemonSocketPath,
     getDaemonLogPath,
+    loadConfig,
     saveConfig,
     fixConfigPermissions
 } from '../lib/config.js';

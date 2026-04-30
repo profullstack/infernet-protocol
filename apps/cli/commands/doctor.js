@@ -257,7 +257,14 @@ async function checkDaemon() {
                 hint: "check full log with `infernet logs`"
             };
         }
-        process.stdout.write("                                auto-started daemon\n");
+        // Wait for the first heartbeat so downstream checks (provider row,
+        // e2e) see status=available rather than the registration-time default.
+        process.stdout.write("                                auto-started daemon, waiting for first heartbeat…\n");
+        for (let i = 0; i < 90; i++) {
+            await new Promise((r) => setTimeout(r, 500));
+            const probe = await sendToDaemon("stats", null, { timeoutMs: 1000 });
+            if (probe?.ok && probe.data?.stats?.lastHeartbeatAt) break;
+        }
     }
     const r = await sendToDaemon("stats", null, { timeoutMs: 1500 });
     if (!r?.ok) {
@@ -342,14 +349,33 @@ async function checkEndToEnd(config, { url, model, timeoutMs = 30_000 }) {
     if (!url) return { status: "skip", summary: "no URL — skipped" };
 
     const messages = [{ role: "user", content: "ping" }];
+    // Retry submit up to 6 times (30s) — on a fresh daemon start the provider
+    // row may still show status=unknown until the first heartbeat propagates.
     let job;
-    try {
-        job = await submitChatJob(url, { messages, model, maxTokens: 8 });
-    } catch (err) {
+    for (let attempt = 0; attempt < 6; attempt++) {
+        try {
+            job = await submitChatJob(url, { messages, model, maxTokens: 8 });
+            break;
+        } catch (err) {
+            const msg = err?.message ?? String(err);
+            if (msg.includes("503") || msg.includes("no live providers")) {
+                if (attempt < 5) {
+                    await new Promise((r) => setTimeout(r, 5000));
+                    continue;
+                }
+            }
+            return {
+                status: "fail",
+                summary: `POST /api/chat failed: ${msg}`,
+                hint: "check `checkControlPlane` above; verify /api/chat is enabled"
+            };
+        }
+    }
+    if (!job) {
         return {
             status: "fail",
-            summary: `POST /api/chat failed: ${err?.message ?? err}`,
-            hint: "check `checkControlPlane` above; verify /api/chat is enabled"
+            summary: "no live providers available after 30s",
+            hint: "daemon may not have heartbeated yet — re-run doctor in a minute"
         };
     }
 

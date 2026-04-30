@@ -411,7 +411,8 @@ async function runDaemon(args, ctx) {
             load,
             ...(reachable ? { reachable } : {}),
             ...(Object.keys(modelKeys).length > 0 ? { model_keys: modelKeys } : {}),
-            public_key: config?.node?.publicKey ?? undefined
+            public_key: config?.node?.publicKey ?? undefined,
+            cli_version: CURRENT_VERSION
         };
     }
 

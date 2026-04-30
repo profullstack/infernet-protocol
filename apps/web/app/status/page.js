@@ -54,7 +54,8 @@ export default async function HomePage() {
             { key: "gpu_summary", label: "GPU" },
             { key: "cpu_summary", label: "CPU" },
             { key: "fabric", label: "Fabric" },
-            { key: "price_display", label: "Price" }
+            { key: "price_display", label: "Price" },
+            { key: "cli_version", label: "Version" }
           ]}
           rows={providers}
           emptyMessage="No providers found."

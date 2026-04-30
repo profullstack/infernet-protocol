@@ -36,7 +36,8 @@ function mapProvider(row) {
     cpu_summary: summarizeCpu(row.specs),
     fabric: summarizeFabric(row.specs),
     price_display: mapCurrency(row.price),
-    reputation: row.reputation ?? "—"
+    reputation: row.reputation ?? "—",
+    cli_version: row.specs?.cli_version ?? "—"
   };
 }
 

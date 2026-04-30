@@ -28,7 +28,7 @@ export async function pickChatProvider({ modelName } = {}) {
 
   const { data, error } = await supabase
     .from("providers")
-    .select("id, node_id, name, reputation, price, gpu_model, specs")
+    .select("id, node_id, name, reputation, price, gpu_model, specs, public_key")
     .eq("status", "available")
     .gte("last_seen", twoMinAgo);
 
@@ -156,16 +156,53 @@ export function headroomScore(c) {
  * @param {number} [params.temperature]
  * @returns {Promise<{ job: Object, provider: Object | null, source: 'p2p' | 'nim' | 'none' }>}
  */
-export async function createChatJob({ messages, modelName, maxTokens = 512, temperature = 0.7 }) {
+/**
+ * @param {Object} params
+ * @param {Array}  [params.messages]          - plaintext messages (legacy / NIM path)
+ * @param {string} [params.encryptedMessages] - NIP-44 ciphertext (E2E path, IPIP-0027)
+ * @param {string} [params.clientPubkey]      - consumer's x-only pubkey hex (E2E path)
+ * @param {string} [params.providerId]        - pre-selected provider UUID (E2E path)
+ * @param {string} [params.modelName]
+ * @param {number} [params.maxTokens]
+ * @param {number} [params.temperature]
+ */
+export async function createChatJob({
+  messages,
+  encryptedMessages,
+  clientPubkey,
+  providerId,
+  modelName,
+  maxTokens = 512,
+  temperature = 0.7
+}) {
   const supabase = getSupabaseServerClient();
   const now = new Date().toISOString();
 
-  const p2pProvider = await pickChatProvider({ modelName });
+  const e2e = Boolean(encryptedMessages && clientPubkey);
+
+  let p2pProvider = null;
+  if (providerId) {
+    // Client pre-selected a provider for E2E encryption — look it up directly.
+    const { data } = await supabase
+      .from("providers")
+      .select("id, node_id, name, reputation, price, gpu_model, specs, public_key")
+      .eq("id", providerId)
+      .eq("status", "available")
+      .maybeSingle();
+    p2pProvider = data ?? null;
+  }
+
+  if (!p2pProvider) {
+    p2pProvider = await pickChatProvider({ modelName });
+  }
+
   const nimAvailable = !p2pProvider && isNimConfigured();
   const source = p2pProvider ? "p2p" : nimAvailable ? "nim" : "none";
 
   const inputSpec = {
-    messages,
+    ...(e2e
+      ? { encrypted_messages: encryptedMessages }
+      : { messages }),
     max_tokens: maxTokens,
     temperature,
     ...(nimAvailable ? { fallback: "nvidia-nim" } : {})
@@ -173,19 +210,23 @@ export async function createChatJob({ messages, modelName, maxTokens = 512, temp
 
   const status = p2pProvider ? "assigned" : nimAvailable ? "running" : "pending";
 
+  const insertRow = {
+    title: modelName ? `chat:${modelName}` : "chat",
+    type: "chat",
+    status,
+    provider_id: p2pProvider?.id ?? null,
+    model_name: modelName ?? null,
+    input_spec: encryptJSON(inputSpec),
+    payment_offer: 0,
+    assigned_at: p2pProvider || nimAvailable ? now : null,
+    updated_at: now
+  };
+
+  if (e2e && clientPubkey) insertRow.client_pubkey = clientPubkey;
+
   const { data: job, error } = await supabase
     .from("jobs")
-    .insert({
-      title: modelName ? `chat:${modelName}` : "chat",
-      type: "chat",
-      status,
-      provider_id: p2pProvider?.id ?? null,
-      model_name: modelName ?? null,
-      input_spec: encryptJSON(inputSpec),
-      payment_offer: 0,
-      assigned_at: p2pProvider || nimAvailable ? now : null,
-      updated_at: now
-    })
+    .insert(insertRow)
     .select()
     .single();
 

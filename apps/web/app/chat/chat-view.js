@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { getConversationKey, encrypt, decrypt } from "@/lib/nip44";
 
 const EXAMPLE_PROMPTS = [
   "Explain how Infernet's P2P GPU network scales compared to a centralized data center.",
@@ -27,10 +28,16 @@ export default function ChatView({ initialModels = [] }) {
   const [modelName, setModelName] = useState(initialModels[0]?.name ?? "");
   const [error, setError] = useState(null);
   const [provider, setProvider] = useState(null);
+  const [e2eActive, setE2eActive] = useState(false);
 
   const esRef = useRef(null);
   const scrollRef = useRef(null);
   const composerRef = useRef(null);
+  // Ephemeral secp256k1 keypair generated once per component mount (per session).
+  // Generated lazily on first send so the import stays off the critical render path.
+  const ephemeralRef = useRef(null);
+  // Per-job conversation key: Map<jobId, Uint8Array>
+  const convKeysRef = useRef(new Map());
 
   useEffect(() => {
     return () => {
@@ -46,6 +53,15 @@ export default function ChatView({ initialModels = [] }) {
     }
   }, [messages, streaming]);
 
+  async function getOrCreateEphemeralKey() {
+    if (!ephemeralRef.current) {
+      // Dynamic import keeps noble off the initial bundle chunk.
+      const { generateKeyPair } = await import("@infernetprotocol/auth");
+      ephemeralRef.current = generateKeyPair();
+    }
+    return ephemeralRef.current;
+  }
+
   async function sendMessage() {
     const text = input.trim();
     if (!text || streaming) return;
@@ -58,17 +74,40 @@ export default function ChatView({ initialModels = [] }) {
     setMessages((prev) => [...prev, nextUser, pendingAssistant]);
     setStreaming(true);
 
+    const outgoingMessages = [...messages, nextUser].map((m) => ({ role: m.role, content: m.content }));
+
+    // Attempt E2E encryption: pre-select a provider and get their pubkey.
+    let postBody = { messages: outgoingMessages, modelName, maxTokens: 512, temperature: 0.7 };
+    let currentJobConvKey = null;
+    try {
+      const provRes = await fetch(`/api/chat/provider${modelName ? `?modelName=${encodeURIComponent(modelName)}` : ""}`);
+      if (provRes.ok) {
+        const provData = await provRes.json();
+        if (provData.providerPubkey) {
+          const { privateKey, publicKey } = await getOrCreateEphemeralKey();
+          const convKey = getConversationKey(privateKey, provData.providerPubkey);
+          currentJobConvKey = convKey;
+          const encryptedMessages = encrypt(convKey, JSON.stringify(outgoingMessages));
+          postBody = {
+            encryptedMessages,
+            clientPubkey: publicKey,
+            providerId: provData.providerId,
+            modelName,
+            maxTokens: 512,
+            temperature: 0.7
+          };
+        }
+      }
+    } catch {
+      // E2E setup failed — fall back to plaintext (no-op, postBody already set)
+    }
+
     let res;
     try {
       res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [...messages, nextUser].map((m) => ({ role: m.role, content: m.content })),
-          modelName,
-          maxTokens: 512,
-          temperature: 0.7
-        })
+        body: JSON.stringify(postBody)
       });
     } catch (e) {
       failPending(`Network error: ${e?.message ?? e}`);
@@ -84,6 +123,14 @@ export default function ChatView({ initialModels = [] }) {
 
     const { jobId, streamUrl, provider: pickedProvider } = await res.json();
     setProvider(pickedProvider);
+
+    // Store conversation key for this job so the SSE handlers can decrypt.
+    if (currentJobConvKey) {
+      convKeysRef.current.set(jobId, currentJobConvKey);
+      setE2eActive(true);
+    } else {
+      setE2eActive(false);
+    }
 
     const es = new EventSource(streamUrl);
     esRef.current = es;
@@ -105,16 +152,26 @@ export default function ChatView({ initialModels = [] }) {
     es.addEventListener("token", (e) => {
       try {
         const data = JSON.parse(e.data);
-        setMessages((prev) => updateLastAssistant(prev, (m) => ({
-          ...m,
-          content: (m.content ?? "") + (data.text ?? "")
-        })));
+        let text = data.text ?? "";
+        if (data.encrypted_text) {
+          const convKey = convKeysRef.current.get(jobId);
+          if (convKey) {
+            try { text = decrypt(convKey, data.encrypted_text); } catch { text = ""; }
+          }
+        }
+        if (text) {
+          setMessages((prev) => updateLastAssistant(prev, (m) => ({
+            ...m,
+            content: (m.content ?? "") + text
+          })));
+        }
       } catch { /* ignore */ }
     });
 
     es.addEventListener("done", () => {
       setMessages((prev) => updateLastAssistant(prev, (m) => ({ ...m, pending: false, done: true })));
       setStreaming(false);
+      convKeysRef.current.delete(jobId);
       try { es.close(); } catch { /* ignore */ }
       esRef.current = null;
     });
@@ -186,6 +243,9 @@ export default function ChatView({ initialModels = [] }) {
     setMessages([]);
     setError(null);
     setProvider(null);
+    setE2eActive(false);
+    ephemeralRef.current = null; // fresh keypair for next session
+    convKeysRef.current.clear();
   }
 
   return (
@@ -252,7 +312,10 @@ export default function ChatView({ initialModels = [] }) {
           <div className="mt-3 flex items-center justify-between gap-3">
             <div className="text-xs text-[var(--muted)]">
               {provider ? (
-                <>Running on <span className="text-white">{provider.name ?? provider.nodeId}</span>{provider.gpuModel ? ` · ${provider.gpuModel}` : ""}.</>
+                <>
+                  {e2eActive && <span className="mr-1 text-green-400" title="End-to-end encrypted">&#128274;</span>}
+                  Running on <span className="text-white">{provider.name ?? provider.nodeId}</span>{provider.gpuModel ? ` · ${provider.gpuModel}` : ""}.
+                </>
               ) : (
                 <>Public playground — rate limited per IP. No sign-in required.</>
               )}

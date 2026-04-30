@@ -75,7 +75,7 @@ function summarizeFabric(specs) {
 function mapJob(row) {
   return {
     id: row.id,
-    title: row.title,
+    title: "<encrypted>",
     status: row.status,
     model_name: row.model_name || row.models?.name || "unassigned",
     payment_offer: mapCurrency(row.payment_offer),

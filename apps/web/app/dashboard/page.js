@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import AutoRefresh from "@/components/auto-refresh";
 import PushModelButton from "@/components/push-model-button";
+import RevealTitle from "@/components/reveal-title";
 import { getCurrentUser } from "@/lib/supabase/auth-server";
 import {
     getEarningsSummary,
@@ -274,7 +275,7 @@ export default async function DashboardPage() {
                                 <tbody>
                                     {jobsProcessed.map((j) => (
                                         <tr key={j.id} className="border-t border-white/5">
-                                            <td className="py-2 pr-3 text-white truncate max-w-[20ch]">{j.title}</td>
+                                            <td className="py-2 pr-3"><RevealTitle title={j.title} /></td>
                                             <td className="py-2 pr-3 text-[var(--muted)]">{j.model_name || "—"}</td>
                                             <td className="py-2 pr-3 text-[var(--muted)]">
                                                 {j.provider_id ? (
@@ -321,7 +322,7 @@ export default async function DashboardPage() {
                                 <tbody>
                                     {jobs.map((j) => (
                                         <tr key={j.id} className="border-t border-white/5">
-                                            <td className="py-2 pr-3 text-white">{j.title}</td>
+                                            <td className="py-2 pr-3"><RevealTitle title={j.title} /></td>
                                             <td className="py-2 pr-3 text-[var(--muted)]">{j.model_name || "—"}</td>
                                             <td className="py-2 pr-3"><StatusPill status={j.status} /></td>
                                             <td className="py-2 pr-3 text-[var(--muted)]">{fmtUsd(j.payment_offer)}</td>

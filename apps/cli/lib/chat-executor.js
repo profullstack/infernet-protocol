@@ -14,6 +14,7 @@
 
 import { createEngine, MSG } from "@infernetprotocol/engine";
 import { loadConfig } from "./config.js";
+import { getConversationKey, encrypt, decrypt } from "./nip44.js";
 
 // Flush the event buffer when it hits this many tokens OR when we haven't
 // flushed in this many ms. After merging (see mergeTokens), each flush
@@ -53,9 +54,10 @@ function mergeTokens(events) {
 }
 
 class EventBuffer {
-    constructor(client, jobId) {
+    constructor(client, jobId, convKey = null) {
         this.client = client;
         this.jobId = jobId;
+        this.convKey = convKey; // NIP-44 conversation key; null for legacy jobs
         this.events = [];
         this.lastFlush = Date.now();
     }
@@ -73,8 +75,20 @@ class EventBuffer {
         const batch = mergeTokens(this.events);
         this.events = [];
         this.lastFlush = Date.now();
+        // E2E: re-encrypt token/done data so Supabase stores ciphertext only.
+        const outBatch = this.convKey
+            ? batch.map((ev) => {
+                if (ev.event_type === "token" || ev.event_type === "done") {
+                    return {
+                        event_type: ev.event_type,
+                        data: { encrypted_text: encrypt(this.convKey, JSON.stringify(ev.data)) }
+                    };
+                }
+                return ev;
+            })
+            : batch;
         try {
-            await this.client.postJobEvents(this.jobId, batch);
+            await this.client.postJobEvents(this.jobId, outBatch);
         } catch (err) {
             process.stderr.write(`postJobEvents failed: ${err?.message ?? err}\n`);
         }
@@ -142,10 +156,26 @@ export async function shutdownEngine() {
  */
 export async function executeChatJob({ client, job, node }) {
     const input = job?.input_spec ?? {};
-    const messages = input.messages ?? [];
+
+    // IPIP-0027: if the job carries NIP-44 encrypted messages, decrypt them
+    // using our node privkey + the consumer's pubkey. Falls back to plaintext
+    // messages for legacy (unencrypted) jobs.
+    let messages = input.messages ?? [];
+    let convKey = null;
+    if (input.encrypted_messages && job.client_pubkey && node.privateKey) {
+        try {
+            convKey = getConversationKey(node.privateKey, job.client_pubkey);
+            const plainJson = decrypt(convKey, input.encrypted_messages);
+            messages = JSON.parse(plainJson);
+        } catch (err) {
+            process.stderr.write(`nip44 decrypt failed: ${err?.message ?? err}\n`);
+            // Don't proceed with empty messages — fail the job instead.
+            throw new Error("Failed to decrypt E2E messages — key mismatch or corrupted payload");
+        }
+    }
 
     const engine = await getEngine();
-    const buffer = new EventBuffer(client, job.id);
+    const buffer = new EventBuffer(client, job.id, convKey);
 
     const t0 = Date.now();
     const generation = engine.generate({

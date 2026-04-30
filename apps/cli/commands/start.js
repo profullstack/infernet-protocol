@@ -882,18 +882,7 @@ async function runDaemon(args, ctx) {
             process.stderr.write(`[update] post-upgrade setup: ${err?.message ?? err}\n`);
         }
 
-        // Re-exec the daemon with the same args so the new code is live.
-        process.stdout.write('[update] restarting daemon with new version\n');
-        const logPath = getDaemonLogPath();
-        const logFd = openSync(logPath, 'a');
-        spawn(process.execPath, process.argv.slice(1), {
-            detached: true,
-            stdio: ['ignore', logFd, logFd],
-            env: process.env
-        }).unref();
-
-        // Release any in-flight jobs so the restarted daemon can re-pick them
-        // (or they time out naturally) rather than getting stuck in 'processing'.
+        // Release any in-flight jobs before we close ports.
         for (const jobId of stats.activeJobIds) {
             try {
                 await client.failJob(jobId, 'daemon restarting for self-update');
@@ -901,7 +890,8 @@ async function runDaemon(args, ctx) {
         }
         stats.activeJobIds.clear();
 
-        // Shut down without sending 'offline' — we're restarting, not stopping.
+        // Tear down servers BEFORE spawning the new process so the new daemon
+        // can bind the same ports without EADDRINUSE races.
         shuttingDown = true;
         clearInterval(heartbeatTimer);
         clearInterval(pollTimer);
@@ -913,6 +903,20 @@ async function runDaemon(args, ctx) {
         try { await shutdownEngine(); } catch {}
         removeSocketFile();
         await removePidFile();
+
+        // Small grace period so OS reclaims the ports before the new process binds.
+        await new Promise((r) => setTimeout(r, 500));
+
+        // Re-exec the daemon with the same args so the new code is live.
+        process.stdout.write('[update] restarting daemon with new version\n');
+        const logPath = getDaemonLogPath();
+        const logFd = openSync(logPath, 'a');
+        spawn(process.execPath, process.argv.slice(1), {
+            detached: true,
+            stdio: ['ignore', logFd, logFd],
+            env: process.env
+        }).unref();
+
         process.exit(0);
     }, UPDATE_CHECK_MS);
     if (typeof updateTimer.unref === 'function') updateTimer.unref();

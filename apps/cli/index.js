@@ -44,6 +44,7 @@ import debug from './commands/debug.js';
 import deploy from './commands/deploy.js';
 import consoleCmd from './commands/console.js';
 import train from './commands/train.js';
+import uncensored from './commands/uncensored.js';
 
 function parseArgs(argv) {
     const positional = [];
@@ -105,11 +106,11 @@ const COMMANDS = {
     // aliases
     uninstall: remove,
     start, status, stop, restart, stats, logs,
-    payout, payments, gpu, firewall, chat, setup, model, train, tui, doctor, service, pubkey, debug, deploy, console: consoleCmd, help
+    payout, payments, gpu, firewall, chat, setup, model, train, uncensored, tui, doctor, service, pubkey, debug, deploy, console: consoleCmd, help
 };
 
 // Commands that can run without a loaded config.
-const NO_CONFIG = new Set(['init', 'login', 'help', 'stats', 'logs', 'stop', 'restart', 'gpu', 'firewall', 'chat', 'setup', 'model', 'train', 'tui', 'doctor', 'service', 'pubkey', 'debug', 'deploy', 'console', 'upgrade', 'update', 'remove', 'uninstall']);
+const NO_CONFIG = new Set(['init', 'login', 'help', 'stats', 'logs', 'stop', 'restart', 'gpu', 'firewall', 'chat', 'setup', 'model', 'train', 'uncensored', 'tui', 'doctor', 'service', 'pubkey', 'debug', 'deploy', 'console', 'upgrade', 'update', 'remove', 'uninstall']);
 // Commands that need a config but not a control-plane client (none today
 // — kept as a future escape hatch).
 const NO_CLIENT = new Set();

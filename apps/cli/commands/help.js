@@ -11,7 +11,8 @@ Usage:
 
 Setup:
   setup        Bootstrap environment (Ollama + model + firewall + config)
-  model        Manage models (list / pull / remove / use)
+  model        Manage models (list / pull / remove / use / hf: prefix for HuggingFace)
+  uncensored   Download an uncensored LLM (auto-picks by VRAM, serve via vLLM)
 
 Node lifecycle:
   init         Configure this node (control-plane URL, role, Nostr identity)

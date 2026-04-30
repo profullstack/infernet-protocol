@@ -20,6 +20,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { loadConfig, saveConfig, getConfigPath, fixConfigPermissions } from "../lib/config.js";
+import { checkFits } from "../lib/model-fit.js";
 import { nodeTokenLogin } from "./login.js";
 import { question } from "../lib/prompt.js";
 import { applyFirewallRule, detectFirewall, describeFirewallHowTo } from "../lib/firewall.js";
@@ -73,30 +74,8 @@ const MODEL_SUGGESTIONS = [
     { name: "qwen2.5:72b",  size_gb: 40.0, size: "≈40 GB",  note: "fits 48 GB+ GPU / 80 GB+ RAM" }
 ];
 
-/**
- * Pure helper — given a model size in GB and host capacity (VRAM gb,
- * RAM gb), return whether the model fits. Same heuristic the
- * register-time guard uses, exposed here so the model picker can
- * filter the menu *before* the user starts a 40 GB download they
- * can't actually run.
- *
- *   GPU box: model fits if size ≤ 0.85 × VRAM
- *   CPU box: model fits if size ≤ 0.6 × RAM (OS + Ollama headroom)
- *
- * Exported so tests + `infernet model pull` can reuse it.
- */
-export function modelFits({ size_gb, vram_gb, ram_gb }) {
-    if (!Number.isFinite(size_gb) || size_gb <= 0) return { fits: true, ceiling_gb: null, mode: "unknown" };
-    if (Number.isFinite(vram_gb) && vram_gb > 0) {
-        const ceiling = vram_gb * 0.85;
-        return { fits: size_gb <= ceiling, ceiling_gb: +ceiling.toFixed(2), mode: "gpu" };
-    }
-    if (Number.isFinite(ram_gb) && ram_gb > 0) {
-        const ceiling = ram_gb * 0.6;
-        return { fits: size_gb <= ceiling, ceiling_gb: +ceiling.toFixed(2), mode: "cpu" };
-    }
-    return { fits: true, ceiling_gb: null, mode: "unknown" };
-}
+// modelFits re-exported from shared lib for backwards compat with any callers.
+export { checkFits as modelFits } from "../lib/model-fit.js";
 
 function ok(msg)   { process.stdout.write(`  ✓ ${msg}\n`); }
 function warn(msg) { process.stdout.write(`  ! ${msg}\n`); }
@@ -372,8 +351,8 @@ async function chooseModel(installed, opts) {
     // Pre-evaluate fit so we can both annotate the menu AND auto-pick a
     // sensible default for `--yes` mode.
     const evaluated = MODEL_SUGGESTIONS.map((m) => {
-        const f = modelFits({ size_gb: m.size_gb, vram_gb: vramGb, ram_gb: ramGb });
-        return { ...m, fits: f.fits, mode: f.mode, ceiling_gb: f.ceiling_gb };
+        const f = checkFits({ size_gb: m.size_gb, vram_gb: vramGb, ram_gb: ramGb });
+        return { ...m, fits: f.ok, mode: f.mode, ceiling_gb: f.ceiling_gb };
     });
     const fittingOnly = evaluated.filter((m) => m.fits);
     const isCpuOnly = !(Number.isFinite(vramGb) && vramGb > 0);

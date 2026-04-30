@@ -46,6 +46,7 @@ import { isDaemonAlive } from '../lib/ipc.js';
 import { resolveP2pPort, detectLocalAddress, formatEndpoint } from '../lib/network.js';
 import { executeChatJob, failChatJob, shutdownEngine } from '../lib/chat-executor.js';
 import { gatherCoarseSpecs } from './register.js';
+import { checkModelFits } from '../lib/model-fit.js';
 import { detectGpus, detectHost } from '@infernetprotocol/gpu';
 import { getOrCreateModelKey, getModelPublicKeys } from '../lib/model-key.js';
 import { pullLatestBinary } from './upgrade.js';
@@ -538,7 +539,15 @@ async function runDaemon(args, ctx) {
         try {
             let result;
             if (command === 'model_install') {
-                result = await ollamaSpawn(['pull', String(args?.model)]);
+                const modelName = String(args?.model);
+                const fits = await checkModelFits(modelName);
+                if (fits && !fits.ok) {
+                    throw new Error(
+                        `${modelName} (≈${fits.size_gb} GB) won't fit on this host ` +
+                        `(${fits.mode} ceiling ≈ ${fits.ceiling_gb} GB with ${fits.have_gb} GB available)`
+                    );
+                }
+                result = await ollamaSpawn(['pull', modelName]);
             } else if (command === 'model_remove') {
                 result = await ollamaSpawn(['rm', String(args?.model)]);
             } else {

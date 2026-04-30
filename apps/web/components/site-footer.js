@@ -56,7 +56,23 @@ export default function SiteFooter() {
 
                 <FooterColumn title="Product" items={PRODUCT} />
                 <FooterColumn title="Company" items={COMPANY} />
-                <FooterColumn title="The Book" items={BOOK_DOWNLOADS} />
+                <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--muted)]">The Book</p>
+                    <div className="mt-4 flex items-start gap-3">
+                        <Link href="/book">
+                            <img src="/book/cover.png" alt="The Infernet Protocol Book" className="w-12 rounded shadow-md opacity-90 hover:opacity-100 transition-opacity" />
+                        </Link>
+                        <ul className="space-y-2 text-sm">
+                            {BOOK_DOWNLOADS.map((item) => (
+                                <li key={item.href}>
+                                    <a href={item.href} target="_blank" rel="noreferrer" className="text-[var(--muted)] hover:text-white">
+                                        {item.label}
+                                    </a>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </div>
             </div>
 
             <div className="mt-10 flex flex-col gap-3 border-t border-white/10 pt-6 text-sm text-[var(--muted)] sm:flex-row sm:items-center sm:justify-between">

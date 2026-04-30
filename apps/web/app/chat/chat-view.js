@@ -204,6 +204,17 @@ export default function ChatView({ initialModels = [] }) {
       const res = await fetch(`/api/chat/${encodeURIComponent(jobId)}/status`);
       if (res.ok) {
         const body = await res.json();
+        // Job completed successfully — connection dropped after done was written
+        // but before the browser received it. Mark done instead of failing.
+        if (body?.status === "completed") {
+          setStreaming(false);
+          setMessages((prev) => updateLastAssistant(prev, (m) => ({ ...m, pending: false, done: true })));
+          if (esRef.current) {
+            try { esRef.current.close(); } catch { /* ignore */ }
+            esRef.current = null;
+          }
+          return;
+        }
         const real = body?.latest_error_message ?? body?.error ?? null;
         if (real) {
           failPending(real);

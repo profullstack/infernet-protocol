@@ -107,6 +107,33 @@ export async function GET(_request, { params }) {
       );
       channel.subscribe();
 
+      // Catch-up: events written between the initial load and the Realtime
+      // subscription activating are not delivered by Realtime. One DB query
+      // after subscribe closes that race window. The lastId dedup in the
+      // Realtime callback above handles any overlap.
+      try {
+        const { data: catchup } = await supabase
+          .from("job_events")
+          .select("id, event_type, data, created_at")
+          .eq("job_id", jobId)
+          .gt("id", lastId)
+          .order("id", { ascending: true });
+        catchupDone = true;
+        for (const ev of catchup ?? []) {
+          if (ev.id <= lastId) continue;
+          lastId = ev.id;
+          safeEnqueue(sseFrame(ev.event_type, decryptJSON(ev.data), ev.id));
+          if (ev.event_type === "done" || ev.event_type === "error") {
+            try { supabase.removeChannel(channel); } catch { /* ignore */ }
+            clearInterval(hb);
+            safeClose();
+            return;
+          }
+        }
+      } catch {
+        // non-fatal; Realtime will still deliver future events
+      }
+
       // Cleanup: absolute upper bound so an abandoned connection can't
       // hold resources forever.
       const maxAlive = setTimeout(() => {

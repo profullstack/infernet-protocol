@@ -23,7 +23,8 @@ const COMPANY = [
 
 const BOOK_DOWNLOADS = [
     { href: "/book/infernet-book.pdf", label: "PDF", external: true },
-    { href: "/book/infernet-book.epub", label: "EPUB", external: true }
+    { href: "/book/infernet-book.epub", label: "EPUB", external: true },
+    { href: "/whitepaper/infernet-whitepaper.pdf", label: "Whitepaper (PDF)", external: true, icon: "pdf" }
 ];
 
 export default function SiteFooter() {
@@ -65,7 +66,8 @@ export default function SiteFooter() {
                         <ul className="space-y-2 text-sm">
                             {BOOK_DOWNLOADS.map((item) => (
                                 <li key={item.href}>
-                                    <a href={item.href} target="_blank" rel="noreferrer" className="text-[var(--muted)] hover:text-white">
+                                    <a href={item.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[var(--muted)] hover:text-white">
+                                        {item.icon === "pdf" && <PdfIcon />}
                                         {item.label}
                                     </a>
                                 </li>
@@ -84,6 +86,14 @@ export default function SiteFooter() {
                 </p>
             </div>
         </footer>
+    );
+}
+
+function PdfIcon() {
+    return (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM6 20V4h5v7h7v9H6zm2.5-5.5h1.2c.7 0 1.3-.6 1.3-1.3v-.4c0-.7-.6-1.3-1.3-1.3H8v4h.5v-1zm0-2.5h.7c.4 0 .8.3.8.8v.4c0 .4-.3.8-.8.8H8.5v-2zm3.5 0h1c1.1 0 2 .9 2 2s-.9 2-2 2h-1v-4zm.5 3.5h.5c.8 0 1.5-.7 1.5-1.5S15.3 13 14.5 13H14v2.5zm3.5-3.5h2.5v.5H18v1h1.5v.5H18V18h-.5v-4z"/>
+        </svg>
     );
 }
 

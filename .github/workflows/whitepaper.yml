@@ -1,0 +1,84 @@
+name: Build whitepaper (PDF)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "docs/whitepaper/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pandoc + LaTeX + fonts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            pandoc \
+            texlive-luatex \
+            texlive-latex-recommended \
+            texlive-latex-extra \
+            texlive-fonts-recommended \
+            fonts-liberation \
+            fonts-noto
+
+      - name: Build PDF
+        run: |
+          pandoc docs/whitepaper/whitepaper.md \
+            --pdf-engine=lualatex \
+            --toc --toc-depth=2 \
+            --highlight-style=tango \
+            -V geometry:margin=1in \
+            -V fontsize=11pt \
+            -V colorlinks=true \
+            -V linkcolor=blue \
+            -V mainfont="Liberation Serif" \
+            -V sansfont="Liberation Sans" \
+            -V monofont="Noto Sans Mono" \
+            -V monofontoptions="Scale=0.82" \
+            -H docs/book/preamble.tex \
+            --include-before-body=docs/whitepaper/cover-page.tex \
+            --resource-path=docs/whitepaper:docs/book \
+            -o docs/whitepaper/infernet-whitepaper.pdf
+
+      - name: Build HTML
+        run: |
+          pandoc docs/whitepaper/whitepaper.md \
+            --standalone \
+            --toc --toc-depth=2 \
+            --highlight-style=tango \
+            --metadata title="Infernet Protocol Whitepaper" \
+            -o docs/whitepaper/infernet-whitepaper.html
+
+      - name: Copy to web public dir
+        run: |
+          mkdir -p apps/web/public/whitepaper
+          cp docs/whitepaper/infernet-whitepaper.pdf  apps/web/public/whitepaper/
+          cp docs/whitepaper/infernet-whitepaper.html apps/web/public/whitepaper/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: infernet-whitepaper
+          path: |
+            docs/whitepaper/infernet-whitepaper.pdf
+            docs/whitepaper/infernet-whitepaper.html
+
+      - name: Commit generated files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add \
+            docs/whitepaper/infernet-whitepaper.pdf \
+            docs/whitepaper/infernet-whitepaper.html \
+            apps/web/public/whitepaper/infernet-whitepaper.pdf \
+            apps/web/public/whitepaper/infernet-whitepaper.html || true
+          git diff --cached --quiet || \
+            git commit -m "ci(whitepaper): regenerate PDF + HTML [skip ci]"
+          git push || true

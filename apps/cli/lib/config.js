@@ -87,9 +87,17 @@ export async function saveConfig(config) {
     await fs.mkdir(dir, { recursive: true, mode: 0o700 });
     const p = getConfigPath();
     const json = JSON.stringify(config, null, 2) + '\n';
+    // Write then chmod — writeFile's mode flag only applies to newly created
+    // files; chmod ensures existing files with wrong permissions get fixed.
     await fs.writeFile(p, json, { mode: 0o600 });
-    try { await fs.chmod(p, 0o600); } catch { /* ignore */ }
+    await fs.chmod(p, 0o600);
     return p;
+}
+
+/** Enforce 0600 on the config file without modifying its contents. */
+export async function fixConfigPermissions() {
+    const p = getConfigPath();
+    try { await fs.chmod(p, 0o600); } catch { /* file may not exist yet */ }
 }
 
 export async function requireConfig() {

@@ -19,7 +19,7 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { loadConfig, saveConfig, getConfigPath } from "../lib/config.js";
+import { loadConfig, saveConfig, getConfigPath, fixConfigPermissions } from "../lib/config.js";
 import { question } from "../lib/prompt.js";
 import { applyFirewallRule, detectFirewall, describeFirewallHowTo } from "../lib/firewall.js";
 import { DEFAULT_P2P_PORT, resolveP2pPort } from "../lib/network.js";
@@ -448,6 +448,10 @@ export default async function setup(args) {
     const existing = (await loadConfig()) ?? {};
     const portArg = args.get("port");
     const port = Number.parseInt(portArg ?? "", 10) || resolveP2pPort(existing);
+
+    // Fix config file permissions on every setup run — self-heals nodes
+    // where the file was created with wrong mode (666 instead of 600).
+    await fixConfigPermissions();
 
     process.stdout.write("\nInfernet setup — checking your environment\n");
 

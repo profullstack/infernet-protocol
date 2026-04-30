@@ -37,7 +37,8 @@ import {
     getDaemonPidPath,
     getDaemonSocketPath,
     getDaemonLogPath,
-    saveConfig
+    saveConfig,
+    fixConfigPermissions
 } from '../lib/config.js';
 import { spawnDetachedDaemon } from '../lib/daemonize.js';
 import { isDaemonAlive } from '../lib/ipc.js';
@@ -213,6 +214,10 @@ async function runDaemon(args, ctx) {
     const pidPath = await writePidFile(process.pid);
     const socketPath = getDaemonSocketPath();
     removeSocketFile();
+
+    // Self-heal: fix config permissions on every daemon start so nodes
+    // upgraded before the 0600 enforcement still get corrected.
+    fixConfigPermissions().catch(() => {});
 
     process.stdout.write('infernet daemon starting\n');
     process.stdout.write(`  node_id:   ${node.nodeId}\n`);

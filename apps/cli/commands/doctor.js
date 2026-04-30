@@ -21,6 +21,7 @@
 import fs from "node:fs/promises";
 import { loadConfig, getConfigPath, getConfigDir } from "../lib/config.js";
 import { isDaemonAlive, sendToDaemon } from "../lib/ipc.js";
+import { spawnDetachedDaemon } from "../lib/daemonize.js";
 import { createNodeClient } from "../lib/node-client.js";
 import { submitChatJob, streamChatEvents } from "../lib/remote-chat.js";
 
@@ -213,13 +214,33 @@ async function checkControlPlane(url) {
 // 4. Daemon
 // ---------------------------------------------------------------------------
 async function checkDaemon() {
-    const alive = await isDaemonAlive(500);
+    let alive = await isDaemonAlive(500);
     if (!alive) {
-        return {
-            status: "warn",
-            summary: "daemon not running",
-            hint: "start with `infernet start` if this node should accept jobs"
-        };
+        // Auto-start: doctor starts the daemon rather than just warning.
+        try {
+            spawnDetachedDaemon([]);
+        } catch (err) {
+            return {
+                status: "fail",
+                summary: "daemon not running, auto-start failed",
+                details: err?.message ?? String(err),
+                hint: "check config with `infernet init` then run `infernet start`"
+            };
+        }
+        // Poll for up to 6 seconds for the daemon socket to appear.
+        for (let i = 0; i < 12; i++) {
+            await new Promise((r) => setTimeout(r, 500));
+            alive = await isDaemonAlive(500);
+            if (alive) break;
+        }
+        if (!alive) {
+            return {
+                status: "fail",
+                summary: "daemon auto-start attempted but not responding",
+                hint: "check logs with `infernet logs`"
+            };
+        }
+        process.stdout.write("                                auto-started daemon\n");
     }
     const r = await sendToDaemon("stats", null, { timeoutMs: 1500 });
     if (!r?.ok) {

@@ -5,10 +5,10 @@ export default function RevealTitle({ prompt }) {
     const [revealed, setRevealed] = useState(false);
 
     if (revealed) {
-        const text = prompt ?? "(E2E encrypted — prompt not available)";
+        const preview = prompt ? prompt.split(/\s+/).slice(0, 6).join(" ") + (prompt.split(/\s+/).length > 6 ? "…" : "") : "(E2E encrypted)";
         return (
-            <span className="font-mono text-xs text-white/80 break-all max-w-[32ch] line-clamp-2" title={text}>
-                {text}
+            <span className="text-xs text-white/80" title={prompt ?? ""}>
+                {preview}
             </span>
         );
     }

@@ -679,7 +679,9 @@ ensure_pnpm() {
 # ---------------------------------------------------------------------------
 clone_or_update() {
     mkdir -p "$INFERNET_HOME"
-    if [ -d "$SOURCE_DIR/.git" ]; then
+    # Validate it's a real git repo, not just a leftover .git dir from
+    # `infernet remove`. A stale dir causes `git fetch` to blow up.
+    if [ -d "$SOURCE_DIR/.git" ] && git -C "$SOURCE_DIR" rev-parse --git-dir > /dev/null 2>&1; then
         info "updating existing install at $SOURCE_DIR"
         git -C "$SOURCE_DIR" fetch --depth 1 --progress origin "$INFERNET_REF" \
             || fail "git fetch failed"
@@ -687,6 +689,10 @@ clone_or_update() {
             || fail "git reset failed"
         ok "fetched $INFERNET_REF"
     else
+        if [ -d "$SOURCE_DIR" ]; then
+            info "stale install detected — clearing $SOURCE_DIR and re-cloning"
+            rm -rf "$SOURCE_DIR"
+        fi
         info "cloning $REPO_URL to $SOURCE_DIR"
         git clone --depth 1 --branch "$INFERNET_REF" --progress "$REPO_URL" "$SOURCE_DIR" \
             || fail "git clone failed"

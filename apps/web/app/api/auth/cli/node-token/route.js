@@ -22,14 +22,14 @@ export async function POST(request) {
 
         const supabase = getSupabaseServerClient();
 
-        // Look up the registered provider by pubkey to find the owner.
-        const { data: provider, error } = await supabase
+        // Verify the node is registered.
+        const { data: provider, error: provErr } = await supabase
             .from("providers")
-            .select("id, pubkey_links(user_id)")
+            .select("id")
             .eq("public_key", pubkey)
             .maybeSingle();
 
-        if (error) throw error;
+        if (provErr) { const e = new Error(provErr.message); e.status = 500; throw e; }
 
         if (!provider) {
             const err = new Error("node not registered — run `infernet register` first");
@@ -37,7 +37,16 @@ export async function POST(request) {
             throw err;
         }
 
-        const userId = provider.pubkey_links?.[0]?.user_id ?? null;
+        // Look up the owner via pubkey_links (separate table, not a FK join).
+        const { data: link, error: linkErr } = await supabase
+            .from("pubkey_links")
+            .select("user_id")
+            .eq("pubkey", pubkey)
+            .maybeSingle();
+
+        if (linkErr) { const e = new Error(linkErr.message); e.status = 500; throw e; }
+
+        const userId = link?.user_id ?? null;
         if (!userId) {
             const err = new Error("node has no linked user — run `infernet pubkey link` first");
             err.status = 403;

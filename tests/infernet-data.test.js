@@ -93,7 +93,7 @@ describe("infernet data mapping", () => {
   it("maps job and provider queries", async () => {
     expect(await getJobs({ limit: 1 })).toEqual([
       expect.objectContaining({
-        title: "Job One",
+        title: "<encrypted>",
         payment_offer: "$10.0000"
       })
     ]);

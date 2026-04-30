@@ -486,7 +486,14 @@ async function runDaemon(args, ctx) {
         try {
             const result = await client.pollJobs({ limit: 5 });
             stats.pollsOk += 1;
-            for (const job of result?.jobs ?? []) await processJob(job);
+            for (const job of result?.jobs ?? []) {
+                // Skip jobs already being processed by this daemon — the
+                // server keeps returning 'assigned' jobs until we mark them
+                // complete, so without this guard the poll loop queues the
+                // same job on every tick while it's in flight.
+                if (stats.activeJobIds.has(job.id)) continue;
+                await processJob(job);
+            }
         } catch (err) {
             stats.pollsFailed += 1;
             process.stderr.write(`job poll error: ${err?.message ?? err}\n`);
@@ -833,13 +840,14 @@ async function runDaemon(args, ctx) {
             return;
         }
 
-        // Idempotent post-upgrade setup: refresh specs (which generates any
-        // missing model keypairs) and push a heartbeat with updated payload.
+        // Post-upgrade: run `infernet upgrade --skip-setup` is already done
+        // (pullLatestBinary above). Now run setup --yes so keys are regenerated,
+        // specs re-registered, and the daemon restarts cleanly via re-exec below.
         process.stdout.write('[update] re-initializing keys and specs\n');
         try {
-            cachedSpecs = null; // force re-detection with new binary's logic
-            const specs = await freshSpecs();
-            await client.heartbeat({ status: 'available', specs });
+            const { default: setup } = await import('./setup.js');
+            const setupArgs = new Map([['yes', true], ['confirm', true], ['skip-pull', true], ['skip-daemon', true]]);
+            await setup(setupArgs, { config, client, configPath });
         } catch (err) {
             process.stderr.write(`[update] post-upgrade setup: ${err?.message ?? err}\n`);
         }

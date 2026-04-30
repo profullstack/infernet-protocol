@@ -376,10 +376,14 @@ async function chooseModel(installed, opts) {
         return { ...m, fits: f.fits, mode: f.mode, ceiling_gb: f.ceiling_gb };
     });
     const fittingOnly = evaluated.filter((m) => m.fits);
-    // Default = largest fitting suggestion (or smallest non-fitting as fallback).
-    const defaultModel = fittingOnly.length > 0
-        ? fittingOnly[fittingOnly.length - 1].name
-        : MODEL_SUGGESTIONS[0].name;
+    const isCpuOnly = !(Number.isFinite(vramGb) && vramGb > 0);
+    // CPU-only: default to smallest model — large models are impractically
+    // slow on CPU and will lock the machine. GPU: largest fitting model.
+    const defaultModel = isCpuOnly
+        ? MODEL_SUGGESTIONS[0].name   // qwen2.5:0.5b
+        : fittingOnly.length > 0
+            ? fittingOnly[fittingOnly.length - 1].name
+            : MODEL_SUGGESTIONS[0].name;
 
     if (opts.preselected) {
         // Honor the preselect, but warn if it won't fit.

@@ -14,7 +14,7 @@
 
 import { createEngine, MSG } from "@infernetprotocol/engine";
 import { loadConfig } from "./config.js";
-import { getConversationKey, encrypt, decrypt } from "./nip44.js";
+import { getConversationKey, decrypt } from "./nip44.js";
 import { getModelKeyPair } from "./model-key.js";
 
 // Flush the event buffer when it hits this many tokens OR when we haven't
@@ -55,10 +55,9 @@ function mergeTokens(events) {
 }
 
 class EventBuffer {
-    constructor(client, jobId, convKey = null) {
+    constructor(client, jobId) {
         this.client = client;
         this.jobId = jobId;
-        this.convKey = convKey; // NIP-44 conversation key; null for legacy jobs
         this.events = [];
         this.lastFlush = Date.now();
     }
@@ -76,20 +75,8 @@ class EventBuffer {
         const batch = mergeTokens(this.events);
         this.events = [];
         this.lastFlush = Date.now();
-        // E2E: re-encrypt token/done data so Supabase stores ciphertext only.
-        const outBatch = this.convKey
-            ? batch.map((ev) => {
-                if (ev.event_type === "token" || ev.event_type === "done") {
-                    return {
-                        event_type: ev.event_type,
-                        data: { encrypted_text: encrypt(this.convKey, JSON.stringify(ev.data)) }
-                    };
-                }
-                return ev;
-            })
-            : batch;
         try {
-            await this.client.postJobEvents(this.jobId, outBatch);
+            await this.client.postJobEvents(this.jobId, batch);
         } catch (err) {
             process.stderr.write(`postJobEvents failed: ${err?.message ?? err}\n`);
         }
@@ -181,7 +168,7 @@ export async function executeChatJob({ client, job, node }) {
     }
 
     const engine = await getEngine();
-    const buffer = new EventBuffer(client, job.id, convKey);
+    const buffer = new EventBuffer(client, job.id);
 
     const t0 = Date.now();
     const generation = engine.generate({

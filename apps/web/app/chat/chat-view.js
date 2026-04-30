@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { getConversationKey, encrypt, decrypt } from "@/lib/nip44";
+import { getConversationKey, encrypt } from "@/lib/nip44";
 
 const EXAMPLE_PROMPTS = [
   "Explain how Infernet's P2P GPU network scales compared to a centralized data center.",
@@ -155,17 +155,7 @@ export default function ChatView({ initialModels = [] }) {
     es.addEventListener("token", (e) => {
       try {
         const data = JSON.parse(e.data);
-        let text = data.text ?? "";
-        if (data.encrypted_text) {
-          const convKey = convKeysRef.current.get(jobId);
-          if (convKey) {
-            try {
-              const plain = decrypt(convKey, data.encrypted_text);
-              // NIP-44 payload is JSON: {"text":"..."}
-              text = JSON.parse(plain)?.text ?? plain;
-            } catch { text = ""; }
-          }
-        }
+        const text = data.text ?? "";
         if (text) {
           setMessages((prev) => updateLastAssistant(prev, (m) => ({
             ...m,

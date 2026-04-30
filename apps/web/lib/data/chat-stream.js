@@ -49,13 +49,9 @@ export async function* streamJobEvents(jobId) {
     for (const ev of pre) {
         lastId = Math.max(lastId, ev.id);
         if (ev.event_type === "token") {
-            if (ev.data?.encrypted_text && !ev.data?.text) {
-                yield { type: "token", data: ev.data, id: ev.id };
-            } else {
-                const cleanText = sanitizer.process(ev.data?.text ?? "");
-                if (cleanText) {
-                    yield { type: "token", data: { ...ev.data, text: cleanText }, id: ev.id };
-                }
+            const cleanText = sanitizer.process(ev.data?.text ?? "");
+            if (cleanText) {
+                yield { type: "token", data: { ...ev.data, text: cleanText }, id: ev.id };
             }
         } else if (ev.event_type === "done") {
             const tail = sanitizer.flush();
@@ -121,15 +117,9 @@ export async function* streamJobEvents(jobId) {
             }
             const ev = queue.shift();
             if (ev.type === "token") {
-                // E2E-encrypted tokens: the server can't NIP-44 decrypt them, so
-                // pass encrypted_text through untouched for clients that can.
-                if (ev.data?.encrypted_text && !ev.data?.text) {
-                    yield { type: "token", data: ev.data, id: ev.id };
-                } else {
-                    const cleanText = sanitizer.process(ev.data?.text ?? "");
-                    if (cleanText) {
-                        yield { type: "token", data: { ...ev.data, text: cleanText }, id: ev.id };
-                    }
+                const cleanText = sanitizer.process(ev.data?.text ?? "");
+                if (cleanText) {
+                    yield { type: "token", data: { ...ev.data, text: cleanText }, id: ev.id };
                 }
             } else if (ev.type === "done") {
                 const tail = sanitizer.flush();

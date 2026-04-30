@@ -256,10 +256,10 @@ export async function nodeTokenLogin(config) {
         const path = "/api/auth/cli/node-token";
         const url  = new URL(path, baseUrl).toString();
         const body = JSON.stringify({ ts: Date.now() });
-        const { headers } = signRequest({ method: "POST", path, body, privateKey: privKey, publicKey: pubKey });
+        const { header } = signRequest({ method: "POST", path, body, privateKey: privKey, publicKey: pubKey });
         res = await fetch(url, {
             method: "POST",
-            headers: { ...headers, "content-type": "application/json" },
+            headers: { "X-Infernet-Auth": header, "content-type": "application/json" },
             body
         });
     } catch (err) {

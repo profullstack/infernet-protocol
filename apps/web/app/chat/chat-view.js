@@ -159,7 +159,11 @@ export default function ChatView({ initialModels = [] }) {
         if (data.encrypted_text) {
           const convKey = convKeysRef.current.get(jobId);
           if (convKey) {
-            try { text = decrypt(convKey, data.encrypted_text); } catch { text = ""; }
+            try {
+              const plain = decrypt(convKey, data.encrypted_text);
+              // NIP-44 payload is JSON: {"text":"..."}
+              text = JSON.parse(plain)?.text ?? plain;
+            } catch { text = ""; }
           }
         }
         if (text) {

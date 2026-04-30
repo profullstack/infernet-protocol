@@ -61,6 +61,20 @@ export function getDaemonLogPath() {
 }
 
 /**
+ * Returns the path where the daemon is actually writing logs right now.
+ * Checks both the preferred path and the legacy fallback so that `infernet
+ * logs` works even when a daemon started before the /var/log migration is
+ * still running.
+ */
+export function resolveLiveDaemonLogPath() {
+    const preferred = getDaemonLogPath();
+    if (fsSync.existsSync(preferred)) return preferred;
+    const legacy = path.join(getConfigDir(), 'daemon.log');
+    if (fsSync.existsSync(legacy)) return legacy;
+    return preferred; // return preferred so the error message is forward-looking
+}
+
+/**
  * Normalize legacy (v1, Supabase-keyed) configs to the v2 shape. Never
  * silently keeps a service-role key around.
  */

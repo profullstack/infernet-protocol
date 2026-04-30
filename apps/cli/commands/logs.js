@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import readline from 'node:readline';
 
-import { getDaemonLogPath } from '../lib/config.js';
+import { resolveLiveDaemonLogPath } from '../lib/config.js';
 
 const HELP = `infernet logs — show the daemon log
 
@@ -39,7 +39,7 @@ export default async function logs(args) {
         return 0;
     }
 
-    const logPath = getDaemonLogPath();
+    const logPath = resolveLiveDaemonLogPath();
     try { await fsp.access(logPath); }
     catch {
         process.stderr.write(`No daemon log yet at ${logPath}. Run \`infernet start\` first.\n`);

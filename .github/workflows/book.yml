@@ -23,6 +23,7 @@ jobs:
             pandoc \
             texlive-luatex \
             texlive-latex-recommended \
+            texlive-latex-extra \
             texlive-fonts-recommended \
             fonts-liberation \
             fonts-noto

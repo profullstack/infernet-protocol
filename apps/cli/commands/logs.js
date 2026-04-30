@@ -1,11 +1,11 @@
 /**
- * `infernet logs` — print (or tail) the daemon log file at
- * `~/.config/infernet/daemon.log`.
+ * `infernet logs` — print (or tail) the daemon log file.
  */
 
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import readline from 'node:readline';
+import ora from 'ora';
 
 import { resolveLiveDaemonLogPath } from '../lib/config.js';
 
@@ -18,8 +18,6 @@ Flags:
   -f, --follow       Tail the log file (Ctrl-C to exit)
   --lines <n>        Print the last N lines (default 200)
   --help             Show this help
-
-Log path: ~/.config/infernet/daemon.log
 `;
 
 async function tailLines(path, n) {
@@ -40,11 +38,14 @@ export default async function logs(args) {
     }
 
     const logPath = resolveLiveDaemonLogPath();
+
+    const spinner = ora({ text: 'Looking for daemon log…', color: 'cyan' }).start();
     try { await fsp.access(logPath); }
     catch {
-        process.stderr.write(`No daemon log yet at ${logPath}. Run \`infernet start\` first.\n`);
+        spinner.fail(`No daemon log at ${logPath}. Run \`infernet start\` first.`);
         return 1;
     }
+    spinner.stop();
 
     const n = Number.parseInt(args.get('lines') ?? '200', 10) || 200;
     const follow = args.has('follow') || args.has('f');
@@ -54,7 +55,9 @@ export default async function logs(args) {
 
     if (!follow) return 0;
 
-    // Follow mode: watch the file for appended data.
+    // Follow mode: spin while idle, clear spinner when a line arrives.
+    const tail = ora({ text: 'Following daemon log… (Ctrl-C to stop)', color: 'cyan' }).start();
+
     let lastSize = (await fsp.stat(logPath)).size;
     return new Promise((resolve) => {
         const watcher = fs.watch(logPath, { persistent: true }, async () => {
@@ -66,10 +69,11 @@ export default async function logs(args) {
                     const buf = Buffer.alloc(length);
                     await fd.read(buf, 0, length, lastSize);
                     await fd.close();
+                    tail.clear();
                     process.stdout.write(buf.toString('utf8'));
+                    tail.render();
                     lastSize = st.size;
                 } else if (st.size < lastSize) {
-                    // File was truncated or rotated.
                     lastSize = 0;
                 }
             } catch {
@@ -77,6 +81,7 @@ export default async function logs(args) {
             }
         });
         const cleanup = () => {
+            tail.stop();
             try { watcher.close(); } catch { /* ignore */ }
             resolve(0);
         };

@@ -5,7 +5,7 @@
 All API requests go to the control plane:
 
 ```
-https://app.infernet.sh/api/v1
+https://infernetprotocol.com/api/v1
 ```
 
 If you're self-hosting the control plane, replace this with your own URL.
@@ -18,7 +18,7 @@ All requests require a bearer token:
 Authorization: Bearer your_token_here
 ```
 
-Get a token by creating an API key in the [Infernet Dashboard](https://app.infernet.sh) under **Settings → API Keys**.
+Get a token by creating an API key in the [Infernet Dashboard](https://infernetprotocol.com) under **Settings → API Keys**.
 
 Tokens are scoped to your account. Rate limits and billing are tracked per token.
 
@@ -71,7 +71,7 @@ When `stream: true`, the response is an SSE stream directly. See [Streaming Chat
 **Example:**
 
 ```bash
-curl https://app.infernet.sh/api/v1/jobs \
+curl https://infernetprotocol.com/api/v1/jobs \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -194,7 +194,7 @@ List your recent jobs.
 **Example:**
 
 ```bash
-curl "https://app.infernet.sh/api/v1/jobs?limit=10&status=completed" \
+curl "https://infernetprotocol.com/api/v1/jobs?limit=10&status=completed" \
   -H "Authorization: Bearer $TOKEN"
 ```
 

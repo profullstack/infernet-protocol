@@ -3,41 +3,31 @@
 ## Install the CLI
 
 ```bash
-curl -sSL https://infernet.sh/install | bash
+curl -sSL https://infernetprotocol.com/install | bash
 ```
 
 The installer:
 1. Detects your OS and architecture
-2. Downloads the appropriate binary
-3. Installs it to `~/.local/bin` (or `/usr/local/bin` with sudo)
-4. Adds it to your PATH in `~/.bashrc` / `~/.zshrc`
+2. Downloads the appropriate pre-built Node.js binary
+3. Installs it to `/usr/local/bin/infernet` (or `~/.local/bin` if not root)
+4. Adds it to your PATH
 
-After the install, either open a new shell or run:
-
-```bash
-source ~/.bashrc
-# or
-source ~/.zshrc
-```
+After the install, either open a new shell or `source ~/.bashrc` / `source ~/.zshrc`.
 
 Verify:
 
 ```bash
 infernet --version
+# infernet v0.1.19
+#   up to date
 ```
 
 ### Manual Install
 
-If you prefer not to pipe to bash:
-
 ```bash
-# Check latest version
-INFERNET_VERSION=$(curl -s https://infernet.sh/version)
-
-# Download binary for your platform
-curl -sSL "https://github.com/infernetprotocol/infernet/releases/download/${INFERNET_VERSION}/infernet-linux-x86_64" \
+INFERNET_VERSION=$(curl -s https://infernetprotocol.com/version)
+curl -sSL "https://github.com/profullstack/infernet-protocol/releases/download/${INFERNET_VERSION}/infernet-linux-x86_64" \
   -o /usr/local/bin/infernet
-
 chmod +x /usr/local/bin/infernet
 ```
 
@@ -51,182 +41,137 @@ Available platforms: `linux-x86_64`, `linux-aarch64`, `darwin-arm64`, `darwin-x8
 infernet setup
 ```
 
+`setup` is interactive and walks through every step. Pass `--yes` to accept defaults non-interactively:
+
+```bash
+infernet setup --yes
+```
+
 ### What Setup Does
 
 **1. Collect registration token**
 
-You'll be prompted for the one-time registration token from the dashboard. Get it at **Nodes → Add Node** in the [Infernet Dashboard](https://app.infernet.sh).
+You'll be prompted for the one-time registration token from the dashboard. Get it at **Nodes → Add Node** in the [Infernet Dashboard](https://infernetprotocol.com).
 
 **2. Detect hardware**
 
-The wizard runs `nvidia-smi`, `rocminfo`, and system checks to determine:
-- GPU model and VRAM
-- VRAM tier assignment
-- System RAM
-- Number of CPU cores
+The wizard runs `nvidia-smi`, `rocminfo`, and system checks to determine GPU model, VRAM, system RAM, and CPU cores. Only coarse capability data is sent to the control plane — no hostname or exact CPU model leaves the node.
 
 **3. Install inference backend**
 
-If no backend is detected, Ollama is installed automatically. If you want a different backend, install it first (see [Chapter 3](../03-inference-backends/index.md)), then run setup — it will detect the backend and use it.
+If no backend is detected, Ollama is installed automatically. If you want a different backend (vLLM, SGLang, MAX), install it first (see [Chapter 3](../03-inference-backends/index.md)), then run setup — it will detect and configure it.
 
 **4. Pull default model**
 
-The wizard suggests a default model based on your tier:
+The wizard suggests a model based on your VRAM tier:
 
 | Tier | Default Model |
 |------|--------------|
 | >=48gb | qwen2.5:72b |
-| >=24gb | qwen2.5:14b |
-| >=12gb | qwen2.5:7b |
-| >=8gb | qwen2.5:7b |
+| 24-48gb | qwen2.5:14b |
+| 16-24gb | qwen2.5:7b |
+| 8-16gb | qwen2.5:7b |
 | cpu | qwen2.5:1.5b |
 
-You can accept the default or enter a different model name. The wizard pulls the model before proceeding.
+**5. Generate keypair + config**
 
-**5. Generate keypair**
-
-A secp256k1 keypair is generated for this node. The private key is written to `~/.infernet/keys/node.key` with permissions `600`. The public key is registered with the control plane.
-
-**6. Write config**
-
-Config is written to `~/.infernet/config.json`:
+A secp256k1 keypair (Nostr-compatible) is generated. Config is written to `~/.config/infernet/config.json` with mode `0600`:
 
 ```json
 {
-  "node_id": "node_8f3a2c1d",
-  "public_key": "npub1abc123...",
-  "control_plane_url": "https://app.infernet.sh",
-  "backend": "ollama",
-  "ollama_host": "http://localhost:11434",
-  "served_models": ["qwen2.5:14b"],
-  "vram_tier": ">=24gb",
-  "payout_address": ""
+  "controlPlane": { "url": "https://infernetprotocol.com" },
+  "node": {
+    "id": null,
+    "nodeId": "provider-a1b2c3d4",
+    "role": "provider",
+    "name": "user@hostname",
+    "publicKey": "abcdef...",
+    "privateKey": "012345...",
+    "address": "1.2.3.4",
+    "port": 46337
+  },
+  "engine": {
+    "backend": "ollama",
+    "ollamaHost": "http://localhost:11434",
+    "model": "qwen2.5:7b"
+  }
 }
 ```
 
-You can edit this file directly. Changes take effect on next daemon restart.
+**6. Configure logrotate**
+
+On Linux, setup writes `/etc/logrotate.d/infernet` so logs in `/var/log/infernet/` rotate daily and are retained for 14 days.
+
+**7. Register with the control plane**
+
+`infernet register` is called automatically. The node's public key, role, GPU capabilities, and available models are sent to the control plane.
 
 ---
 
 ## Firewall Configuration
 
-The node daemon listens on port `3000` by default. The inference backend (e.g., Ollama) listens on its own port (`11434` for Ollama). Neither needs to be externally accessible — the daemon makes outbound connections to the control plane only.
-
-However, if you're running behind a NAT or firewall, make sure outbound HTTPS (port 443) is permitted:
+The daemon makes outbound HTTPS connections only — no inbound ports are required for basic operation. If clients connect directly to your node:
 
 ```bash
-# UFW (Ubuntu)
+# UFW
 sudo ufw allow out 443/tcp
-sudo ufw allow out 80/tcp
+sudo ufw allow in 46337/tcp   # P2P port (default)
 
-# Check current status
-sudo ufw status
-```
-
-If clients connect directly to your node (direct-routing mode), you also need inbound on port 3000:
-
-```bash
-sudo ufw allow in 3000/tcp
-```
-
-For datacenter deployments with `iptables`:
-
-```bash
-# Allow outbound HTTPS
+# iptables
 iptables -A OUTPUT -p tcp --dport 443 -j ACCEPT
-
-# Allow inbound on node port (if using direct routing)
-iptables -A INPUT -p tcp --dport 3000 -j ACCEPT
+iptables -A INPUT  -p tcp --dport 46337 -j ACCEPT
 ```
 
 ---
 
 ## Running as a System Service
 
-For production nodes, you want the daemon to start automatically on boot and restart if it crashes.
-
 ```bash
 infernet service install
 ```
 
-This creates a systemd service unit at `/etc/systemd/system/infernet.service` (Linux) or a launchd plist at `~/Library/LaunchAgents/sh.infernet.daemon.plist` (macOS).
-
-### Managing the Service
+This creates a systemd unit (Linux) or launchd plist (macOS) so the daemon starts at boot.
 
 ```bash
-# Start
 infernet service start
-
-# Stop
 infernet service stop
-
-# Restart
 infernet service restart
-
-# Check status
 infernet service status
-
-# View logs (follows systemd journal)
-infernet service logs
-
-# Remove from boot (does not uninstall)
 infernet service uninstall
-```
-
-### Manual Systemd Unit
-
-If you prefer to write your own unit file:
-
-```ini
-[Unit]
-Description=Infernet Protocol Node Daemon
-After=network.target
-Wants=network.target
-
-[Service]
-Type=simple
-User=infernet
-ExecStart=/usr/local/bin/infernet start
-Restart=always
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-Environment=HOME=/home/infernet
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable infernet
-sudo systemctl start infernet
-```
-
-It's good practice to run the daemon as a dedicated non-root user. Create one with:
-
-```bash
-sudo useradd -r -s /bin/false -d /home/infernet infernet
-sudo mkdir -p /home/infernet/.infernet
-sudo chown -R infernet:infernet /home/infernet
-```
-
-Then move your config:
-
-```bash
-sudo cp -r ~/.infernet/* /home/infernet/.infernet/
-sudo chown -R infernet:infernet /home/infernet/.infernet
 ```
 
 ---
 
-## Upgrading the CLI
+## Auto-Upgrade
+
+The daemon checks for a new CLI version every 5 minutes against the GitHub releases API. When a newer version is available it:
+
+1. Re-runs the installer to pull the new binary
+2. Waits for in-flight jobs to finish
+3. Closes all server sockets
+4. Re-execs itself into the new binary
+
+No manual intervention needed. You can also trigger an upgrade manually:
 
 ```bash
 infernet upgrade
 ```
 
-This re-runs the curl installer to fetch the latest version. Your config and keys are preserved.
+Check your current version at any time:
+
+```bash
+infernet --version
+```
+
+---
+
+## Upgrading the CLI Manually
+
+```bash
+infernet upgrade
+```
+
+Re-runs the curl installer. Config, keys, and registered node identity are preserved.
 
 ---
 
@@ -236,4 +181,4 @@ This re-runs the curl installer to fetch the latest version. Your config and key
 infernet remove
 ```
 
-This stops the daemon, removes the service unit, removes the binary, and optionally removes your config and keys (it will ask). The node's registration on the control plane is deactivated.
+Stops the daemon, removes the service unit, removes the binary, and optionally removes your config and keys (it will ask). The node's registration on the control plane is deactivated.

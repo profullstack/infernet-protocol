@@ -41,7 +41,7 @@ There are two ways to get a stream:
 The job submission itself returns a stream immediately:
 
 ```bash
-curl https://app.infernet.sh/api/v1/jobs \
+curl https://infernetprotocol.com/api/v1/jobs \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
@@ -58,13 +58,13 @@ Submit first, get a job ID, then stream:
 
 ```bash
 # Submit
-JOB_ID=$(curl -s https://app.infernet.sh/api/v1/jobs \
+JOB_ID=$(curl -s https://infernetprotocol.com/api/v1/jobs \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"model": "qwen2.5:14b", "messages": [...]}' | jq -r .id)
 
 # Stream
-curl "https://app.infernet.sh/api/v1/jobs/$JOB_ID/stream" \
+curl "https://infernetprotocol.com/api/v1/jobs/$JOB_ID/stream" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Accept: text/event-stream"
 ```
@@ -76,7 +76,7 @@ Using the native `EventSource` API or `fetch` with a ReadableStream:
 ```javascript
 // Using fetch (works in browsers and Node.js 18+)
 async function streamInference(prompt) {
-  const response = await fetch('https://app.infernet.sh/api/v1/jobs', {
+  const response = await fetch('https://infernetprotocol.com/api/v1/jobs', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${process.env.INFERNET_BEARER_TOKEN}`,
@@ -237,7 +237,7 @@ def stream_inference(prompt: str, model: str = "qwen2.5:14b"):
     with httpx.Client(timeout=120) as client:
         with client.stream(
             "POST",
-            "https://app.infernet.sh/api/v1/jobs",
+            "https://infernetprotocol.com/api/v1/jobs",
             headers={
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",
@@ -293,7 +293,7 @@ async def stream_inference_async(prompt: str, model: str = "qwen2.5:14b"):
     async with httpx.AsyncClient(timeout=120) as client:
         async with client.stream(
             "POST",
-            "https://app.infernet.sh/api/v1/jobs",
+            "https://infernetprotocol.com/api/v1/jobs",
             headers={
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",

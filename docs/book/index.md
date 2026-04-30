@@ -1,5 +1,7 @@
 # The Infernet Protocol Book
 
+<img src="cover.jpg" alt="The Infernet Protocol Book" width="180" style="float:right;margin:0 0 1.5rem 2rem;border-radius:4px;" />
+
 Infernet Protocol is a decentralized GPU compute network. Node operators register their GPU servers and get paid to run LLM inference. Developers submit jobs through a unified API and get responses back without depending on any single provider.
 
 This book covers everything you need to know to run a node, build applications on the network, or understand how the protocol works under the hood.

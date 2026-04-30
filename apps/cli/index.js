@@ -94,16 +94,22 @@ function parseArgs(argv) {
     };
 }
 
+async function restart(args, ctx) {
+    const stopCode = await stop(args, ctx);
+    if (stopCode !== 0) return stopCode;
+    return start(args, ctx);
+}
+
 const COMMANDS = {
     init, login, register, update, upgrade, remove,
     // aliases
     uninstall: remove,
-    start, status, stop, stats, logs,
+    start, status, stop, restart, stats, logs,
     payout, payments, gpu, firewall, chat, setup, model, train, tui, doctor, service, pubkey, debug, deploy, console: consoleCmd, help
 };
 
 // Commands that can run without a loaded config.
-const NO_CONFIG = new Set(['init', 'login', 'help', 'stats', 'logs', 'stop', 'gpu', 'firewall', 'chat', 'setup', 'model', 'train', 'tui', 'doctor', 'service', 'pubkey', 'debug', 'deploy', 'console', 'upgrade', 'update', 'remove', 'uninstall']);
+const NO_CONFIG = new Set(['init', 'login', 'help', 'stats', 'logs', 'stop', 'restart', 'gpu', 'firewall', 'chat', 'setup', 'model', 'train', 'tui', 'doctor', 'service', 'pubkey', 'debug', 'deploy', 'console', 'upgrade', 'update', 'remove', 'uninstall']);
 // Commands that need a config but not a control-plane client (none today
 // — kept as a future escape hatch).
 const NO_CLIENT = new Set();

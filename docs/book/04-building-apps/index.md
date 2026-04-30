@@ -22,7 +22,7 @@ The key differences from a centralized provider:
 
 2. **Streaming is the default**: because responses come from distributed nodes, streaming is the most reliable way to get results. Polling a job ID also works but adds latency.
 
-3. **Auth uses bearer tokens from the dashboard**: you get a bearer token by creating an API key in the [Infernet Dashboard](https://app.infernet.sh). This token identifies your account for billing and rate limiting.
+3. **Auth uses bearer tokens from the dashboard**: you get a bearer token by creating an API key in the [Infernet Dashboard](https://infernetprotocol.com). This token identifies your account for billing and rate limiting.
 
 ---
 
@@ -33,7 +33,7 @@ The key differences from a centralized provider:
 export INFERNET_BEARER_TOKEN="your_token_here"
 
 # Submit a job
-curl https://app.infernet.sh/api/v1/jobs \
+curl https://infernetprotocol.com/api/v1/jobs \
   -H "Authorization: Bearer $INFERNET_BEARER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

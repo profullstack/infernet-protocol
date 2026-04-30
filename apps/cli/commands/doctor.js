@@ -19,7 +19,7 @@
  */
 
 import fs from "node:fs/promises";
-import { loadConfig, getConfigPath, getConfigDir } from "../lib/config.js";
+import { loadConfig, getConfigPath, getConfigDir, getDaemonLogPath, fixConfigPermissions } from "../lib/config.js";
 import { isDaemonAlive, sendToDaemon } from "../lib/ipc.js";
 import { spawnDetachedDaemon } from "../lib/daemonize.js";
 import { createNodeClient } from "../lib/node-client.js";
@@ -102,14 +102,22 @@ async function checkConfig() {
     const hasUrl = !!config.controlPlane?.url;
 
     const issues = [];
-    if (mode !== "600") issues.push(`mode is ${mode}, should be 600`);
+    if (mode !== "600") {
+        // Auto-heal: fix permissions right here so the next daemon start
+        // doesn't find them wrong.
+        try {
+            await fixConfigPermissions();
+        } catch { /* ignore — may already be correct */ }
+        issues.push(`mode was ${mode} (auto-fixed to 600)`);
+    }
     if (!hasKey) issues.push("missing Nostr keypair");
     if (!hasUrl) issues.push("missing controlPlane.url");
 
     if (issues.length) {
+        const onlyPermFix = issues.length === 1 && issues[0].includes("auto-fixed");
         return {
-            status: "fail",
-            summary: `${path} (${role})`,
+            status: onlyPermFix ? "ok" : "fail",
+            summary: `${role}/${name}, key=${config.node.publicKey?.slice(0, 12) ?? "?"}…`,
             details: issues.join("\n"),
             hint: !hasKey || !hasUrl ? "run `infernet init` to fix" : undefined,
             config
@@ -227,17 +235,26 @@ async function checkDaemon() {
                 hint: "check config with `infernet init` then run `infernet start`"
             };
         }
-        // Poll for up to 6 seconds for the daemon socket to appear.
-        for (let i = 0; i < 12; i++) {
+        // Poll up to 15 seconds — Node.js + ESM startup can be slow.
+        for (let i = 0; i < 30; i++) {
             await new Promise((r) => setTimeout(r, 500));
             alive = await isDaemonAlive(500);
             if (alive) break;
         }
         if (!alive) {
+            // Grab last few log lines to surface the crash reason.
+            let logTail = "";
+            try {
+                const logPath = getDaemonLogPath();
+                const raw = await fs.readFile(logPath, "utf8");
+                const lines = raw.trimEnd().split("\n");
+                logTail = lines.slice(-6).join("\n");
+            } catch { /* log may not exist yet */ }
             return {
                 status: "fail",
                 summary: "daemon auto-start attempted but not responding",
-                hint: "check logs with `infernet logs`"
+                details: logTail || undefined,
+                hint: "check full log with `infernet logs`"
             };
         }
         process.stdout.write("                                auto-started daemon\n");

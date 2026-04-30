@@ -386,9 +386,14 @@ async function chooseModel(installed, opts) {
             : MODEL_SUGGESTIONS[0].name;
 
     if (opts.preselected) {
-        // Honor the preselect, but warn if it won't fit.
         const m = evaluated.find((x) => x.name === opts.preselected);
         if (m && !m.fits) {
+            if (opts.yes) {
+                // In non-interactive mode, fall back to the auto-detected default
+                // rather than pulling a model that will OOM or crawl on CPU.
+                warn(`${opts.preselected} won't fit on this host — falling back to ${defaultModel}`);
+                return defaultModel;
+            }
             warn(`preselected ${opts.preselected} (${m.size}) likely won't fit (${m.mode} ceiling ≈ ${m.ceiling_gb} GB)`);
             warn("  Pulling anyway because --model overrides the fit check. Inference may OOM.");
         }

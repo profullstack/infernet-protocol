@@ -118,7 +118,15 @@ INFERNET_NPM_VERSION="${INFERNET_NPM_VERSION:-latest}"
 INFERNET_FORCE_GIT="${INFERNET_FORCE_GIT:-}"
 INFERNET_AUTOSTART="${INFERNET_AUTOSTART:-1}"
 INFERNET_CONTROL_PLANE="${INFERNET_CONTROL_PLANE:-https://infernetprotocol.com}"
-INFERNET_MODEL="${INFERNET_MODEL:-qwen2.5:7b}"
+# Default model: qwen2.5:7b for GPU nodes, qwen2.5:0.5b for CPU-only.
+# Operators can override via INFERNET_MODEL=<name> before running the installer.
+if [ -z "${INFERNET_MODEL:-}" ]; then
+    if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L 2>/dev/null | grep -q "GPU"; then
+        INFERNET_MODEL="qwen2.5:7b"
+    else
+        INFERNET_MODEL="qwen2.5:0.5b"
+    fi
+fi
 INFERNET_NODE_ROLE="${INFERNET_NODE_ROLE:-provider}"
 # Leave INFERNET_NODE_NAME unset by default so `infernet init` can
 # generate the user@host:slug default itself (it has access to nodeId,

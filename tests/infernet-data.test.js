@@ -79,7 +79,8 @@ describe("infernet data mapping", () => {
       cpu_summary: "amd · x64 · 16 cores",
       fabric: "NVLink",
       price_display: "$1.5000",
-      reputation: 88
+      reputation: 88,
+      cli_version: "—"
     });
   });
 

@@ -1,5 +1,6 @@
 import "server-only";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { decryptJSON } from "@/lib/encrypt";
 
 /**
  * User-scoped reads for /dashboard.
@@ -258,12 +259,12 @@ export async function getRecentJobs(userId, { limit = 8 } = {}) {
     const supabase = getSupabaseServerClient();
     const { data, error } = await supabase
         .from("jobs")
-        .select("id, title, status, payment_offer, model_name, client_name, created_at")
+        .select("id, title, status, payment_offer, model_name, client_name, created_at, input_spec")
         .in("client_name", names)
         .order("created_at", { ascending: false })
         .limit(limit);
     if (error) throw new Error(error.message);
-    return data ?? [];
+    return (data ?? []).map(withPrompt);
 }
 
 /**
@@ -289,7 +290,7 @@ export async function getRecentJobsProcessed(userId, { limit = 8 } = {}) {
     const supabase = getSupabaseServerClient();
     const { data, error } = await supabase
         .from("jobs")
-        .select("id, title, status, payment_offer, model_name, provider_id, created_at, completed_at")
+        .select("id, title, status, payment_offer, model_name, provider_id, created_at, completed_at, input_spec")
         .in("provider_id", ids)
         .order("created_at", { ascending: false })
         .limit(limit);
@@ -297,9 +298,20 @@ export async function getRecentJobsProcessed(userId, { limit = 8 } = {}) {
     return (data ?? []).map((j) => {
         const meta = nameById.get(j.provider_id) ?? {};
         return {
-            ...j,
+            ...withPrompt(j),
             provider_name: meta.name,
             provider_node_id: meta.node_id
         };
     });
+}
+
+function withPrompt(j) {
+    try {
+        const spec = decryptJSON(j.input_spec);
+        const messages = Array.isArray(spec?.messages) ? spec.messages : [];
+        const first = messages.find((m) => m?.role === "user" && typeof m.content === "string");
+        return { ...j, prompt: first?.content ?? null };
+    } catch {
+        return { ...j, prompt: null };
+    }
 }

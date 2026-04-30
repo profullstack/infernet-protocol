@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/supabase/auth-server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { appUrl } from "@/lib/auth/app-url";
 
 /**
  * POST /api/v1/user/settings
@@ -16,7 +17,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 export async function POST(request) {
     const user = await getCurrentUser();
     if (!user) {
-        return NextResponse.redirect(new URL("/auth/login?next=/settings", request.url), 303);
+        return NextResponse.redirect(new URL("/auth/login?next=/settings", appUrl()), 303);
     }
     const form = await request.formData();
     const supabase = getSupabaseServerClient();
@@ -36,7 +37,7 @@ export async function POST(request) {
             .eq("user_id", user.id);
         const ownedPubkeys = (ownedLinks ?? []).map((r) => r.pubkey);
         if (ownedPubkeys.length === 0) {
-            return NextResponse.redirect(new URL("/settings?saved=1", request.url), 303);
+            return NextResponse.redirect(new URL("/settings?saved=1", appUrl()), 303);
         }
 
         const { data: ownedProviders } = await supabase
@@ -60,9 +61,9 @@ export async function POST(request) {
         }
         await Promise.all(updates);
 
-        return NextResponse.redirect(new URL("/settings?saved=1", request.url), 303);
+        return NextResponse.redirect(new URL("/settings?saved=1", appUrl()), 303);
     } catch (err) {
         const msg = encodeURIComponent(err?.message ?? "save failed");
-        return NextResponse.redirect(new URL(`/settings?error=${msg}`, request.url), 303);
+        return NextResponse.redirect(new URL(`/settings?error=${msg}`, appUrl()), 303);
     }
 }

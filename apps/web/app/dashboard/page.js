@@ -275,7 +275,7 @@ export default async function DashboardPage() {
                                 <tbody>
                                     {jobsProcessed.map((j) => (
                                         <tr key={j.id} className="border-t border-white/5">
-                                            <td className="py-2 pr-3"><RevealTitle title={j.title} /></td>
+                                            <td className="py-2 pr-3"><RevealTitle prompt={j.prompt} /></td>
                                             <td className="py-2 pr-3 text-[var(--muted)]">{j.model_name || "—"}</td>
                                             <td className="py-2 pr-3 text-[var(--muted)]">
                                                 {j.provider_id ? (
@@ -322,7 +322,7 @@ export default async function DashboardPage() {
                                 <tbody>
                                     {jobs.map((j) => (
                                         <tr key={j.id} className="border-t border-white/5">
-                                            <td className="py-2 pr-3"><RevealTitle title={j.title} /></td>
+                                            <td className="py-2 pr-3"><RevealTitle prompt={j.prompt} /></td>
                                             <td className="py-2 pr-3 text-[var(--muted)]">{j.model_name || "—"}</td>
                                             <td className="py-2 pr-3"><StatusPill status={j.status} /></td>
                                             <td className="py-2 pr-3 text-[var(--muted)]">{fmtUsd(j.payment_offer)}</td>

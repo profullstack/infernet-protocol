@@ -253,9 +253,10 @@ export async function nodeTokenLogin(config) {
     let res;
     try {
         const { signRequest } = await import("@infernetprotocol/auth");
-        const url  = new URL("/api/auth/cli/node-token", baseUrl).toString();
+        const path = "/api/auth/cli/node-token";
+        const url  = new URL(path, baseUrl).toString();
         const body = JSON.stringify({ ts: Date.now() });
-        const { headers } = signRequest({ method: "POST", url, body, privateKey: privKey });
+        const { headers } = signRequest({ method: "POST", path, body, privateKey: privKey, publicKey: pubKey });
         res = await fetch(url, {
             method: "POST",
             headers: { ...headers, "content-type": "application/json" },

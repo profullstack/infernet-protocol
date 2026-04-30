@@ -882,6 +882,15 @@ async function runDaemon(args, ctx) {
             env: process.env
         }).unref();
 
+        // Release any in-flight jobs so the restarted daemon can re-pick them
+        // (or they time out naturally) rather than getting stuck in 'processing'.
+        for (const jobId of stats.activeJobIds) {
+            try {
+                await client.failJob(jobId, 'daemon restarting for self-update');
+            } catch { /* best-effort */ }
+        }
+        stats.activeJobIds.clear();
+
         // Shut down without sending 'offline' — we're restarting, not stopping.
         shuttingDown = true;
         clearInterval(heartbeatTimer);

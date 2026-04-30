@@ -16,10 +16,41 @@ import { createEngine, MSG } from "@infernetprotocol/engine";
 import { loadConfig } from "./config.js";
 
 // Flush the event buffer when it hits this many tokens OR when we haven't
-// flushed in this many ms. Batching amortizes the per-request signing cost
-// without killing the streaming UX.
+// flushed in this many ms. After merging (see mergeTokens), each flush
+// produces at most one token row in job_events → one Supabase Realtime
+// push → one SSE frame, regardless of how many model tokens accumulated.
 const EVENT_BATCH_MAX = 16;
 const EVENT_BATCH_FLUSH_MS = 250;
+
+/**
+ * Merge consecutive token events in a batch into a single token event
+ * by concatenating their text. Non-token events preserve order.
+ *
+ * Before: [meta, token("H"), token("el"), token("lo"), done]
+ * After:  [meta, token("Hello"), done]
+ *
+ * This reduces Supabase Realtime row-insert count from n_tokens to
+ * n_flushes, cutting streaming latency by ~10-20x (IPIP-0024).
+ */
+function mergeTokens(events) {
+    const out = [];
+    let tokenText = "";
+    for (const ev of events) {
+        if (ev.event_type === "token") {
+            tokenText += ev.data?.text ?? "";
+        } else {
+            if (tokenText) {
+                out.push({ event_type: "token", data: { text: tokenText } });
+                tokenText = "";
+            }
+            out.push(ev);
+        }
+    }
+    if (tokenText) {
+        out.push({ event_type: "token", data: { text: tokenText } });
+    }
+    return out;
+}
 
 class EventBuffer {
     constructor(client, jobId) {
@@ -39,7 +70,7 @@ class EventBuffer {
     }
     async flush() {
         if (this.events.length === 0) return;
-        const batch = this.events;
+        const batch = mergeTokens(this.events);
         this.events = [];
         this.lastFlush = Date.now();
         try {

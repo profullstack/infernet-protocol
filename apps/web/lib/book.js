@@ -1,125 +1,35 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+/**
+ * Book data accessor — reads from the pre-baked book-data.json that
+ * `scripts/build-book-data.mjs` writes during prebuild.
+ *
+ * No filesystem walks at runtime; all reads come from the bundled JSON.
+ * Railway / serverless builds don't reliably ship the monorepo's docs/
+ * tree, so the previous fs-walk version returned empty TOCs in prod.
+ */
 
-const _dir = path.dirname(fileURLToPath(import.meta.url));
-// Navigate from apps/web/lib/ up to repo root, then into docs/book
-const BOOK_ROOT = path.join(_dir, "..", "..", "..", "docs", "book");
+import data from "./book-data.json" with { type: "json" };
 
-function safeRead(filePath) {
-    try { return fs.readFileSync(filePath, "utf8"); } catch { return null; }
-}
-
-function titleFromFilename(name) {
-    return name
-        .replace(/^\d+-/, "")
-        .replace(/-/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function titleFromMarkdown(content) {
-    const m = content?.match(/^#\s+(.+)$/m);
-    return m ? m[1].trim() : null;
-}
-
-/** Build the full chapter tree from the book directory. */
 export function getBookToc() {
-    if (!fs.existsSync(BOOK_ROOT)) return [];
-
-    const entries = fs.readdirSync(BOOK_ROOT, { withFileTypes: true })
-        .filter((e) => e.name !== "index.md")
-        .sort((a, b) => a.name.localeCompare(b.name));
-
-    const sections = [];
-
-    for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        const sectionSlug = entry.name;
-        const sectionPath = path.join(BOOK_ROOT, sectionSlug);
-        const sectionIndex = safeRead(path.join(sectionPath, "index.md"));
-        const sectionTitle = titleFromMarkdown(sectionIndex) ?? titleFromFilename(sectionSlug);
-
-        const pages = fs.readdirSync(sectionPath, { withFileTypes: true })
-            .filter((e) => e.isFile() && e.name.endsWith(".md") && e.name !== "index.md")
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map((e) => {
-                const slug = e.name.replace(/\.md$/, "");
-                const content = safeRead(path.join(sectionPath, e.name));
-                return {
-                    slug,
-                    href: `/book/${sectionSlug}/${slug}`,
-                    title: titleFromMarkdown(content) ?? titleFromFilename(slug)
-                };
-            });
-
-        sections.push({
-            slug: sectionSlug,
-            href: `/book/${sectionSlug}`,
-            title: sectionTitle,
-            pages
-        });
-    }
-
-    return sections;
+    return data.toc ?? [];
 }
 
-/** Return { content, title, section, prev, next } for a slug path. */
+/**
+ * Return { content, title, sectionTitle, prev, next } for a slug path,
+ * or null if the chapter doesn't exist.
+ */
 export function getChapter(slugParts) {
-    const toc = getBookToc();
-
-    let filePath, title, sectionTitle;
-
-    if (!slugParts || slugParts.length === 0) {
-        filePath = path.join(BOOK_ROOT, "index.md");
-        title = "Introduction";
-    } else if (slugParts.length === 1) {
-        const sectionSlug = slugParts[0];
-        filePath = path.join(BOOK_ROOT, sectionSlug, "index.md");
-        const section = toc.find((s) => s.slug === sectionSlug);
-        title = section?.title ?? titleFromFilename(sectionSlug);
-        sectionTitle = title;
-    } else {
-        const [sectionSlug, pageSlug] = slugParts;
-        filePath = path.join(BOOK_ROOT, sectionSlug, `${pageSlug}.md`);
-        const section = toc.find((s) => s.slug === sectionSlug);
-        sectionTitle = section?.title;
-        const page = section?.pages.find((p) => p.slug === pageSlug);
-        title = page?.title ?? titleFromFilename(pageSlug);
-    }
-
-    const content = safeRead(filePath);
-    if (!content) return null;
-
-    // Build flat page list for prev/next
-    const flat = [
-        { href: "/book", title: "Introduction" },
-        ...toc.flatMap((s) => [
-            { href: s.href, title: s.title },
-            ...s.pages
-        ])
-    ];
-    const currentHref = slugParts?.length
-        ? `/book/${slugParts.join("/")}`
-        : "/book";
-    const idx = flat.findIndex((p) => p.href === currentHref);
-
+    const key = !slugParts || slugParts.length === 0 ? "" : slugParts.join("/");
+    const ch = data.chapters?.[key];
+    if (!ch) return null;
     return {
-        content,
-        title,
-        sectionTitle,
-        prev: idx > 0 ? flat[idx - 1] : null,
-        next: idx >= 0 && idx < flat.length - 1 ? flat[idx + 1] : null
+        content: ch.content,
+        title: ch.title,
+        sectionTitle: ch.sectionTitle ?? null,
+        prev: ch.prev ?? null,
+        next: ch.next ?? null
     };
 }
 
 export function getAllChapterSlugs() {
-    const toc = getBookToc();
-    const slugs = [[]]; // root index
-    for (const section of toc) {
-        slugs.push([section.slug]);
-        for (const page of section.pages) {
-            slugs.push([section.slug, page.slug]);
-        }
-    }
-    return slugs;
+    return Object.keys(data.chapters ?? {}).map((key) => key === "" ? [] : key.split("/"));
 }

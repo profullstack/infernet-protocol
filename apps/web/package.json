@@ -8,7 +8,10 @@
     "dev": "next dev -p 8080",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "predev": "node scripts/build-book-data.mjs",
+    "prebuild": "node scripts/build-book-data.mjs",
+    "book:gen": "node scripts/build-book-data.mjs"
   },
   "dependencies": {
     "@infernetprotocol/auth": "workspace:*",

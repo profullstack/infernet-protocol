@@ -86,6 +86,7 @@ jobs:
             --highlight-style=tango \
             --metadata title="The Infernet Protocol Book" \
             --resource-path=docs/book \
+            --lua-filter=docs/book/rewrite-md-links.lua \
             -o docs/book/infernet-book.html
 
       - name: Copy to web public dir

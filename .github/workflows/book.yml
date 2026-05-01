@@ -117,4 +117,7 @@ jobs:
             apps/web/public/book/infernet-book.html || true
           git diff --cached --quiet || \
             git commit -m "ci(book): regenerate PDF + EPUB + HTML [skip ci]"
+          # Pull any commits that landed mid-build before pushing, so we
+          # don't lose the freshly-built artifacts to a race.
+          git pull --rebase origin master || true
           git push || true

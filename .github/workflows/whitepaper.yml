@@ -87,4 +87,5 @@ jobs:
             apps/web/public/whitepaper/infernet-whitepaper.html || true
           git diff --cached --quiet || \
             git commit -m "ci(whitepaper): regenerate PDF + HTML [skip ci]"
+          git pull --rebase origin master || true
           git push || true

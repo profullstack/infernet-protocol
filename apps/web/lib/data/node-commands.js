@@ -73,7 +73,7 @@ export async function listCommandsForPubkey({ userId, pubkey, limit = 20 }) {
     const supabase = getSupabaseServerClient();
     const { data, error } = await supabase
         .from("node_commands")
-        .select("id, command, args, status, result, error, issued_at, started_at, completed_at")
+        .select("id, command, args, status, result, error, progress, issued_at, started_at, completed_at")
         .eq("pubkey", pubkey)
         .order("issued_at", { ascending: false })
         .limit(Math.min(Math.max(limit, 1), 100));
@@ -162,4 +162,52 @@ export async function completeCommandForNode({ pubkey, commandId, status, result
         .eq("id", commandId);
     if (upErr) throw new Error(upErr.message);
     return { id: commandId, status };
+}
+
+/**
+ * Daemon reports incremental progress on a long-running command (e.g.
+ * ollama pull). Same pubkey-match check as completeCommandForNode.
+ * Stores the latest snapshot only — no history.
+ */
+export async function updateCommandProgressForNode({ pubkey, commandId, progress }) {
+    if (!commandId) {
+        const err = new Error("commandId is required");
+        err.status = 400;
+        throw err;
+    }
+    if (!progress || typeof progress !== "object") {
+        const err = new Error("progress object is required");
+        err.status = 400;
+        throw err;
+    }
+    const supabase = getSupabaseServerClient();
+    const { data: row, error: lookErr } = await supabase
+        .from("node_commands")
+        .select("id, pubkey, status")
+        .eq("id", commandId)
+        .maybeSingle();
+    if (lookErr) throw new Error(lookErr.message);
+    if (!row) {
+        const err = new Error("command not found");
+        err.status = 404;
+        throw err;
+    }
+    if (row.pubkey !== pubkey) {
+        const err = new Error("command does not target this pubkey");
+        err.status = 403;
+        throw err;
+    }
+    // Slim sanitization — keep the shape predictable for the frontend.
+    const safe = {
+        status: typeof progress.status === "string" ? progress.status.slice(0, 64) : null,
+        total: Number.isFinite(progress.total) ? progress.total : null,
+        completed: Number.isFinite(progress.completed) ? progress.completed : null,
+        pct: Number.isFinite(progress.pct) ? Math.max(0, Math.min(100, progress.pct)) : null
+    };
+    const { error: upErr } = await supabase
+        .from("node_commands")
+        .update({ progress: safe })
+        .eq("id", commandId);
+    if (upErr) throw new Error(upErr.message);
+    return { id: commandId, progress: safe };
 }

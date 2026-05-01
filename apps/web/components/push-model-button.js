@@ -82,7 +82,10 @@ export default function PushModelButton({ pubkey, servedModels = [], specs }) {
         refresh();
         const inFlight = (cs) => cs.some((c) => c.status === "pending" || c.status === "running");
         const tick = () => { if (inFlight(commands)) refresh(); };
-        const id = setInterval(tick, 5000);
+        // Tight 2s poll while a pull is running so the progress bar
+        // tracks closely with what the daemon reports (it posts at most
+        // every 2s too — see ollamaPullWithProgress in start.js).
+        const id = setInterval(tick, 2000);
         return () => clearInterval(id);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, commands.length]);
@@ -279,12 +282,17 @@ export default function PushModelButton({ pubkey, servedModels = [], specs }) {
                 ) : (
                     <ul className="mt-2 space-y-1.5 text-xs">
                         {commands.map((c) => (
-                            <li key={c.id} className="flex items-center justify-between gap-3">
-                                <span className="truncate text-white">
-                                    {c.command === "model_install" ? "+" : c.command === "model_remove" ? "−" : "?"}{" "}
-                                    {c.args?.model ?? "—"}
-                                </span>
-                                <CommandStatus s={c.status} />
+                            <li key={c.id}>
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="truncate text-white">
+                                        {c.command === "model_install" ? "+" : c.command === "model_remove" ? "−" : "?"}{" "}
+                                        {c.args?.model ?? "—"}
+                                    </span>
+                                    <CommandStatus s={c.status} />
+                                </div>
+                                {c.status === "running" && c.progress ? (
+                                    <ProgressBar progress={c.progress} />
+                                ) : null}
                             </li>
                         ))}
                     </ul>
@@ -309,6 +317,40 @@ export default function PushModelButton({ pubkey, servedModels = [], specs }) {
             {createPortal(modal, document.body)}
         </>
     );
+}
+
+function ProgressBar({ progress }) {
+    const pct = Number.isFinite(progress?.pct)
+        ? Math.max(0, Math.min(100, progress.pct))
+        : null;
+    const status = progress?.status ?? "working…";
+    const total = progress?.total;
+    const completed = progress?.completed;
+    const sizeBlurb = (Number.isFinite(total) && total > 0)
+        ? ` · ${formatBytes(completed ?? 0)} / ${formatBytes(total)}`
+        : "";
+    return (
+        <div className="mt-1">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                <div
+                    className="h-full bg-[var(--accent)] transition-all duration-500"
+                    style={{ width: `${pct ?? 5}%` }}
+                />
+            </div>
+            <p className="mt-0.5 text-[10px] text-[var(--muted)]">
+                {status}{pct != null ? ` · ${pct}%` : ""}{sizeBlurb}
+            </p>
+        </div>
+    );
+}
+
+function formatBytes(n) {
+    if (!Number.isFinite(n) || n <= 0) return "0 B";
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    let v = n;
+    let i = 0;
+    while (v >= 1024 && i < units.length - 1) { v /= 1024; i += 1; }
+    return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
 }
 
 function CommandStatus({ s }) {

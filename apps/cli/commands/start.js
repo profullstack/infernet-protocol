@@ -517,7 +517,7 @@ async function runDaemon(args, ctx) {
                 if (fits && !fits.ok) {
                     throw new Error(formatFitFailure(modelName, fits));
                 }
-                result = await ollamaSpawn(['pull', modelName]);
+                result = await ollamaPullWithProgress(modelName, id);
             } else if (command === 'model_remove') {
                 result = await ollamaSpawn(['rm', String(args?.model)]);
             } else {
@@ -554,6 +554,87 @@ async function runDaemon(args, ctx) {
                 else reject(new Error(`ollama exited ${code}: ${(err || out).slice(-512)}`));
             });
         });
+    }
+
+    /**
+     * Pull a model via Ollama's HTTP API (POST /api/pull) so we can
+     * stream progress JSON and post throttled updates to the control
+     * plane. The web dashboard renders a progress bar from those
+     * updates.
+     *
+     * Each NDJSON line looks like:
+     *   {"status":"pulling manifest"}
+     *   {"status":"downloading","digest":"sha256:abc","total":1234,"completed":456}
+     *   {"status":"verifying sha256 digest"}
+     *   {"status":"success"}
+     */
+    async function ollamaPullWithProgress(modelName, commandId) {
+        const ollamaHost = process.env.OLLAMA_HOST ?? 'http://localhost:11434';
+        const url = new URL('/api/pull', ollamaHost);
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: modelName, stream: true })
+        });
+        if (!res.ok || !res.body) {
+            throw new Error(`ollama pull HTTP ${res.status}`);
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let lastPostMs = 0;
+        let lastStatus = null;
+        let finalLine = null;
+        const POST_THROTTLE_MS = 2000;
+
+        const postProgress = async (line) => {
+            try {
+                const safe = {
+                    status: typeof line.status === 'string' ? line.status : null,
+                    total: Number.isFinite(line.total) ? line.total : null,
+                    completed: Number.isFinite(line.completed) ? line.completed : null,
+                    pct: (Number.isFinite(line.total) && Number.isFinite(line.completed) && line.total > 0)
+                        ? Math.round((line.completed / line.total) * 100)
+                        : null
+                };
+                await client.updateCommandProgress(commandId, safe);
+            } catch (err) {
+                // Don't fail the pull on a progress-post hiccup.
+                process.stderr.write(`progress post failed: ${err?.message ?? err}\n`);
+            }
+        };
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let idx;
+            while ((idx = buffer.indexOf('\n')) >= 0) {
+                const raw = buffer.slice(0, idx).trim();
+                buffer = buffer.slice(idx + 1);
+                if (!raw) continue;
+                let line;
+                try { line = JSON.parse(raw); } catch { continue; }
+                finalLine = line;
+                if (line.error) throw new Error(`ollama: ${line.error}`);
+
+                // Post when status changes (manifest → downloading → verifying →
+                // success) OR when we've been on the same status long enough.
+                const now = Date.now();
+                const statusChanged = line.status !== lastStatus;
+                if (statusChanged || (now - lastPostMs) > POST_THROTTLE_MS) {
+                    lastStatus = line.status;
+                    lastPostMs = now;
+                    await postProgress(line);
+                }
+            }
+        }
+        // Final 100% post on success.
+        if (finalLine?.status === 'success' || (finalLine && !finalLine.error)) {
+            await postProgress({ status: 'success', total: 1, completed: 1 });
+        }
+        return { stdout: 'pulled via /api/pull', code: 0 };
     }
 
     function snapshot() {

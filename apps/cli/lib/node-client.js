@@ -124,6 +124,13 @@ export function createNodeClient({ url, publicKey, privateKey, role, timeoutMs =
             );
         },
 
+        updateCommandProgress(commandId, progress) {
+            return signedFetch(
+                `/api/v1/node/commands/${encodeURIComponent(commandId)}/progress`,
+                { progress }
+            );
+        },
+
         listPayouts() {
             return signedFetch('/api/v1/node/payouts/list', {});
         },

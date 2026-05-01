@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/cli",
-  "version": "0.1.25",
+  "version": "0.1.26",
   "description": "GPU-node CLI / daemon for the Infernet Protocol — register a GPU server with a Supabase control plane and start earning.",
   "license": "MIT",
   "type": "module",

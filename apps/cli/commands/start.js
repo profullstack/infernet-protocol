@@ -777,6 +777,78 @@ async function runDaemon(args, ctx) {
     }
 
     /**
+     * IPIP-0031: distributed inference proxy. Accepts a chat request,
+     * spawns a Python Petals client subprocess, streams its JSON-line
+     * output back as SSE.
+     *
+     *   POST /v1/petals/inference
+     *   body: { model, messages, max_tokens?, temperature? }
+     *   response: text/event-stream with token / done / error frames
+     */
+    async function handlePetalsInference(req, res) {
+        if (req.method !== 'POST' || req.url !== '/v1/petals/inference') return false;
+
+        const fsp = await import('node:fs/promises');
+        const path = await import('node:path');
+        const os = await import('node:os');
+        const { PETALS_CLIENT_PY } = await import('../lib/inference/petals-client.py.js');
+
+        // Read JSON body
+        let body = '';
+        await new Promise((resolve, reject) => {
+            req.on('data', (chunk) => { body += chunk.toString(); });
+            req.on('end', resolve);
+            req.on('error', reject);
+        });
+        let payload;
+        try { payload = JSON.parse(body); } catch {
+            res.writeHead(400, { 'content-type': 'text/plain' });
+            res.end('bad json\n');
+            return true;
+        }
+
+        // Drop the bundled Python client to a temp file and spawn it.
+        const tmp = path.join(os.tmpdir(), `petals-${process.pid}-${Date.now()}.py`);
+        await fsp.writeFile(tmp, PETALS_CLIENT_PY);
+
+        res.writeHead(200, {
+            'content-type': 'text/event-stream',
+            'cache-control': 'no-cache',
+            'x-accel-buffering': 'no'
+        });
+
+        const child = spawn('python3', [tmp], { stdio: ['pipe', 'pipe', 'pipe'] });
+        child.stdin.write(JSON.stringify(payload));
+        child.stdin.end();
+
+        let stdoutBuf = '';
+        child.stdout.on('data', (chunk) => {
+            stdoutBuf += chunk.toString();
+            let nl;
+            while ((nl = stdoutBuf.indexOf('\n')) >= 0) {
+                const line = stdoutBuf.slice(0, nl).trim();
+                stdoutBuf = stdoutBuf.slice(nl + 1);
+                if (!line) continue;
+                try {
+                    const ev = JSON.parse(line);
+                    res.write(`event: ${ev.event ?? 'data'}\ndata: ${JSON.stringify(ev)}\n\n`);
+                } catch {
+                    res.write(`event: log\ndata: ${JSON.stringify({ raw: line })}\n\n`);
+                }
+            }
+        });
+        child.stderr.on('data', (chunk) => {
+            res.write(`event: log\ndata: ${JSON.stringify({ stderr: chunk.toString() })}\n\n`);
+        });
+        child.on('exit', async (code) => {
+            res.write(`event: exit\ndata: ${JSON.stringify({ code })}\n\n`);
+            res.end();
+            try { await fsp.unlink(tmp); } catch { /* ignore */ }
+        });
+        return true;
+    }
+
+    /**
      * IPIP-0030: shard-hosting routes layered on top of /healthz.
      * Returns true if the request matched and was handled.
      */
@@ -1060,6 +1132,15 @@ async function runDaemon(args, ctx) {
             } catch (err) {
                 res.writeHead(500, { 'content-type': 'text/plain' });
                 res.end(`training http error: ${err?.message ?? err}\n`);
+                return;
+            }
+
+            try {
+                const petalsHandled = await handlePetalsInference(req, res);
+                if (petalsHandled) return;
+            } catch (err) {
+                res.writeHead(500, { 'content-type': 'text/plain' });
+                res.end(`petals http error: ${err?.message ?? err}\n`);
                 return;
             }
 

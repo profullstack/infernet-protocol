@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>The Infernet Protocol Book</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">The Infernet Protocol Book</h1>
+</header>
+<h1 id="architecture">Architecture</h1>
+<p>Infernet Protocol has four major components: the control plane, node
+daemons, inference backends, and the on-chain payment layer. Here’s how
+they connect.</p>
+<h2 id="component-overview">Component Overview</h2>
+<pre><code>┌─────────────────────────────────────────────────────────────────┐
+│                        CONTROL PLANE                            │
+│                   (Next.js + Supabase)                          │
+│                                                                 │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
+│  │  Node        │  │  Job         │  │  Payment             │  │
+│  │  Registry    │  │  Router      │  │  Accounting          │  │
+│  └──────────────┘  └──────────────┘  └──────────────────────┘  │
+└────────────────────────────┬────────────────────────────────────┘
+                             │  HTTPS / SSE
+         ┌───────────────────┼───────────────────┐
+         │                   │                   │
+         ▼                   ▼                   ▼
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│   NODE DAEMON   │ │   NODE DAEMON   │ │   NODE DAEMON   │
+│  (infernet      │ │  (infernet      │ │  (infernet      │
+│   start)        │ │   start)        │ │   start)        │
+│                 │ │                 │ │                 │
+│ ┌─────────────┐ │ │ ┌─────────────┐ │ │ ┌─────────────┐ │
+│ │   Ollama    │ │ │ │    vLLM     │ │ │ │   SGLang    │ │
+│ │  (default)  │ │ │ │             │ │ │ │             │ │
+│ └─────────────┘ │ │ └─────────────┘ │ │ └─────────────┘ │
+└────────┬────────┘ └─────────────────┘ └─────────────────┘
+         │
+         ▼ on-chain
+┌─────────────────────────────┐
+│   PAYMENT LAYER             │
+│   (EVM / Solana / etc.)     │
+│   Compute Payment Receipts  │
+└─────────────────────────────┘</code></pre>
+<h2 id="control-plane">Control Plane</h2>
+<p>The control plane is a Next.js application backed by Supabase. It
+serves two audiences:</p>
+<p><strong>The dashboard</strong> — a web UI for operators to see their
+nodes’ status, earnings, model inventory, and recent jobs. Clients can
+also use the dashboard to browse available models and manage API
+access.</p>
+<p><strong>The API</strong> — the REST endpoints that clients call to
+submit jobs and that node daemons call to register, heartbeat, and poll
+for commands. The primary job submission endpoint is
+<code>POST /api/v1/jobs</code>.</p>
+<p>Supabase handles persistence: node registrations, job records,
+payment accounting, and the command queue (model installs/removes).
+Supabase Realtime is used for live dashboard updates.</p>
+<p>The control plane is open source. You can self-host it — see <a
+href="../06-advanced/self-hosting.html">Chapter 6: Self-Hosting</a>.</p>
+<h2 id="node-daemon">Node Daemon</h2>
+<p>The node daemon is the process started by
+<code>infernet start</code>. It does several things:</p>
+<p><strong>Heartbeat loop</strong> — every 30 seconds, the daemon sends
+a signed heartbeat to the control plane. The heartbeat includes: node
+public key, IP address, port, GPU stats, which models are currently
+loaded, and current load. If the control plane doesn’t hear from a node
+for 90 seconds, it marks the node offline.</p>
+<p><strong>Command polling</strong> — on each heartbeat cycle, the
+daemon checks a command queue in the control plane. Commands include
+<code>model_install</code> (pull a new model) and
+<code>model_remove</code> (evict a model). Operators issue these
+commands from the dashboard or CLI; the daemon picks them up and
+executes them.</p>
+<p><strong>Job execution</strong> — when a job is routed to the node,
+the daemon receives it, calls the local inference backend, and streams
+the result back.</p>
+<p><strong>Auth</strong> — every request the daemon makes is signed with
+the node’s secp256k1 private key. The signature covers the HTTP method,
+path, body hash, a nonce, and a timestamp. This is carried in the
+<code>X-Infernet-Auth</code> header. The control plane verifies the
+signature against the node’s registered public key. The private key
+never leaves the node.</p>
+<h2 id="inference-backends">Inference Backends</h2>
+<p>The daemon doesn’t run inference itself. It delegates to one of five
+supported backends:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Backend</th>
+<th>Best for</th>
+<th>Protocol</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Ollama</td>
+<td>General use, easy setup</td>
+<td>REST at <code>localhost:11434</code></td>
+</tr>
+<tr class="even">
+<td>vLLM</td>
+<td>High-throughput NVIDIA</td>
+<td>OpenAI-compatible REST</td>
+</tr>
+<tr class="odd">
+<td>SGLang</td>
+<td>KV-cache reuse, structured output</td>
+<td>OpenAI-compatible REST</td>
+</tr>
+<tr class="even">
+<td>Modular MAX</td>
+<td>Throughput, modern NVIDIA</td>
+<td>REST at configurable port</td>
+</tr>
+<tr class="odd">
+<td>llama.cpp</td>
+<td>CPU, Apple Silicon, GGUF models</td>
+<td>REST via llama-swap</td>
+</tr>
+</tbody>
+</table>
+<p>The daemon probes each backend in priority order at startup and uses
+the first one that responds. You can override the selection with env
+vars.</p>
+<h2 id="job-flow">Job Flow</h2>
+<p>Here’s what happens from the moment a client submits a job to the
+moment they receive the last token:</p>
+<pre><code>Client                 Control Plane              Node Daemon         Backend
+  │                        │                          │                  │
+  │  POST /api/v1/jobs      │                          │                  │
+  │──────────────────────&gt;  │                          │                  │
+  │                        │  route to best node       │                  │
+  │                        │─────────────────────────&gt; │                  │
+  │                        │                          │  POST /generate   │
+  │                        │                          │─────────────────&gt; │
+  │  GET /api/v1/jobs/:id/stream                       │                  │
+  │──────────────────────────────────────────────────&gt; │                  │
+  │                        │                          │ &lt;── token chunk ──│
+  │ &lt;── SSE: {text:&quot;...&quot;}──────────────────────────── │                  │
+  │ &lt;── SSE: {text:&quot;...&quot;}──────────────────────────── │                  │
+  │ &lt;── SSE: [DONE] ───────────────────────────────── │                  │
+  │                        │                          │                  │
+  │                        │  job complete + CPR       │                  │
+  │                        │ &lt;───────────────────────  │                  │</code></pre>
+<p>The client can poll <code>GET /api/v1/jobs/:id</code> for status or
+open an SSE stream for real-time token delivery. Most applications use
+the stream.</p>
+<h2 id="key-design-decisions">Key Design Decisions</h2>
+<p><strong>Supabase as the coordination layer</strong> — not a custom
+blockchain. Job routing, node registry, and command queuing run on
+Postgres with real-time capabilities. This keeps latency low and the
+stack familiar. On-chain components handle only what needs to be
+on-chain: payment settlement.</p>
+<p><strong>Nodes never trust the control plane with keys</strong> — the
+secp256k1 auth model means the control plane can verify node identity
+without ever holding private keys. A compromised control plane cannot
+impersonate a node or steal earnings.</p>
+<p><strong>Backends are swappable</strong> — the daemon speaks to all
+backends through a thin adapter layer. Adding a new backend is a matter
+of implementing the adapter, not changing the protocol.</p>
+<p><strong>SSE for streaming</strong> — Server-Sent Events are simpler
+than WebSockets for unidirectional streaming and work through most
+proxies and CDNs without special configuration.</p>
+</body>
+</html>

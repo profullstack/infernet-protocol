@@ -78,7 +78,7 @@ jobs:
             --resource-path=docs/book \
             -o docs/book/infernet-book.epub
 
-      - name: Build HTML
+      - name: Build single-file HTML (all-in-one download)
         run: |
           pandoc docs/book/_combined.md \
             --standalone \
@@ -88,6 +88,28 @@ jobs:
             --resource-path=docs/book \
             --lua-filter=docs/book/rewrite-md-links.lua \
             -o docs/book/infernet-book.html
+
+      - name: Build per-chapter HTML pages (pandoc md → html)
+        run: |
+          # One pandoc invocation per .md file. The md-to-html-links.lua
+          # filter rewrites cross-chapter [link](other.md) references to
+          # [link](other.html), so the chapter HTML files cross-link
+          # naturally without any custom routing.
+          mkdir -p apps/web/public/book
+          find docs/book -name "*.md" -not -name "_combined.md" | while read md; do
+            rel="${md#docs/book/}"
+            out="apps/web/public/book/${rel%.md}.html"
+            mkdir -p "$(dirname "$out")"
+            pandoc "$md" \
+              --standalone \
+              --highlight-style=tango \
+              --metadata title="The Infernet Protocol Book" \
+              --resource-path="$(dirname "$md")":docs/book \
+              --lua-filter=docs/book/md-to-html-links.lua \
+              -o "$out"
+          done
+          echo "built per-chapter pages:"
+          find apps/web/public/book -name "*.html" | wc -l
 
       - name: Copy to web public dir
         run: |
@@ -113,9 +135,7 @@ jobs:
             docs/book/infernet-book.pdf \
             docs/book/infernet-book.epub \
             docs/book/infernet-book.html \
-            apps/web/public/book/infernet-book.pdf \
-            apps/web/public/book/infernet-book.epub \
-            apps/web/public/book/infernet-book.html || true
+            apps/web/public/book/ || true
           git diff --cached --quiet || \
             git commit -m "ci(book): regenerate PDF + EPUB + HTML [skip ci]"
           # Pull any commits that landed mid-build before pushing, so we

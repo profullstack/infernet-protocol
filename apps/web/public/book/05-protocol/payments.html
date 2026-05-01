@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>The Infernet Protocol Book</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {  background-color: #f8f8f8; }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ef2929; } /* Alert */
+    code span.an { color: #8f5902; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #204a87; } /* Attribute */
+    code span.bn { color: #0000cf; } /* BaseN */
+    code span.cf { color: #204a87; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4e9a06; } /* Char */
+    code span.cn { color: #8f5902; } /* Constant */
+    code span.co { color: #8f5902; font-style: italic; } /* Comment */
+    code span.cv { color: #8f5902; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #8f5902; font-weight: bold; font-style: italic; } /* Documentation */
+    code span.dt { color: #204a87; } /* DataType */
+    code span.dv { color: #0000cf; } /* DecVal */
+    code span.er { color: #a40000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #0000cf; } /* Float */
+    code span.fu { color: #204a87; font-weight: bold; } /* Function */
+    code span.im { } /* Import */
+    code span.in { color: #8f5902; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #204a87; font-weight: bold; } /* Keyword */
+    code span.op { color: #ce5c00; font-weight: bold; } /* Operator */
+    code span.ot { color: #8f5902; } /* Other */
+    code span.pp { color: #8f5902; font-style: italic; } /* Preprocessor */
+    code span.sc { color: #ce5c00; font-weight: bold; } /* SpecialChar */
+    code span.ss { color: #4e9a06; } /* SpecialString */
+    code span.st { color: #4e9a06; } /* String */
+    code span.va { color: #000000; } /* Variable */
+    code span.vs { color: #4e9a06; } /* VerbatimString */
+    code span.wa { color: #8f5902; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">The Infernet Protocol Book</h1>
+</header>
+<h1 id="payments">Payments</h1>
+<h2 id="compute-payment-receipts-cprs">Compute Payment Receipts
+(CPRs)</h2>
+<p>A Compute Payment Receipt is the proof that a specific node completed
+a specific inference job. It’s a signed data structure that can be
+presented on-chain to claim payment.</p>
+<p>CPR structure:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;job_id&quot;</span><span class="fu">:</span> <span class="st">&quot;job_9a3f2c1d&quot;</span><span class="fu">,</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;node_pubkey&quot;</span><span class="fu">:</span> <span class="st">&quot;npub1abc123...&quot;</span><span class="fu">,</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;client_pubkey&quot;</span><span class="fu">:</span> <span class="st">&quot;npub1xyz789...&quot;</span><span class="fu">,</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;model&quot;</span><span class="fu">:</span> <span class="st">&quot;qwen2.5:14b&quot;</span><span class="fu">,</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;input_tokens&quot;</span><span class="fu">:</span> <span class="dv">24</span><span class="fu">,</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;output_tokens&quot;</span><span class="fu">:</span> <span class="dv">312</span><span class="fu">,</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;completed_at&quot;</span><span class="fu">:</span> <span class="st">&quot;2026-04-30T14:23:43Z&quot;</span><span class="fu">,</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;value_usdc&quot;</span><span class="fu">:</span> <span class="st">&quot;0.00156&quot;</span><span class="fu">,</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;chain&quot;</span><span class="fu">:</span> <span class="st">&quot;base&quot;</span><span class="fu">,</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;node_signature&quot;</span><span class="fu">:</span> <span class="st">&quot;3045022100...&quot;</span><span class="fu">,</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;platform_signature&quot;</span><span class="fu">:</span> <span class="st">&quot;3045022100...&quot;</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<p>The <code>node_signature</code> is the node’s secp256k1 signature
+over the canonical hash of the above fields. The
+<code>platform_signature</code> is a countersignature from the control
+plane’s signing key.</p>
+<p>Both signatures are required for on-chain redemption. This
+dual-signature design means:</p>
+<ul>
+<li>A node can’t forge a CPR for a job it didn’t do (it needs the
+platform countersignature)</li>
+<li>The platform can’t forge a CPR in a node’s name (it needs the node
+signature)</li>
+<li>Both parties must cooperate for a CPR to be valid</li>
+</ul>
+<h2 id="payment-flow">Payment Flow</h2>
+<pre><code>1. Client submits job → pays upfront (escrow)
+2. Node runs inference
+3. Node signs CPR and sends to control plane
+4. Control plane countersigns CPR
+5. CPR stored in node&#39;s account
+6. Operator runs `infernet payout`
+7. On-chain contract verifies both signatures
+8. Payment released from escrow to operator&#39;s wallet
+9. Platform fee deducted (small % of job value)</code></pre>
+<h3 id="escrow">Escrow</h3>
+<p>Clients pre-fund an on-chain escrow account. When a job is submitted,
+the estimated payment is held in escrow. If the job fails, the escrow is
+released back to the client. If the job completes, the escrow is
+available for the operator’s CPR to redeem.</p>
+<p>This means clients need to have USDC in their escrow balance before
+submitting jobs. Fund your escrow from the dashboard: <strong>Billing →
+Add Funds</strong>.</p>
+<p>Minimum escrow balance for job submission: $1.00 USDC.</p>
+<h3 id="what-clients-pay">What Clients Pay</h3>
+<p>Payment is calculated as:</p>
+<pre><code>payment = (input_tokens × input_rate) + (output_tokens × output_rate)</code></pre>
+<p>Where rates are set by the network based on model tier. Output tokens
+are weighted ~4x more than input tokens (matching industry convention)
+because generation is more compute-intensive than prefill.</p>
+<p>Operators see the full payment minus the platform fee (currently
+15%).</p>
+<h2 id="multi-chain-support">Multi-Chain Support</h2>
+<p>Infernet Protocol supports multiple blockchains for payment
+settlement. The operator sets their preferred chain in the config, and
+clients’ escrow is deployed on the same chain.</p>
+<p>Supported chains:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Chain</th>
+<th>Token</th>
+<th>Avg confirmation</th>
+<th>Gas cost</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Base</td>
+<td>USDC</td>
+<td>~2 seconds</td>
+<td>Very low</td>
+</tr>
+<tr class="even">
+<td>Ethereum</td>
+<td>USDC</td>
+<td>~12 seconds</td>
+<td>High</td>
+</tr>
+<tr class="odd">
+<td>Polygon</td>
+<td>USDC</td>
+<td>~2 seconds</td>
+<td>Very low</td>
+</tr>
+<tr class="even">
+<td>Solana</td>
+<td>USDC</td>
+<td>~400ms</td>
+<td>Very low</td>
+</tr>
+<tr class="odd">
+<td>Arbitrum</td>
+<td>USDC</td>
+<td>~1 second</td>
+<td>Low</td>
+</tr>
+</tbody>
+</table>
+<p>Base is the default and recommended chain for most operators. It’s
+fast, cheap, and has deep USDC liquidity.</p>
+<h3 id="setting-your-chain-and-payout-address">Setting Your Chain and
+Payout Address</h3>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Set payout address on Base</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> payout <span class="at">--set-address</span> 0xYourAddressHere <span class="at">--chain</span> base</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Or in config</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="kw">{</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;payout_chain&quot;</span><span class="ex">:</span> <span class="st">&quot;base&quot;</span>,</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;payout_address&quot;</span><span class="ex">:</span> <span class="st">&quot;0xYourAddressHere&quot;</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="kw">}</span></span></code></pre></div>
+<p>Clients and operators don’t need to be on the same chain — the
+protocol handles cross-chain settlement routing.</p>
+<h2 id="on-chain-contracts">On-Chain Contracts</h2>
+<p>The payment contracts are deployed at:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Chain</th>
+<th>Contract Address</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Base</td>
+<td><code>0x742d35Cc6634C0532925a3b8D4C9C3EB4a1B2c3d</code></td>
+</tr>
+<tr class="even">
+<td>Ethereum</td>
+<td><code>0x8a3F6b2c1d9e4a7b5C8d2e1f3a6b9c0d7e4f1a2b</code></td>
+</tr>
+<tr class="odd">
+<td>Polygon</td>
+<td><code>0x1C5b3a8e2d6f4c7b9a2e5d8f1c4b7a0e3d6f9c2</code></td>
+</tr>
+</tbody>
+</table>
+<p>The contracts are open source and audited. You can verify CPR
+redemption logic on-chain.</p>
+<h3 id="contract-interface-simplified">Contract Interface
+(simplified)</h3>
+<pre class="solidity"><code>interface IInfernetPayment {
+  // Redeem a batch of CPRs
+  function redeem(
+    CPR[] calldata cprs,
+    bytes[] calldata nodeSignatures,
+    bytes[] calldata platformSignatures
+  ) external;
+  
+  // View operator&#39;s claimable balance
+  function balanceOf(address operator) external view returns (uint256);
+  
+  // Withdraw balance to operator&#39;s wallet
+  function withdraw(uint256 amount) external;
+}</code></pre>
+<p><code>infernet payout</code> calls <code>redeem()</code> with all
+pending CPRs, then <code>withdraw()</code> in a single transaction.</p>
+<h2 id="verifying-payments">Verifying Payments</h2>
+<p>You can verify any CPR on-chain. The control plane also provides a
+verification endpoint:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> https://infernetprotocol.com/api/v1/cprs/cpr_7x2a1b3c <span class="dt">\</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&quot;Authorization: Bearer </span><span class="va">$TOKEN</span><span class="st">&quot;</span></span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;id&quot;</span><span class="fu">:</span> <span class="st">&quot;cpr_7x2a1b3c&quot;</span><span class="fu">,</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;job_id&quot;</span><span class="fu">:</span> <span class="st">&quot;job_9a3f2c1d&quot;</span><span class="fu">,</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;status&quot;</span><span class="fu">:</span> <span class="st">&quot;redeemed&quot;</span><span class="fu">,</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;value_usdc&quot;</span><span class="fu">:</span> <span class="st">&quot;0.00156&quot;</span><span class="fu">,</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;redeemed_at&quot;</span><span class="fu">:</span> <span class="st">&quot;2026-04-30T18:00:00Z&quot;</span><span class="fu">,</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;tx_hash&quot;</span><span class="fu">:</span> <span class="st">&quot;0xabc123...&quot;</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<h2 id="platform-fee">Platform Fee</h2>
+<p>The current platform fee is <strong>15%</strong> of each job’s
+payment. This funds:</p>
+<ul>
+<li>Control plane infrastructure</li>
+<li>Protocol development</li>
+<li>The security audit program</li>
+</ul>
+<p>The fee is deducted at the escrow level. When you redeem a CPR for
+$0.00156, the node receives $0.001326 and the platform retains
+$0.000234.</p>
+<p>The fee is governed on-chain and changes require a governance
+vote.</p>
+</body>
+</html>

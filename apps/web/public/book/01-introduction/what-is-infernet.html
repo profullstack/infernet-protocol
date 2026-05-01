@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>The Infernet Protocol Book</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">The Infernet Protocol Book</h1>
+</header>
+<h1 id="what-is-infernet-protocol">What Is Infernet Protocol?</h1>
+<h2 id="the-problem">The Problem</h2>
+<p>Modern AI applications depend almost entirely on a handful of
+centralized API providers. When OpenAI has an outage, thousands of
+products break. When Anthropic changes its pricing, startups scramble.
+When a model gets deprecated, months of prompt engineering disappears
+overnight.</p>
+<p>Beyond reliability and cost, there’s a structural problem: the
+compute that runs these models is controlled by a small number of large
+cloud providers. GPUs are expensive. If you have one, there’s currently
+no straightforward way to monetize it by running inference for others.
+If you need inference, you’re stuck paying whatever the incumbent
+providers charge.</p>
+<p>Infernet Protocol is built to fix both sides of this.</p>
+<h2 id="what-it-is">What It Is</h2>
+<p>Infernet Protocol is a decentralized GPU compute network for LLM
+inference. It has two kinds of participants:</p>
+<p><strong>Node operators</strong> run GPU servers with inference
+software installed. They register their nodes on the network, keep
+models loaded, and accept inference jobs. They earn crypto payments per
+job completed.</p>
+<p><strong>Clients</strong> submit inference jobs through a unified API.
+Jobs are routed to available nodes, executed, and results are streamed
+back. Clients pay per job. They don’t need to know which node ran their
+job.</p>
+<p>The network is coordinated through a control plane (a Next.js app
+backed by Supabase) that handles node registration, job routing, and
+payment accounting. Crucially, the control plane never holds private
+keys. All auth uses Nostr-style secp256k1 keypairs where nodes sign
+their own requests.</p>
+<h2 id="how-it-works-at-a-high-level">How It Works at a High Level</h2>
+<ol type="1">
+<li><p><strong>A node operator installs the CLI</strong> and runs
+<code>infernet setup</code>. This generates a secp256k1 keypair, detects
+the GPU, installs an inference backend (Ollama by default), and
+registers the node on the network.</p></li>
+<li><p><strong>The daemon starts</strong> with
+<code>infernet start</code>. It heartbeats to the control plane every 30
+seconds, reporting which models are loaded, GPU utilization, and
+availability.</p></li>
+<li><p><strong>A client submits a job</strong> via
+<code>POST /api/v1/jobs</code>. The control plane routes the job to a
+suitable node based on model availability, capacity, and
+proximity.</p></li>
+<li><p><strong>The node runs inference</strong> using whichever backend
+is installed (Ollama, vLLM, SGLang, MAX, or llama.cpp). Results stream
+back to the client via Server-Sent Events.</p></li>
+<li><p><strong>Payment is settled</strong>. The node’s wallet receives a
+Compute Payment Receipt (CPR) that can be redeemed on-chain. Operators
+run <code>infernet payout</code> to claim earnings.</p></li>
+</ol>
+<h2 id="what-makes-it-different">What Makes It Different</h2>
+<p><strong>No vendor lock-in.</strong> The API is consistent regardless
+of which backend is running inference. You can switch from Ollama to
+vLLM by changing an env var without changing your client code.</p>
+<p><strong>Censorship resistance.</strong> Because any operator can join
+and any model can be served, the network isn’t dependent on any single
+company’s content policies or business decisions.</p>
+<p><strong>Real hardware.</strong> Jobs run on real GPUs owned by real
+people, not virtual machines. Operators who invest in better hardware
+can handle larger models and charge more.</p>
+<p><strong>Crypto-native payments.</strong> Payments are settled
+on-chain with no intermediary holding funds. Operators get paid directly
+into their wallets.</p>
+<p><strong>Open source.</strong> The CLI, control plane code, and
+protocol spec are all open source. You can self-host the entire stack if
+you want full independence.</p>
+<h2 id="what-it-is-not">What It Is Not</h2>
+<p>Infernet Protocol is not a model hosting service. It doesn’t store
+model weights. Operators pull models onto their own machines and serve
+them from local storage.</p>
+<p>It’s not a training platform (yet — see <a
+href="../06-advanced/distributed-training.html">Chapter 6</a> for the
+roadmap).</p>
+<p>It’s not a cloud provider. There are no SLAs, no guaranteed uptime
+per node, and no managed infrastructure. The network’s reliability comes
+from having many nodes, not from any individual node being highly
+available.</p>
+</body>
+</html>

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>The Infernet Protocol Book</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {  background-color: #f8f8f8; }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ef2929; } /* Alert */
+    code span.an { color: #8f5902; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #204a87; } /* Attribute */
+    code span.bn { color: #0000cf; } /* BaseN */
+    code span.cf { color: #204a87; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4e9a06; } /* Char */
+    code span.cn { color: #8f5902; } /* Constant */
+    code span.co { color: #8f5902; font-style: italic; } /* Comment */
+    code span.cv { color: #8f5902; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #8f5902; font-weight: bold; font-style: italic; } /* Documentation */
+    code span.dt { color: #204a87; } /* DataType */
+    code span.dv { color: #0000cf; } /* DecVal */
+    code span.er { color: #a40000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #0000cf; } /* Float */
+    code span.fu { color: #204a87; font-weight: bold; } /* Function */
+    code span.im { } /* Import */
+    code span.in { color: #8f5902; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #204a87; font-weight: bold; } /* Keyword */
+    code span.op { color: #ce5c00; font-weight: bold; } /* Operator */
+    code span.ot { color: #8f5902; } /* Other */
+    code span.pp { color: #8f5902; font-style: italic; } /* Preprocessor */
+    code span.sc { color: #ce5c00; font-weight: bold; } /* SpecialChar */
+    code span.ss { color: #4e9a06; } /* SpecialString */
+    code span.st { color: #4e9a06; } /* String */
+    code span.va { color: #000000; } /* Variable */
+    code span.vs { color: #4e9a06; } /* VerbatimString */
+    code span.wa { color: #8f5902; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">The Infernet Protocol Book</h1>
+</header>
+<h1 id="nostr-key-hierarchy-ipip-0028">Nostr Key Hierarchy
+(IPIP-0028)</h1>
+<p>Infernet Protocol uses a three-party key hierarchy (specified in
+IPIP-0028) that enables fine-grained permissions without sharing private
+keys. The three key types are: <strong>user keys</strong>, <strong>node
+keys</strong>, and <strong>model keys</strong>.</p>
+<h2 id="overview">Overview</h2>
+<pre><code>User keypair
+  ├── signs node registrations
+  ├── authorizes model installs/removes
+  └── delegates to → Node keypair
+                       ├── signs API requests to control plane
+                       ├── signs CPRs
+                       └── delegates to → Model keypair (one per model artifact)
+                                            ├── signs model-specific metadata
+                                            └── used for NIP-44 encrypted model comms</code></pre>
+<p>Each level can only do what its parent authorized. The user key
+(which the operator ultimately controls) never needs to be online — it’s
+only needed when registering a node or changing node permissions.</p>
+<h2 id="user-keys">User Keys</h2>
+<p>The user key is the operator’s master identity on the network. It’s
+analogous to a Nostr account key or an Ethereum wallet key.</p>
+<p><strong>Purpose:</strong> - Prove ownership of a set of nodes -
+Authorize node registrations - Sign operator profile metadata - Required
+for governance participation</p>
+<p><strong>Where it lives:</strong> In your personal wallet or key
+manager, ideally offline. It should not be on the node machine.</p>
+<p><strong>Format:</strong> secp256k1 keypair, encoded in bech32 as
+<code>nsec1...</code> / <code>npub1...</code> (Nostr-compatible).</p>
+<p>You don’t interact with the user key frequently — only when
+registering a new node or making major changes.</p>
+<h2 id="node-keys">Node Keys</h2>
+<p>The node key is generated by <code>infernet setup</code> and lives on
+the node machine. It’s the key that signs every API request and every
+CPR.</p>
+<p><strong>Purpose:</strong> - Authenticate requests to the control
+plane - Sign Compute Payment Receipts - Identify the node on the
+network</p>
+<p><strong>Where it lives:</strong>
+<code>~/.infernet/keys/node.key</code> (file permission 600)</p>
+<p><strong>Relationship to user key:</strong> The node key is authorized
+by the user key. During <code>infernet setup</code>, the user key signs
+a delegation message that says “this node key is authorized to act on
+behalf of user X”. The control plane verifies this delegation before
+accepting the node’s registration.</p>
+<p>If you run multiple nodes, each has its own node key, but all are
+authorized by the same user key.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># View your node&#39;s public key</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> status <span class="kw">|</span> <span class="fu">grep</span> <span class="st">&quot;Public key&quot;</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co"># View the user key that authorized it</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> status <span class="kw">|</span> <span class="fu">grep</span> <span class="st">&quot;Authorized by&quot;</span></span></code></pre></div>
+<h3 id="node-key-rotation">Node Key Rotation</h3>
+<p>If you believe your node key is compromised, you can rotate it:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> keys rotate</span></code></pre></div>
+<p>This generates a new node keypair, signs the rotation with the old
+node key (proving you control the old key and are deliberately replacing
+it), and re-registers with the control plane. The old key is revoked.
+Any pending CPRs signed with the old key can still be redeemed during a
+24-hour grace period.</p>
+<h2 id="model-keys-ipip-0028">Model Keys (IPIP-0028)</h2>
+<p>Per IPIP-0028, each model artifact has its own secp256k1 keypair.
+This is the most granular level of the key hierarchy.</p>
+<p><strong>Purpose:</strong> - Sign model-specific metadata (version,
+hash, capabilities) - Enable NIP-44 encrypted communication between
+nodes and clients about specific model interactions - Support
+model-level reputation and provenance tracking</p>
+<p><strong>Where it lives:</strong> Generated by the daemon when a model
+is installed, stored in <code>~/.infernet/keys/models/</code></p>
+<pre><code>~/.infernet/keys/models/
+  qwen2.5:14b.key
+  llama3.2:3b.key
+  deepseek-coder:6.7b.key</code></pre>
+<p><strong>Format:</strong> Same secp256k1 format. Each model key is
+authorized by the node key that generated it.</p>
+<h3 id="what-model-keys-enable">What Model Keys Enable</h3>
+<p><strong>Model provenance</strong>: When a client requests inference,
+the response includes a signature from the model key. This lets clients
+verify that the response came from the correct model artifact on the
+correct node.</p>
+<p><strong>NIP-44 encrypted channels</strong>: NIP-44 is a Nostr
+standard for encrypted direct messages using secp256k1 keys. Model keys
+can be used to establish encrypted channels between a client’s key and a
+specific model key. This enables confidential inference where the
+control plane can route the job without seeing the prompt content.</p>
+<p><strong>Model reputation</strong>: Model keys accumulate a reputation
+history on the control plane — successful completions, failure rate,
+latency percentiles. Clients can query this reputation before requesting
+a specific model key.</p>
+<h3 id="model-key-delegation-chain">Model Key Delegation Chain</h3>
+<p>The full delegation chain:</p>
+<pre><code>User key
+  └─signs→ &quot;node_key_abc123 is authorized&quot;
+              └─signs→ &quot;model_key_xyz789 is authorized for qwen2.5:14b on node_abc123&quot;
+                          └─signs→ inference response metadata</code></pre>
+<p>Each level in the chain can be verified independently by anyone with
+the parent’s public key.</p>
+<h2 id="key-operations">Key Operations</h2>
+<h3 id="viewing-all-keys">Viewing All Keys</h3>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> keys list</span></code></pre></div>
+<pre><code>User key:      npub1abc123... (not on this machine — delegation only)
+Node key:      npub1def456... (~/.infernet/keys/node.key)
+Model keys:
+  qwen2.5:14b  npub1ghi789... (~/.infernet/keys/models/qwen2.5:14b.key)
+  llama3.2:3b  npub1jkl012... (~/.infernet/keys/models/llama3.2:3b.key)</code></pre>
+<h3 id="exporting-a-public-key">Exporting a Public Key</h3>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Get node public key in hex format</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> keys export node <span class="at">--format</span> hex</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Get in npub (bech32) format</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> keys export node <span class="at">--format</span> npub</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Get model key</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> keys export model qwen2.5:14b <span class="at">--format</span> hex</span></code></pre></div>
+<h3 id="verifying-a-signature">Verifying a Signature</h3>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Verify a CPR signature</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> keys verify cpr_7x2a1b3c</span></code></pre></div>
+<h2 id="nip-44-encryption-advanced">NIP-44 Encryption (Advanced)</h2>
+<p>For applications requiring confidential inference, clients can use
+NIP-44 to encrypt the prompt:</p>
+<ol type="1">
+<li>Client fetches the model key’s public key from the control
+plane</li>
+<li>Client encrypts the prompt using NIP-44 ECDH with the model public
+key and the client’s private key</li>
+<li>Client submits the encrypted payload as the job body</li>
+<li>The node’s daemon decrypts it using the model private key and the
+client’s public key</li>
+<li>Result is encrypted with the same shared secret and returned</li>
+</ol>
+<p>This ensures the control plane and any intermediaries see only
+ciphertext. The node and the client share a secret derived from their
+keypair interaction, and no one else can read the conversation.</p>
+<p>This feature requires a client-side library that supports NIP-44.
+Check the SDK documentation for current support status.</p>
+</body>
+</html>

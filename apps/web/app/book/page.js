@@ -1,17 +1,9 @@
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { getBookToc, getChapter } from "@/lib/book";
+import { getBookToc, getBookIntro } from "@/lib/book";
 
 export const dynamic = "force-static";
-
-/** Strip the leading H1 and the inline cover <img> — both are already in the hero. */
-function stripFrontMatter(md) {
-    if (!md) return "";
-    return md
-        .replace(/^#[^\n]*\n+/, "")
-        .replace(/^<img[^>]*\/>\s*\n+/, "");
-}
 
 export const metadata = {
     title: "The Infernet Protocol Book — operator + developer guide",
@@ -23,31 +15,23 @@ const AUDIENCES = [
     {
         title: "Node operators",
         body: "You have an NVIDIA, AMD, or Apple Silicon machine and want to earn crypto running LLM inference. Hardware sizing, install, monitoring, payouts.",
-        href: "/book/02-node-operators"
+        href: "/book/02-node-operators/index.html"
     },
     {
         title: "App developers",
         body: "You want OpenAI-compatible APIs without locking into a single provider. REST + streaming chat (SSE), job lifecycle, error handling. JS + Python.",
-        href: "/book/04-building-apps"
+        href: "/book/04-building-apps/index.html"
     },
     {
         title: "Protocol contributors",
         body: "Nostr-style secp256k1 auth, Compute Payment Receipts, multi-chain wallets, and the IPIP-0028 model key hierarchy.",
-        href: "/book/05-protocol"
+        href: "/book/05-protocol/index.html"
     }
 ];
 
 export default function BookLandingPage() {
-    let toc = [];
-    let intro = "";
-    try {
-        toc = getBookToc();
-        const chapter = getChapter([]);
-        intro = stripFrontMatter(chapter?.content);
-    } catch {
-        // Production deployment may not include docs/book/. Hero +
-        // download links still render; chapter list / intro just collapse.
-    }
+    const toc = getBookToc();
+    const intro = getBookIntro();
 
     return (
         <div className="space-y-16">
@@ -75,12 +59,12 @@ export default function BookLandingPage() {
                         building on top of it, and the contributors shaping the protocol.
                     </p>
                     <div className="flex flex-wrap items-center gap-3 pt-2">
-                        <Link
-                            href="/book/01-introduction"
+                        <a
+                            href="/book/01-introduction/index.html"
                             className="rounded-full bg-[var(--accent-strong)] px-5 py-2.5 text-sm font-semibold text-[var(--bg)] transition hover:bg-[var(--accent)]"
                         >
                             Read online →
-                        </Link>
+                        </a>
                         <a
                             href="/book/infernet-book.pdf"
                             target="_blank"
@@ -128,7 +112,7 @@ export default function BookLandingPage() {
                 </h2>
                 <div className="grid gap-4 sm:grid-cols-3">
                     {AUDIENCES.map((a) => (
-                        <Link
+                        <a
                             key={a.href}
                             href={a.href}
                             className="group block rounded-lg border border-white/10 bg-white/[0.02] p-5 transition hover:border-[var(--accent)] hover:bg-white/[0.04]"
@@ -138,7 +122,7 @@ export default function BookLandingPage() {
                             <p className="mt-3 text-xs text-[var(--accent)] group-hover:underline">
                                 Start chapter →
                             </p>
-                        </Link>
+                        </a>
                     ))}
                 </div>
             </section>
@@ -178,7 +162,7 @@ export default function BookLandingPage() {
                     <ol className="space-y-3">
                         {toc.map((section, i) => (
                             <li key={section.slug} className="rounded-md border border-white/10 bg-white/[0.02] px-5 py-4">
-                                <Link
+                                <a
                                     href={section.href}
                                     className="flex items-baseline gap-3 font-semibold text-white hover:text-[var(--accent)]"
                                 >
@@ -186,17 +170,17 @@ export default function BookLandingPage() {
                                         {String(i + 1).padStart(2, "0")}
                                     </span>
                                     <span>{section.title}</span>
-                                </Link>
+                                </a>
                                 {section.pages.length > 0 && (
                                     <ul className="mt-3 grid gap-x-6 gap-y-1 pl-7 text-sm sm:grid-cols-2">
                                         {section.pages.map((page) => (
                                             <li key={page.slug}>
-                                                <Link
+                                                <a
                                                     href={page.href}
                                                     className="text-[var(--muted)] hover:text-white"
                                                 >
                                                     {page.title}
-                                                </Link>
+                                                </a>
                                             </li>
                                         ))}
                                     </ul>

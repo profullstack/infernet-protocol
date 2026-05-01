@@ -23,16 +23,19 @@ export default function BookLayout({ children }) {
                         </Link>
                         {toc.map((section) => (
                             <div key={section.slug}>
-                                <Link href={section.href} className="block font-medium text-white hover:text-[var(--accent)]">
+                                {/* Chapter pages are static pandoc-built .html
+                                    files served from /book/<path>.html, so we
+                                    use plain anchors instead of next/link. */}
+                                <a href={section.href} className="block font-medium text-white hover:text-[var(--accent)]">
                                     {section.title}
-                                </Link>
+                                </a>
                                 {section.pages.length > 0 && (
                                     <ul className="mt-1 space-y-1 border-l border-white/10 pl-3">
                                         {section.pages.map((page) => (
                                             <li key={page.slug}>
-                                                <Link href={page.href} className="block text-[var(--muted)] hover:text-white">
+                                                <a href={page.href} className="block text-[var(--muted)] hover:text-white">
                                                     {page.title}
-                                                </Link>
+                                                </a>
                                             </li>
                                         ))}
                                     </ul>

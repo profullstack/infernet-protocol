@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>The Infernet Protocol Book</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {  background-color: #f8f8f8; }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ef2929; } /* Alert */
+    code span.an { color: #8f5902; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #204a87; } /* Attribute */
+    code span.bn { color: #0000cf; } /* BaseN */
+    code span.cf { color: #204a87; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4e9a06; } /* Char */
+    code span.cn { color: #8f5902; } /* Constant */
+    code span.co { color: #8f5902; font-style: italic; } /* Comment */
+    code span.cv { color: #8f5902; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #8f5902; font-weight: bold; font-style: italic; } /* Documentation */
+    code span.dt { color: #204a87; } /* DataType */
+    code span.dv { color: #0000cf; } /* DecVal */
+    code span.er { color: #a40000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #0000cf; } /* Float */
+    code span.fu { color: #204a87; font-weight: bold; } /* Function */
+    code span.im { } /* Import */
+    code span.in { color: #8f5902; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #204a87; font-weight: bold; } /* Keyword */
+    code span.op { color: #ce5c00; font-weight: bold; } /* Operator */
+    code span.ot { color: #8f5902; } /* Other */
+    code span.pp { color: #8f5902; font-style: italic; } /* Preprocessor */
+    code span.sc { color: #ce5c00; font-weight: bold; } /* SpecialChar */
+    code span.ss { color: #4e9a06; } /* SpecialString */
+    code span.st { color: #4e9a06; } /* String */
+    code span.va { color: #000000; } /* Variable */
+    code span.vs { color: #4e9a06; } /* VerbatimString */
+    code span.wa { color: #8f5902; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">The Infernet Protocol Book</h1>
+</header>
+<h1 id="multi-gpu-inference">Multi-GPU Inference</h1>
+<p>Running models larger than your single GPU’s VRAM requires splitting
+them across multiple GPUs. vLLM with Ray is the primary tool for this on
+Infernet.</p>
+<h2 id="when-you-need-multi-gpu">When You Need Multi-GPU</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Model</th>
+<th>Min VRAM (Q4)</th>
+<th>Min VRAM (FP16)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Qwen2.5-72B</td>
+<td>38 GB</td>
+<td>144 GB</td>
+</tr>
+<tr class="even">
+<td>Llama-3.1-70B</td>
+<td>37 GB</td>
+<td>140 GB</td>
+</tr>
+<tr class="odd">
+<td>DeepSeek-V2 (236B MoE)</td>
+<td>130 GB (active)</td>
+<td>—</td>
+</tr>
+<tr class="even">
+<td>Mixtral 8x7B</td>
+<td>26 GB</td>
+<td>87 GB</td>
+</tr>
+</tbody>
+</table>
+<p>For Qwen2.5-72B at Q4, you need either one 48GB+ GPU (H100, A100
+80GB, or RTX 6000 Ada) or two 24GB GPUs (2x RTX 4090 or 2x RTX
+3090).</p>
+<h2 id="tensor-parallelism-with-vllm-ray">Tensor Parallelism with vLLM +
+Ray</h2>
+<p>Tensor parallelism splits each transformer layer’s weight matrices
+across GPUs. Every GPU participates in every token, and they communicate
+via NVLink or PCIe to exchange partial results.</p>
+<h3 id="setup">Setup</h3>
+<p>Install Ray:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install ray</span></code></pre></div>
+<p>Start a single-machine Ray cluster (for multi-GPU on one
+machine):</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ray</span> start <span class="at">--head</span> <span class="at">--num-gpus</span><span class="op">=</span><span class="va">$(</span><span class="ex">nvidia-smi</span> <span class="at">--list-gpus</span> <span class="kw">|</span> <span class="fu">wc</span> <span class="at">-l</span><span class="va">)</span></span></code></pre></div>
+<p>Verify Ray sees all GPUs:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ray</span> status</span></code></pre></div>
+<pre><code>Resources
+---------------------------------------------------------------
+Usage:
+ 0.0/64.0 CPU
+ 0.0/4.0 GPU
+ 0B/503.48GiB memory
+ ...</code></pre>
+<h3 id="running-vllm-with-tensor-parallelism">Running vLLM with Tensor
+Parallelism</h3>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 2 GPUs: 2x RTX 4090 → 48GB total → can run Qwen2.5-72B Q4</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> vllm.entrypoints.openai.api_server <span class="dt">\</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--model</span> Qwen/Qwen2.5-72B-Instruct <span class="dt">\</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--tensor-parallel-size</span> 2 <span class="dt">\</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--host</span> 0.0.0.0 <span class="dt">\</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">--port</span> 8000 <span class="dt">\</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">--gpu-memory-utilization</span> 0.92</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="co"># 4 GPUs: 4x RTX 4090 → 96GB → can run Qwen2.5-72B FP16</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> vllm.entrypoints.openai.api_server <span class="dt">\</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">--model</span> Qwen/Qwen2.5-72B-Instruct <span class="dt">\</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">--tensor-parallel-size</span> 4 <span class="dt">\</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">--host</span> 0.0.0.0 <span class="dt">\</span></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">--port</span> 8000</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a><span class="co"># 8 GPUs</span></span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> vllm.entrypoints.openai.api_server <span class="dt">\</span></span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">--model</span> Qwen/Qwen2.5-72B-Instruct <span class="dt">\</span></span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">--tensor-parallel-size</span> 8 <span class="dt">\</span></span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">--host</span> 0.0.0.0 <span class="dt">\</span></span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>  <span class="at">--port</span> 8000</span></code></pre></div>
+<p>vLLM will automatically use Ray for inter-GPU communication. You
+don’t need to manage Ray workers manually for single-machine setups.</p>
+<h3 id="selecting-specific-gpus">Selecting Specific GPUs</h3>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Use GPUs 0 and 1 only</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="va">CUDA_VISIBLE_DEVICES</span><span class="op">=</span>0,1 <span class="ex">python</span> <span class="at">-m</span> vllm.entrypoints.openai.api_server <span class="dt">\</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--model</span> Qwen/Qwen2.5-72B-Instruct <span class="dt">\</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--tensor-parallel-size</span> 2 <span class="dt">\</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--port</span> 8000</span></code></pre></div>
+<h2 id="pipeline-parallelism">Pipeline Parallelism</h2>
+<p>Pipeline parallelism splits the model’s layers across GPUs — GPU 0
+runs layers 0–20, GPU 1 runs layers 21–40, etc. Unlike tensor
+parallelism, GPUs process the model sequentially rather than in
+parallel.</p>
+<p><strong>When to use pipeline parallelism:</strong> - GPUs are
+connected via PCIe (not NVLink) — lower bandwidth, tensor parallelism
+suffers more - You have more GPUs than needed for tensor parallelism and
+want to increase batch size</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Tensor + pipeline parallelism combined</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> vllm.entrypoints.openai.api_server <span class="dt">\</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--model</span> Qwen/Qwen2.5-72B-Instruct <span class="dt">\</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--tensor-parallel-size</span> 2 <span class="dt">\</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--pipeline-parallel-size</span> 2 <span class="dt">\</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">--port</span> 8000</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Total GPUs used: 2 × 2 = 4</span></span></code></pre></div>
+<h2 id="multi-machine-with-ray">Multi-Machine with Ray</h2>
+<p>For models requiring more VRAM than a single machine can provide, Ray
+can be extended across multiple machines via the network.</p>
+<h3 id="start-ray-cluster">Start Ray Cluster</h3>
+<p>On the head node:</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ray</span> start <span class="at">--head</span> <span class="dt">\</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--port</span> 6379 <span class="dt">\</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--num-gpus</span><span class="op">=</span><span class="va">$(</span><span class="ex">nvidia-smi</span> <span class="at">--list-gpus</span> <span class="kw">|</span> <span class="fu">wc</span> <span class="at">-l</span><span class="va">)</span></span></code></pre></div>
+<p>On each worker node (replace <code>HEAD_IP</code> with the head
+node’s IP):</p>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ray</span> start <span class="dt">\</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--address</span><span class="op">=</span>HEAD_IP:6379 <span class="dt">\</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--num-gpus</span><span class="op">=</span><span class="va">$(</span><span class="ex">nvidia-smi</span> <span class="at">--list-gpus</span> <span class="kw">|</span> <span class="fu">wc</span> <span class="at">-l</span><span class="va">)</span></span></code></pre></div>
+<p>Verify the cluster:</p>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ray</span> status</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Should show combined GPUs from all nodes</span></span></code></pre></div>
+<h3 id="run-vllm-on-the-cluster">Run vLLM on the Cluster</h3>
+<p>From the head node:</p>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> vllm.entrypoints.openai.api_server <span class="dt">\</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--model</span> Qwen/Qwen2.5-72B-Instruct <span class="dt">\</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--tensor-parallel-size</span> 8 <span class="dt">\ </span> <span class="co"># 8 GPUs across 2 machines with 4 each</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="ex">--host</span> 0.0.0.0 <span class="dt">\</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--port</span> 8000</span></code></pre></div>
+<p>vLLM will distribute the work across all Ray workers
+automatically.</p>
+<p><strong>Network requirements for multi-machine Ray:</strong> The
+machines need fast, low-latency networking between them. NVLink or
+InfiniBand are ideal; 10Gbps Ethernet works for pipeline parallelism but
+will bottleneck tensor parallelism. 1Gbps Ethernet is not
+sufficient.</p>
+<h2 id="infernet-config-for-multi-gpu">Infernet Config for
+Multi-GPU</h2>
+<p>The Infernet daemon doesn’t need to know about the multi-GPU setup —
+it just talks to vLLM’s API endpoint. The only change needed is in the
+vLLM startup command.</p>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;backend&quot;</span><span class="fu">:</span> <span class="st">&quot;vllm&quot;</span><span class="fu">,</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;vllm_host&quot;</span><span class="fu">:</span> <span class="st">&quot;http://localhost:8000&quot;</span><span class="fu">,</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;vllm_model&quot;</span><span class="fu">:</span> <span class="st">&quot;Qwen/Qwen2.5-72B-Instruct&quot;</span><span class="fu">,</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;vram_tier&quot;</span><span class="fu">:</span> <span class="st">&quot;&gt;=48gb&quot;</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<p>Note the <code>vram_tier</code>. For multi-GPU setups, set this to
+the combined VRAM tier: - 2x 24GB → <code>&gt;=48gb</code> - 4x 24GB →
+you can serve 72B FP16, set to <code>&gt;=48gb</code> (there’s no
+dedicated 96GB+ tier)</p>
+<h2 id="serving-multiple-models-on-multiple-gpus">Serving Multiple
+Models on Multiple GPUs</h2>
+<p>If you have 4 GPUs and want to serve two different 14B models
+simultaneously (2 GPUs each):</p>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Model 1 on GPUs 0 and 1</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="va">CUDA_VISIBLE_DEVICES</span><span class="op">=</span>0,1 <span class="ex">python</span> <span class="at">-m</span> vllm.entrypoints.openai.api_server <span class="dt">\</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--model</span> Qwen/Qwen2.5-14B-Instruct <span class="dt">\</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--tensor-parallel-size</span> 2 <span class="dt">\</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--port</span> 8000 <span class="dt">\</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">--served-model-name</span> qwen2.5:14b <span class="kw">&amp;</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Model 2 on GPUs 2 and 3</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a><span class="va">CUDA_VISIBLE_DEVICES</span><span class="op">=</span>2,3 <span class="ex">python</span> <span class="at">-m</span> vllm.entrypoints.openai.api_server <span class="dt">\</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">--model</span> meta-llama/Llama-3.1-8B-Instruct <span class="dt">\</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">--tensor-parallel-size</span> 2 <span class="dt">\</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">--port</span> 8001 <span class="dt">\</span></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">--served-model-name</span> llama3.1:8b <span class="kw">&amp;</span></span></code></pre></div>
+<p>Then configure Infernet to know about both:</p>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;backend&quot;</span><span class="fu">:</span> <span class="st">&quot;vllm&quot;</span><span class="fu">,</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;vllm_instances&quot;</span><span class="fu">:</span> <span class="ot">[</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span><span class="dt">&quot;host&quot;</span><span class="fu">:</span> <span class="st">&quot;http://localhost:8000&quot;</span><span class="fu">,</span> <span class="dt">&quot;model&quot;</span><span class="fu">:</span> <span class="st">&quot;qwen2.5:14b&quot;</span><span class="fu">}</span><span class="ot">,</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span><span class="dt">&quot;host&quot;</span><span class="fu">:</span> <span class="st">&quot;http://localhost:8001&quot;</span><span class="fu">,</span> <span class="dt">&quot;model&quot;</span><span class="fu">:</span> <span class="st">&quot;llama3.1:8b&quot;</span><span class="fu">}</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  <span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;served_models&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="st">&quot;qwen2.5:14b&quot;</span><span class="ot">,</span> <span class="st">&quot;llama3.1:8b&quot;</span><span class="ot">]</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<h2 id="performance-expectations">Performance Expectations</h2>
+<p>Throughput for Qwen2.5-72B on NVIDIA hardware:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Hardware</th>
+<th>Config</th>
+<th>Tokens/sec</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1x H100 80GB</td>
+<td>Single GPU, FP16</td>
+<td>45–60</td>
+</tr>
+<tr class="even">
+<td>2x A100 40GB</td>
+<td>TP=2, FP16</td>
+<td>70–90</td>
+</tr>
+<tr class="odd">
+<td>2x RTX 4090</td>
+<td>TP=2, Q4</td>
+<td>30–45</td>
+</tr>
+<tr class="even">
+<td>4x RTX 4090</td>
+<td>TP=4, FP16</td>
+<td>80–100</td>
+</tr>
+<tr class="odd">
+<td>4x H100 80GB</td>
+<td>TP=4, FP16</td>
+<td>150–200</td>
+</tr>
+</tbody>
+</table>
+<p>These are approximate single-request throughputs. Concurrent requests
+increase total throughput thanks to continuous batching.</p>
+</body>
+</html>

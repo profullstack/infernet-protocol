@@ -13,12 +13,21 @@ const nextConfig = {
   ],
   // Next.js 16 moved this out of `experimental` to the top level.
   typedRoutes: false,
-  // Include monorepo doc sources in the deployment bundle so server
-  // components in /book can read them at runtime (lib/book.js reads
-  // markdown chapters from docs/book/ at runtime).
-  outputFileTracingIncludes: {
-    "/book": ["../../docs/book/**/*.md"],
-    "/book/**": ["../../docs/book/**/*.md"]
+  // Forward old extensionless chapter URLs to the new pandoc-built
+  // .html files under /book/<path>.html.
+  async redirects() {
+    return [
+      {
+        source: "/book/:section(\\d{2}-[^/.]+)",
+        destination: "/book/:section/index.html",
+        permanent: true
+      },
+      {
+        source: "/book/:section(\\d{2}-[^/.]+)/:page",
+        destination: "/book/:section/:page.html",
+        permanent: true
+      }
+    ];
   }
 };
 

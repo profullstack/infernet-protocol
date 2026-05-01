@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>The Infernet Protocol Book</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {  background-color: #f8f8f8; }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ef2929; } /* Alert */
+    code span.an { color: #8f5902; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #204a87; } /* Attribute */
+    code span.bn { color: #0000cf; } /* BaseN */
+    code span.cf { color: #204a87; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4e9a06; } /* Char */
+    code span.cn { color: #8f5902; } /* Constant */
+    code span.co { color: #8f5902; font-style: italic; } /* Comment */
+    code span.cv { color: #8f5902; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #8f5902; font-weight: bold; font-style: italic; } /* Documentation */
+    code span.dt { color: #204a87; } /* DataType */
+    code span.dv { color: #0000cf; } /* DecVal */
+    code span.er { color: #a40000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #0000cf; } /* Float */
+    code span.fu { color: #204a87; font-weight: bold; } /* Function */
+    code span.im { } /* Import */
+    code span.in { color: #8f5902; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #204a87; font-weight: bold; } /* Keyword */
+    code span.op { color: #ce5c00; font-weight: bold; } /* Operator */
+    code span.ot { color: #8f5902; } /* Other */
+    code span.pp { color: #8f5902; font-style: italic; } /* Preprocessor */
+    code span.sc { color: #ce5c00; font-weight: bold; } /* SpecialChar */
+    code span.ss { color: #4e9a06; } /* SpecialString */
+    code span.st { color: #4e9a06; } /* String */
+    code span.va { color: #000000; } /* Variable */
+    code span.vs { color: #4e9a06; } /* VerbatimString */
+    code span.wa { color: #8f5902; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">The Infernet Protocol Book</h1>
+</header>
+<h1 id="security-model">Security Model</h1>
+<h2 id="the-problem-with-api-keys">The Problem with API Keys</h2>
+<p>Traditional node auth uses API keys: the server has a key, the client
+provides it in a header, the server checks if it matches. This works,
+but it requires the server to store secrets. If the control plane is
+breached, all node keys are compromised.</p>
+<p>Infernet Protocol uses a different approach: <strong>each node has a
+secp256k1 keypair, and every request is signed with the private
+key</strong>. The control plane stores only public keys. Verifying a
+request requires only the public key and the signature — no secrets are
+stored anywhere except on the node itself.</p>
+<p>This is the same cryptographic foundation used by Nostr (hence
+“Nostr-style”), Bitcoin, and Ethereum. The security properties are
+well-understood.</p>
+<h2 id="keypair-generation">Keypair Generation</h2>
+<p>When you run <code>infernet setup</code>, a secp256k1 keypair is
+generated for your node:</p>
+<pre><code>Private key (hex): stored in ~/.infernet/keys/node.key (mode 600)
+Public key (hex):  registered with the control plane</code></pre>
+<p>The public key is derived deterministically from the private key. The
+private key never leaves your machine.</p>
+<p>In Nostr notation:</p>
+<pre><code>Private key: nsec1...  (bech32-encoded private key)
+Public key:  npub1...  (bech32-encoded public key)</code></pre>
+<p>You can view your node’s public key:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> status <span class="kw">|</span> <span class="fu">grep</span> <span class="st">&quot;Public key&quot;</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Public key: npub1abc123def456...</span></span></code></pre></div>
+<h2 id="the-x-infernet-auth-header">The X-Infernet-Auth Header</h2>
+<p>Every request the daemon makes to the control plane carries an
+<code>X-Infernet-Auth</code> header. This header contains a signed proof
+that the request was made by the holder of the private key.</p>
+<p>Format:</p>
+<pre><code>X-Infernet-Auth: v1.&lt;signature&gt;.&lt;nonce&gt;.&lt;timestamp&gt;</code></pre>
+<p>Where: - <code>v1</code> — protocol version -
+<code>&lt;signature&gt;</code> — hex-encoded Schnorr signature -
+<code>&lt;nonce&gt;</code> — 16-byte random hex value, unique per
+request - <code>&lt;timestamp&gt;</code> — Unix timestamp in seconds</p>
+<h3 id="whats-signed">What’s Signed</h3>
+<p>The signature covers:</p>
+<pre><code>message = SHA256(
+  method           +  // &quot;POST&quot;
+  &quot;\n&quot;             +
+  path             +  // &quot;/api/v1/heartbeat&quot;
+  &quot;\n&quot;             +
+  body_sha256      +  // SHA256 of request body, or empty string
+  &quot;\n&quot;             +
+  nonce            +  // same nonce as in header
+  &quot;\n&quot;             +
+  timestamp           // same timestamp as in header
+)</code></pre>
+<p>All fields are UTF-8 encoded and concatenated with newlines before
+hashing.</p>
+<h3 id="why-this-design">Why This Design</h3>
+<p><strong>Replay prevention</strong>: The nonce is unique per request.
+The control plane keeps a short-lived nonce cache (5 minutes). A
+replayed request with the same nonce is rejected.</p>
+<p><strong>Timestamp binding</strong>: Requests more than 30 seconds old
+are rejected. This prevents replays even if the nonce cache doesn’t have
+the nonce.</p>
+<p><strong>Body integrity</strong>: The body hash prevents anyone from
+modifying the request body in transit.</p>
+<p><strong>Method + path binding</strong>: The signature covers the full
+endpoint, not just the body. A valid signature for a
+<code>GET /heartbeat</code> cannot be replayed as a
+<code>POST /jobs</code>.</p>
+<h3 id="verification-on-the-control-plane">Verification on the Control
+Plane</h3>
+<p>When the control plane receives a request:</p>
+<ol type="1">
+<li>Parse the <code>X-Infernet-Auth</code> header</li>
+<li>Check that <code>timestamp</code> is within ±30 seconds of current
+time</li>
+<li>Check that <code>nonce</code> hasn’t been seen recently</li>
+<li>Retrieve the node’s registered public key (using
+<code>node_id</code> from the request body or URL)</li>
+<li>Reconstruct the signed message from the request method, path, body,
+nonce, and timestamp</li>
+<li>Verify the Schnorr signature against the public key</li>
+<li>Cache the nonce for 5 minutes</li>
+</ol>
+<p>If any step fails, the request is rejected with HTTP 401.</p>
+<h3 id="client-api-tokens-vs-node-auth">Client API Tokens vs Node
+Auth</h3>
+<p>Note that <strong>client developers use bearer tokens</strong> from
+the dashboard — not secp256k1 keys. The secp256k1 auth is only for
+node-to-control-plane communication. Clients authenticate with standard
+bearer tokens because:</p>
+<ul>
+<li>Clients don’t have persistent identities that need cryptographic
+proof</li>
+<li>Bearer tokens are simpler for developers to use</li>
+<li>Rate limiting and billing are account-level concerns, not
+key-level</li>
+</ul>
+<p>If you want your application to have Nostr-style auth, that’s
+possible but requires a custom integration — contact the team.</p>
+<h2 id="what-this-means-in-practice">What This Means in Practice</h2>
+<p><strong>The control plane cannot impersonate a node.</strong> Even if
+an attacker gains full control of the control plane database, they
+cannot forge a signed request from any node because they don’t have the
+private keys.</p>
+<p><strong>Compromising the control plane doesn’t steal
+earnings.</strong> CPRs are signed by node keys. Fake CPRs without valid
+node signatures are rejected by the on-chain payment contract.</p>
+<p><strong>Node operators control their own identity.</strong> The
+public key is the node’s canonical identity on the network. Rotating to
+a new keypair requires re-registration (new node ID), but the operator’s
+history and reputation can be migrated if the old key signs a migration
+message.</p>
+<h2 id="key-storage">Key Storage</h2>
+<p>The private key is stored in <code>~/.infernet/keys/node.key</code>
+with file permissions <code>600</code> (owner read/write only). On
+Linux, this means only the process running as the same user can read
+it.</p>
+<p>Best practices:</p>
+<ol type="1">
+<li><strong>Don’t run the daemon as root.</strong> Create a dedicated
+<code>infernet</code> user and run the daemon as that user.</li>
+<li><strong>Backup your key.</strong> If you lose it, you can’t claim
+pending earnings and must re-register.</li>
+<li><strong>Use disk encryption.</strong> If your machine is physically
+compromised, full-disk encryption (LUKS on Linux) protects the key at
+rest.</li>
+<li><strong>Keep the key off cloud storage.</strong> Don’t back it up to
+S3, GitHub, or anything synced.</li>
+</ol>
+<p>To back up securely:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Encrypt with a passphrase before storing anywhere</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="ex">gpg</span> <span class="at">--symmetric</span> <span class="at">--cipher-algo</span> AES256 ~/.infernet/keys/node.key</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Stores as ~/.infernet/keys/node.key.gpg</span></span></code></pre></div>
+</body>
+</html>

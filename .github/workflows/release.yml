@@ -72,21 +72,19 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
         run: |
+          # Public surface only. The 7 internal packages (api-schema, db,
+          # inference, logger, nim-adapter, payments, training) are marked
+          # "private": true in their package.json so pnpm publish skips
+          # them by default; they're consumed via workspace:* inside the
+          # monorepo and never need to be on npm.
           pnpm publish \
             --filter "@infernetprotocol/cli" \
             --filter "@infernetprotocol/sdk" \
-            --filter "@infernetprotocol/api-schema" \
-            --filter "@infernetprotocol/deploy-providers" \
             --filter "@infernetprotocol/auth" \
             --filter "@infernetprotocol/config" \
-            --filter "@infernetprotocol/db" \
+            --filter "@infernetprotocol/deploy-providers" \
             --filter "@infernetprotocol/engine" \
             --filter "@infernetprotocol/gpu" \
-            --filter "@infernetprotocol/inference" \
-            --filter "@infernetprotocol/logger" \
-            --filter "@infernetprotocol/nim-adapter" \
-            --filter "@infernetprotocol/payments" \
-            --filter "@infernetprotocol/training" \
             --access public \
             --no-git-checks \
             --tag latest

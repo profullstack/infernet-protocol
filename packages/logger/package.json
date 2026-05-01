@@ -1,5 +1,6 @@
 {
   "name": "@infernetprotocol/logger",
+  "private": true,
   "version": "0.1.7",
   "description": "Structured logger used across Infernet Protocol packages.",
   "license": "MIT",

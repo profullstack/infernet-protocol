@@ -17,9 +17,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { spawn } from "node:child_process";
+import fsSync from "node:fs";
 import { createWriteStream } from "node:fs";
 import { loadConfig } from "../lib/config.js";
 import { resolveValueSerpKey, buildTrainingDataset } from "../lib/data-crawler.js";
+import { buildUnslothScript } from "../lib/training/unsloth-script.js";
+import {
+    splitJsonl, discoverNodes, queueTrainShard, awaitCommand, fedAvg
+} from "../lib/training/p2p-coordinator.js";
 
 const HELP = `infernet train — fine-tune or train models on the P2P GPU network
 
@@ -324,20 +329,190 @@ async function cmdRun(args) {
 
     const useLocal = forceLocal || workloadClass === "C1";
 
+    // P2P (federated LoRA) — workload_class C2/C3 or explicit --p2p flag.
     if (!useLocal) {
-        process.stdout.write(`Submitting to P2P network (workload class ${workloadClass})...\n`);
-        process.stdout.write(`(P2P training submission not yet implemented — use --local for now)\n`);
-        await updateRunStatus(runDir, "pending_p2p");
-        return 0;
+        return runP2PFederated({ trainConfig, runDir, runId });
     }
 
-    // Local execution
-    if (runtime !== "microgpt") {
-        process.stdout.write(`Note: only microgpt runtime is supported in local mode (v0.1).\n`);
-        process.stdout.write(`Falling back to microgpt.\n`);
+    // Local — pick a real runtime (Unsloth) for QLoRA fine-tuning of a
+    // base HF model. microgpt remains for the from-scratch demo path.
+    if (runtime === "unsloth" || runtime === "transformers" || runtime === "trl") {
+        return runUnslothLocal({ trainConfig, runDir, runId });
     }
-
     return runMicrogptLocal({ trainConfig, runDir, runId });
+}
+
+async function runUnslothLocal({ trainConfig, runDir, runId }) {
+    const dataset = trainConfig.input?.dataset;
+    if (!dataset) {
+        process.stderr.write(`error: input.dataset is required for unsloth runtime\n`);
+        return 1;
+    }
+    if (!fsSync.existsSync(dataset)) {
+        process.stderr.write(`error: dataset not found: ${dataset}\n`);
+        return 1;
+    }
+
+    const scriptPath = path.join(runDir, "unsloth_runner.py");
+    await fs.writeFile(scriptPath, buildUnslothScript({ trainConfig }));
+
+    const python = await findPython();
+    if (!python) {
+        process.stderr.write(`error: python3 not found\n`);
+        process.stderr.write(`install with: sudo apt install python3 python3-pip && pip install unsloth datasets trl\n`);
+        return 1;
+    }
+
+    process.stdout.write(`Starting Unsloth QLoRA training (runtime=unsloth, base=${trainConfig.base_model})...\n\n`);
+    const logStream = createWriteStream(path.join(runDir, "run.log"), { flags: "a" });
+
+    return new Promise((resolve) => {
+        const child = spawn(python, [scriptPath, "--data", dataset, "--output", runDir], {
+            stdio: ["ignore", "pipe", "pipe"]
+        });
+        child.stdout.on("data", (chunk) => {
+            const lines = chunk.toString().split("\n").filter(Boolean);
+            for (const line of lines) {
+                logStream.write(line + "\n");
+                try {
+                    const event = JSON.parse(line);
+                    if (event.event === "step") {
+                        process.stdout.write(`  step ${event.step}  loss=${event.loss?.toFixed?.(4) ?? "—"}  lr=${event.lr?.toExponential?.(2) ?? "—"}\n`);
+                    } else if (event.event) {
+                        process.stdout.write(`  ${event.event}${event.path ? ` → ${event.path}` : ""}${event.rows ? ` (${event.rows} rows)` : ""}\n`);
+                    } else if (event.error) {
+                        process.stderr.write(`  ✗ ${event.error}\n`);
+                    }
+                } catch {
+                    process.stdout.write(`  ${line}\n`);
+                }
+            }
+        });
+        child.stderr.on("data", (chunk) => {
+            const txt = chunk.toString();
+            logStream.write(txt);
+            process.stderr.write(txt);
+        });
+        child.on("exit", async (code) => {
+            logStream.end();
+            await updateRunStatus(runDir, code === 0 ? "completed" : "failed");
+            if (code === 0) {
+                process.stdout.write(`\n✓ Training complete. Model saved to ${path.join(runDir, "checkpoint-final")}\n`);
+                process.stdout.write(`Next:  infernet publish ${path.join(runDir, "checkpoint-final")} --hf <org>/<name> --ollama <user>/<name>\n`);
+            }
+            resolve(code === 0 ? 0 : 1);
+        });
+        child.on("error", (err) => {
+            process.stderr.write(`spawn error: ${err?.message ?? err}\n`);
+            resolve(1);
+        });
+    });
+}
+
+/**
+ * Federated LoRA across all owner-controlled nodes that meet the
+ * resources.min_vram_gb threshold. Splits the dataset into N shards,
+ * queues a `train_shard` command per node, awaits completion, then
+ * runs FedAvg over the resulting adapters.
+ *
+ * EXPERIMENTAL — assumes the operator has a way to host shard files
+ * reachable by the daemons (S3, HF dataset, ngrok, etc) and that nodes
+ * have a working Unsloth Python install.
+ */
+async function runP2PFederated({ trainConfig, runDir, runId }) {
+    const cfg = await loadConfig().catch(() => ({}));
+    const controlPlaneUrl = cfg?.controlPlane?.url ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://infernetprotocol.com";
+    const sessionToken = cfg?.session?.token ?? process.env.INFERNET_SESSION_TOKEN;
+    if (!sessionToken) {
+        process.stderr.write(`error: P2P training needs a logged-in session — run \`infernet login\` first\n`);
+        return 1;
+    }
+
+    const minVramGb = trainConfig.resources?.min_vram_gb ?? 12;
+    process.stdout.write(`P2P federated LoRA — discovering nodes (≥ ${minVramGb} GB VRAM)…\n`);
+    const nodes = await discoverNodes({ controlPlaneUrl, sessionToken, minVramGb });
+    if (nodes.length === 0) {
+        process.stderr.write(`No online nodes meet min_vram_gb=${minVramGb}.\n`);
+        return 1;
+    }
+    process.stdout.write(`  found ${nodes.length} eligible node(s):\n`);
+    for (const n of nodes) {
+        process.stdout.write(`    ${n.name ?? n.public_key.slice(0, 16)}  ${n.specs?.gpus?.[0]?.vram_tier ?? "?"}\n`);
+    }
+
+    // Split dataset
+    const datasetPath = trainConfig.input?.dataset;
+    if (!datasetPath) {
+        process.stderr.write(`error: input.dataset is required\n`);
+        return 1;
+    }
+    const shardsDir = path.join(runDir, "shards");
+    process.stdout.write(`\nSplitting ${datasetPath} into ${nodes.length} shard(s)…\n`);
+    const shards = await splitJsonl({ inputPath: datasetPath, outDir: shardsDir, numShards: nodes.length });
+
+    if (!process.env.INFERNET_SHARD_BASE_URL) {
+        process.stdout.write(
+            `\n⚠  P2P training is in MVP — set INFERNET_SHARD_BASE_URL to a public URL\n` +
+            `   the daemons can fetch from. Each shard's file is at:\n` +
+            shards.map((s) => `     ${s.path}  (${s.lines} examples)`).join("\n") + "\n" +
+            `   Example: \`aws s3 sync ${shardsDir} s3://your-bucket/runs/${runId}/\`\n` +
+            `   then: \`export INFERNET_SHARD_BASE_URL=https://your-bucket.s3.amazonaws.com/runs/${runId}\`\n` +
+            `   and re-run \`infernet train run\`.\n`
+        );
+        return 1;
+    }
+    const shardBase = process.env.INFERNET_SHARD_BASE_URL.replace(/\/$/, "");
+
+    // Queue train_shard commands
+    process.stdout.write(`\nQueueing train_shard commands…\n`);
+    const inFlight = [];
+    for (let i = 0; i < nodes.length && i < shards.length; i += 1) {
+        const node = nodes[i];
+        const shard = shards[i];
+        const cmd = await queueTrainShard({
+            controlPlaneUrl, sessionToken, pubkey: node.public_key,
+            args: {
+                run_id: runId,
+                base_model: trainConfig.base_model,
+                shard_url: `${shardBase}/${path.basename(shard.path)}`,
+                training: trainConfig.training,
+                lora: trainConfig.lora,
+                upload_url: process.env.INFERNET_ADAPTER_UPLOAD_URL ?? null
+            }
+        });
+        process.stdout.write(`  → node ${node.name ?? node.public_key.slice(0, 16)}  command ${cmd.id}\n`);
+        inFlight.push({ node, shard, commandId: cmd.id });
+    }
+
+    // Await each
+    process.stdout.write(`\nWaiting for shards to finish (this can take hours)…\n`);
+    const adapterDirs = [];
+    for (const w of inFlight) {
+        try {
+            const res = await awaitCommand({
+                controlPlaneUrl, sessionToken, pubkey: w.node.public_key, commandId: w.commandId
+            });
+            if (res.status === "completed" && res.result?.adapter_path) {
+                process.stdout.write(`  ✓ ${w.node.name ?? w.node.public_key.slice(0, 16)}: ${res.result.adapter_path}\n`);
+                adapterDirs.push(res.result.adapter_path);
+            } else {
+                process.stderr.write(`  ✗ ${w.node.name ?? w.node.public_key.slice(0, 16)}: ${res.error ?? res.status}\n`);
+            }
+        } catch (err) {
+            process.stderr.write(`  ✗ ${w.node.name ?? "?"}: ${err.message}\n`);
+        }
+    }
+
+    if (adapterDirs.length === 0) {
+        process.stderr.write(`\nNo successful shards — aborting aggregation.\n`);
+        return 1;
+    }
+
+    process.stdout.write(`\nRunning FedAvg over ${adapterDirs.length} adapter(s)…\n`);
+    await fedAvg({ adapterDirs, outDir: runDir });
+    await updateRunStatus(runDir, "completed");
+    process.stdout.write(`\n✓ Federated training complete. Final model: ${path.join(runDir, "checkpoint-final")}\n`);
+    return 0;
 }
 
 async function runMicrogptLocal({ trainConfig, runDir, runId }) {

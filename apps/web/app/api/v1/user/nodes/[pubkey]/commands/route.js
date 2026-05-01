@@ -86,6 +86,13 @@ export async function POST(request, { params }) {
             }
             args.model = model;
         }
+        if (command === "train_shard") {
+            if (!args.shard_url || !args.base_model) {
+                const err = new Error("train_shard requires args.shard_url and args.base_model");
+                err.status = 400;
+                throw err;
+            }
+        }
 
         const row = await issueCommand({ userId, pubkey, command, args });
         return NextResponse.json({ data: row });

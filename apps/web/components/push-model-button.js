@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { recommendModels, vramFromSpecs, USE_CASES } from "@/lib/model-catalog";
 
@@ -34,6 +35,34 @@ export default function PushModelButton({ pubkey, servedModels = [], specs }) {
         () => recommendModels({ vramGb, useCase, limit: 6 }),
         [vramGb, useCase]
     );
+
+    // Portal the modal to document.body so it escapes the table's stacking
+    // context. Position it relative to the trigger button via a ref + the
+    // button's bounding rect.
+    const triggerRef = useRef(null);
+    const [portalReady, setPortalReady] = useState(false);
+    const [pos, setPos] = useState({ top: 0, right: 0 });
+
+    useEffect(() => { setPortalReady(true); }, []);
+
+    useLayoutEffect(() => {
+        if (!open || !triggerRef.current) return;
+        const update = () => {
+            const r = triggerRef.current?.getBoundingClientRect();
+            if (!r) return;
+            setPos({
+                top:   r.bottom + 6,
+                right: Math.max(8, window.innerWidth - r.right)
+            });
+        };
+        update();
+        window.addEventListener("scroll", update, true);
+        window.addEventListener("resize", update);
+        return () => {
+            window.removeEventListener("scroll", update, true);
+            window.removeEventListener("resize", update);
+        };
+    }, [open]);
 
     async function refresh() {
         if (!open) return;
@@ -99,20 +128,26 @@ export default function PushModelButton({ pubkey, servedModels = [], specs }) {
         }
     }
 
-    if (!open) {
-        return (
-            <button
-                type="button"
-                onClick={() => setOpen(true)}
-                className="rounded-md border border-white/15 bg-[var(--panel-strong)] px-2.5 py-1 text-xs text-white hover:bg-white/10"
-            >
-                Models
-            </button>
-        );
+    const trigger = (
+        <button
+            ref={triggerRef}
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="rounded-md border border-white/15 bg-[var(--panel-strong)] px-2.5 py-1 text-xs text-white hover:bg-white/10"
+        >
+            Models
+        </button>
+    );
+
+    if (!open || !portalReady) {
+        return trigger;
     }
 
-    return (
-        <div className="absolute right-0 top-0 z-20 w-[min(24rem,90vw)] rounded-[1rem] border border-white/15 bg-[var(--panel)] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur">
+    const modal = (
+        <div
+            className="fixed z-[100] w-[min(24rem,90vw)] rounded-[1rem] border border-white/15 bg-[var(--panel)] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur"
+            style={{ top: pos.top, right: pos.right }}
+        >
             <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-white">Manage models</h3>
                 <button
@@ -261,6 +296,13 @@ export default function PushModelButton({ pubkey, servedModels = [], specs }) {
                 ) : null}
             </div>
         </div>
+    );
+
+    return (
+        <>
+            {trigger}
+            {createPortal(modal, document.body)}
+        </>
     );
 }
 

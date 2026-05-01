@@ -56,14 +56,66 @@ export async function fetchHfModelInfo(repoId, token) {
         ? ollamaUnsupported.some(t => modelType.toLowerCase().includes(t))
         : shards.length > 50; // large shard count → probably too big for Ollama
 
+    // The HF API often leaves `size` null on siblings — fall back to
+    // model.safetensors.index.json which carries the authoritative
+    // total_size for sharded models.
+    let trueTotalGb = sizeGb;
+    try {
+        const idxRes = await fetch(
+            `https://huggingface.co/${repoId}/resolve/main/model.safetensors.index.json`,
+            { headers, redirect: 'follow' }
+        );
+        if (idxRes.ok) {
+            const idx = await idxRes.json();
+            const sz = idx?.metadata?.total_size;
+            if (Number.isFinite(sz) && sz > 0) {
+                trueTotalGb = +(sz / 1024 ** 3).toFixed(1);
+            }
+        }
+    } catch { /* best-effort */ }
+
+    // Architecture pulls for VRAM math + the info command output.
+    const numLayers   = modelConfig.num_hidden_layers ?? null;
+    const hiddenSize  = modelConfig.hidden_size ?? null;
+    const numHeads    = modelConfig.num_attention_heads ?? null;
+    const numKvHeads  = modelConfig.num_key_value_heads ?? numHeads ?? null;
+    const expertsPerTok = modelConfig.num_experts_per_tok ?? null;
+    const contextLen  = modelConfig.max_position_embeddings ?? null;
+    const vocabSize   = modelConfig.vocab_size ?? null;
+    const architectures = modelConfig.architectures ?? null;
+    const isQuantized = !!modelConfig.quantization_config;
+    const quantMethod = modelConfig.quantization_config?.quant_method ?? null;
+
+    // Estimate VRAM at common precisions. Param count derived from disk
+    // size + dtype byte-width when explicit param count isn't published.
+    const dtypeBytes = (torchDtype === 'float32' || torchDtype === 'fp32') ? 4 : 2;
+    const paramsB = trueTotalGb ? +(trueTotalGb * 1024 ** 3 / dtypeBytes / 1e9).toFixed(1) : null;
+    const vramEstimateGb = paramsB ? {
+        fp16: +(paramsB * 2 * 1.15).toFixed(1),    // weights + ~15% overhead
+        int8: +(paramsB * 1 * 1.15).toFixed(1),
+        int4: +(paramsB * 0.5 * 1.15).toFixed(1)
+    } : null;
+
     return {
         repoId,
         modelType,
+        architectures,
         torchDtype,
         shardCount: shards.length,
-        sizeGb,
+        sizeGb: trueTotalGb,
+        paramsB,
+        vramEstimateGb,
+        numLayers,
+        hiddenSize,
+        numHeads,
+        numKvHeads,
+        contextLen,
+        vocabSize,
         numExperts,
-        isMoe: numExperts !== null || modelType?.includes('moe'),
+        expertsPerTok,
+        isMoe: numExperts !== null || /moe|mixtral|bailing/i.test(modelType ?? ''),
+        isQuantized,
+        quantMethod,
         recommendedBackend: needsVllmOrSglang ? 'vllm_or_sglang' : 'ollama_or_vllm',
         pipeline: data.pipeline_tag ?? 'text-generation',
         license: data.cardData?.license ?? data.tags?.find(t => t.startsWith('license:'))?.replace('license:', '') ?? null,

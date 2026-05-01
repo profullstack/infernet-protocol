@@ -19,17 +19,26 @@
 
 import { spawn } from "node:child_process";
 import { loadConfig, saveConfig, getConfigPath } from "../lib/config.js";
-import { checkModelFits } from "../lib/model-fit.js";
+import { checkModelFits, detectCapacity } from "../lib/model-fit.js";
 import {
     resolveHfToken,
     fetchHfModelInfo,
     downloadHfModel,
 } from "../lib/hf-model.js";
+import { recommendModels } from "../lib/recommender.js";
 
 const HELP = `infernet model — manage models served by this node
 
 Usage:
   infernet model list                    List models pulled locally.
+  infernet model recommend [flags]       Recommend models for your hardware.
+                                           --use-case <chat|coding|study|agents|uncensored|vision>
+                                           --uncensored
+                                           --install            install the top pick
+                                           --install-all        install everything that fits on disk
+  infernet model info hf:<org>/<repo>    Inspect a HuggingFace model — size,
+                                         architecture, VRAM estimates — without
+                                         downloading anything.
   infernet model pull <name>             Pull an Ollama model (e.g. qwen2.5:7b).
   infernet model pull hf:<org>/<repo>    Download a HuggingFace model (vLLM/SGLang).
   infernet model remove <name>           Delete a pulled model.
@@ -37,6 +46,7 @@ Usage:
   infernet model show                    Show the engine default + Ollama host.
 
 Examples:
+  infernet model info hf:Qwen/Qwen2.5-32B-Instruct
   infernet model pull qwen2.5:7b
   infernet model pull hf:NousResearch/Hermes-3-Llama-3.1-8B
   infernet model use qwen2.5:7b
@@ -145,6 +155,203 @@ async function cmdList(host) {
     if (active) {
         process.stdout.write(`\nactive: ${active}\n`);
     }
+    return 0;
+}
+
+async function cmdRecommend(args) {
+    const useCase = args.get("use-case") ?? args.get("for") ?? null;
+    const uncensoredOnly = args.has("uncensored");
+    const limit = Number.parseInt(args.get("limit") ?? "5", 10);
+    const wantInstall = args.has("install") || args.has("i");
+    const wantInstallAll = args.has("install-all");
+
+    const cap = await detectCapacity();
+    const vramGb = cap.vram_gb;
+    const ramGb = cap.ram_gb;
+
+    process.stdout.write(`Detected: ${vramGb.toFixed(1)} GB VRAM, ${ramGb.toFixed(1)} GB RAM`);
+    process.stdout.write(useCase ? `  (use case: ${useCase})` : "");
+    process.stdout.write(uncensoredOnly ? `  (uncensored only)` : "");
+    process.stdout.write("\n");
+
+    const recs = recommendModels({ vramGb, ramGb, useCase, uncensoredOnly, limit });
+    if (recs.length === 0) {
+        process.stdout.write("No matching models in the catalog. Try without --use-case / --uncensored.\n");
+        return 0;
+    }
+
+    process.stdout.write(`\nTop ${recs.length} for your hardware:\n\n`);
+    recs.forEach((rec, i) => {
+        const m = rec.model;
+        const fits = rec.fits ? "✓" : "⚠ tight on VRAM";
+        const sizeGb = m.paramsB * 0.6;  // rough Q4 disk size for catalog estimate
+        process.stdout.write(`  ${i + 1}. ${m.name}  (${m.paramsB}B, ~${sizeGb.toFixed(1)} GB Q4 disk, needs ≥${m.vramMin} GB VRAM)  ${fits}\n`);
+        if (m.notes) process.stdout.write(`     ${m.notes}\n`);
+        process.stdout.write(`     pull:  infernet model pull ${m.pullName}\n\n`);
+    });
+
+    if (!wantInstall && !wantInstallAll) {
+        process.stdout.write(`To install the top pick:           infernet model recommend --install\n`);
+        process.stdout.write(`To install everything that fits:    infernet model recommend --install-all\n\n`);
+        return 0;
+    }
+
+    // ---- auto-install path ----
+    const fitsOnHardware = recs.filter((r) => r.fits);
+    if (fitsOnHardware.length === 0) {
+        process.stderr.write("No recommended models actually fit your hardware — refusing to install.\n");
+        return 1;
+    }
+
+    let toInstall;
+    if (wantInstallAll) {
+        const diskFreeGb = await detectFreeDiskGb();
+        const RESERVE_GB = 10; // leave headroom
+        const budget = diskFreeGb - RESERVE_GB;
+        process.stdout.write(`Disk free: ${diskFreeGb.toFixed(1)} GB (reserving ${RESERVE_GB} GB headroom → ${budget.toFixed(1)} GB budget)\n`);
+        toInstall = [];
+        let used = 0;
+        for (const r of fitsOnHardware) {
+            const sz = r.model.paramsB * 0.6;
+            if (used + sz > budget) {
+                process.stdout.write(`  skipping ${r.model.name} — would exceed disk budget\n`);
+                continue;
+            }
+            toInstall.push(r);
+            used += sz;
+        }
+        if (toInstall.length === 0) {
+            process.stderr.write(`Disk budget too small for any recommended model.\n`);
+            return 1;
+        }
+        process.stdout.write(`Will install ${toInstall.length} model(s), ~${used.toFixed(1)} GB total.\n\n`);
+    } else {
+        toInstall = [fitsOnHardware[0]];
+    }
+
+    let lastInstalled = null;
+    for (const r of toInstall) {
+        process.stdout.write(`\n→ Pulling ${r.model.name} (${r.model.pullName})…\n\n`);
+        const code = r.model.pullName.startsWith("hf:")
+            ? await cmdHfPull(r.model.pullName.slice(3))
+            : await cmdPull(host_(), r.model.pullName, { force: true });
+        if (code === 0) {
+            lastInstalled = r.model;
+        } else {
+            process.stderr.write(`pull failed for ${r.model.pullName} (exit ${code}); continuing\n`);
+        }
+    }
+
+    // Set the most recently-installed as the active model so chat works.
+    if (lastInstalled) {
+        const cfg = (await loadConfig()) ?? {};
+        const updated = { ...cfg, engine: { ...(cfg.engine ?? {}), model: lastInstalled.pullName, backend: lastInstalled.backend } };
+        await saveConfig(updated);
+        process.stdout.write(`\n✓ engine.model = ${lastInstalled.pullName}  (${lastInstalled.backend})\n`);
+        process.stdout.write(`Try it:  infernet chat "hello"\n\n`);
+    }
+    return 0;
+}
+
+/** Re-read config to grab the resolved Ollama host. cmdPull needs it. */
+function host_() {
+    return process.env.OLLAMA_HOST ?? DEFAULT_HOST;
+}
+
+/** Best-effort free-disk lookup (GB) on the partition holding $HOME. */
+async function detectFreeDiskGb() {
+    try {
+        const { execFile } = await import("node:child_process");
+        const { promisify } = await import("node:util");
+        const pExec = promisify(execFile);
+        const { stdout } = await pExec("df", ["-Pk", process.env.HOME ?? "/"], { timeout: 3000 });
+        const parts = stdout.trim().split("\n").pop().split(/\s+/);
+        const freeKb = Number.parseInt(parts[3], 10);
+        return Number.isFinite(freeKb) ? freeKb / 1024 / 1024 : 0;
+    } catch {
+        return 0;
+    }
+}
+
+async function cmdInfo(name) {
+    if (!name) {
+        process.stderr.write("error: info requires a model name (e.g. hf:Qwen/Qwen2.5-32B-Instruct)\n");
+        return 2;
+    }
+    const repoId = name.startsWith('hf:') ? name.slice(3) : (name.includes('/') ? name : null);
+    if (!repoId) {
+        process.stderr.write(
+            `info works on HuggingFace models only. Try:\n` +
+            `  infernet model info hf:Qwen/Qwen2.5-32B-Instruct\n` +
+            `  infernet model info NousResearch/Hermes-3-Llama-3.1-8B\n`
+        );
+        return 2;
+    }
+
+    const token = await resolveHfToken();
+    process.stdout.write(`Fetching ${repoId} from HuggingFace…\n`);
+    let info;
+    try {
+        info = await fetchHfModelInfo(repoId, token);
+    } catch (err) {
+        process.stderr.write(`error: ${err?.message ?? err}\n`);
+        return 1;
+    }
+
+    const fmt = (v, suffix = "") => v == null ? "?" : `${v}${suffix}`;
+    process.stdout.write(`\n${info.repoId}\n`);
+    process.stdout.write(`${'─'.repeat(Math.min(70, info.repoId.length))}\n`);
+    process.stdout.write(`  pipeline:        ${info.pipeline}\n`);
+    process.stdout.write(`  architecture:    ${info.architectures?.join(", ") ?? info.modelType ?? "?"}\n`);
+    process.stdout.write(`  model_type:      ${fmt(info.modelType)}\n`);
+    if (info.isMoe) {
+        process.stdout.write(`  MoE:             ${fmt(info.numExperts)} experts, ${fmt(info.expertsPerTok)} active per token\n`);
+    }
+    process.stdout.write(`  layers:          ${fmt(info.numLayers)}\n`);
+    process.stdout.write(`  hidden_size:     ${fmt(info.hiddenSize)}\n`);
+    if (info.numHeads) {
+        const gqa = info.numKvHeads && info.numKvHeads !== info.numHeads ? ` (GQA, ${info.numKvHeads} kv)` : "";
+        process.stdout.write(`  attention:       ${info.numHeads} heads${gqa}\n`);
+    }
+    process.stdout.write(`  context length:  ${info.contextLen ? info.contextLen.toLocaleString() : "?"}\n`);
+    process.stdout.write(`  vocab:           ${info.vocabSize ? info.vocabSize.toLocaleString() : "?"}\n`);
+    process.stdout.write(`  dtype:           ${fmt(info.torchDtype)}\n`);
+    if (info.isQuantized) {
+        process.stdout.write(`  quantized:       yes (${info.quantMethod ?? "unknown method"})\n`);
+    }
+    process.stdout.write(`\n  total weights:   ${fmt(info.sizeGb, " GB")}  (${fmt(info.shardCount)} shards)\n`);
+    process.stdout.write(`  param count:     ~${fmt(info.paramsB, "B")}\n`);
+
+    if (info.vramEstimateGb) {
+        process.stdout.write(`\n  VRAM estimate (weights + ~15% overhead, no KV cache):\n`);
+        process.stdout.write(`    bf16/fp16:     ~${info.vramEstimateGb.fp16} GB\n`);
+        process.stdout.write(`    int8:          ~${info.vramEstimateGb.int8} GB\n`);
+        process.stdout.write(`    int4 (AWQ/GPTQ): ~${info.vramEstimateGb.int4} GB\n`);
+    }
+
+    process.stdout.write(`\n  recommended backend: ${info.recommendedBackend === 'vllm_or_sglang' ? 'vLLM or SGLang (Ollama not supported)' : 'Ollama or vLLM'}\n`);
+    process.stdout.write(`  license:             ${fmt(info.license)}\n`);
+    if (info.downloads) process.stdout.write(`  downloads (30d):     ${info.downloads.toLocaleString()}\n`);
+
+    // Single-GPU verdict for common SKUs.
+    if (info.vramEstimateGb) {
+        process.stdout.write(`\n  Fits a single GPU?\n`);
+        const skus = [
+            { name: "RTX 4090 24GB", vram: 24 },
+            { name: "L40S / A6000 48GB", vram: 48 },
+            { name: "A100 80GB / H100 80GB", vram: 80 },
+            { name: "H200 141GB", vram: 141 }
+        ];
+        for (const sku of skus) {
+            const fp16 = info.vramEstimateGb.fp16 <= sku.vram ? "✓ fp16" : "";
+            const int8 = info.vramEstimateGb.int8 <= sku.vram ? (fp16 ? "" : "✓ int8") : "";
+            const int4 = info.vramEstimateGb.int4 <= sku.vram ? (fp16 || int8 ? "" : "✓ int4") : "";
+            const verdict = fp16 || int8 || int4 || "✗ requires multi-GPU";
+            process.stdout.write(`    ${sku.name.padEnd(24)}  ${verdict}\n`);
+        }
+    }
+
+    process.stdout.write(`\n  To download: infernet model pull hf:${info.repoId}\n\n`);
     return 0;
 }
 
@@ -356,6 +563,12 @@ export default async function model(args) {
             case "list":
             case "ls":
                 return await cmdList(host);
+            case "info":
+            case "inspect":
+                return await cmdInfo(arg);
+            case "recommend":
+            case "suggest":
+                return await cmdRecommend(args);
             case "pull":
             case "add":
                 return await cmdPull(host, arg, {

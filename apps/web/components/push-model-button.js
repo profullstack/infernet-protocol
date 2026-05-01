@@ -289,9 +289,14 @@ export default function PushModelButton({ pubkey, servedModels = [], specs }) {
                         ))}
                     </ul>
                 )}
-                {commands.some((c) => c.error) ? (
+                {/* Only surface the error from the MOST RECENT command. Old
+                    failures stay in the list as visual history but their
+                    stale error text doesn't shadow new actions — pushing a
+                    new model effectively clears the displayed error since
+                    commands[0] becomes the new pending row. */}
+                {commands[0]?.error ? (
                     <p className="mt-2 rounded-md border border-amber-400/30 bg-amber-400/10 p-2 text-xs text-amber-100">
-                        {commands.find((c) => c.error)?.error}
+                        {commands[0].error}
                     </p>
                 ) : null}
             </div>

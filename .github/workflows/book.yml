@@ -35,9 +35,22 @@ jobs:
 
           [ -f docs/book/index.md ] && { cat docs/book/index.md >> $OUT; printf '\n\n---\n\n' >> $OUT; }
 
+          # Inject an explicit <a id="..."></a> anchor before each
+          # chapter's content. The id matches what rewrite-md-links.lua
+          # generates so cross-chapter [link](other.md) references resolve
+          # to a real anchor in the single-page HTML, not pandoc's
+          # auto-derived heading id (which often differs because of
+          # punctuation / "Chapter N:" prefixes).
           for section_dir in $(ls -d docs/book/[0-9]*/ | sort); do
-            [ -f "${section_dir}index.md" ] && { cat "${section_dir}index.md" >> $OUT; printf '\n\n---\n\n' >> $OUT; }
+            section_anchor=$(basename "$section_dir" | sed 's/^[0-9]*-//')
+            if [ -f "${section_dir}index.md" ]; then
+              printf '\n<a id="%s"></a>\n\n' "$section_anchor" >> $OUT
+              cat "${section_dir}index.md" >> $OUT
+              printf '\n\n---\n\n' >> $OUT
+            fi
             for chapter in $(ls ${section_dir}*.md 2>/dev/null | grep -v index.md | sort); do
+              chapter_anchor=$(basename "$chapter" .md | sed 's/^[0-9]*-//')
+              printf '\n<a id="%s"></a>\n\n' "$chapter_anchor" >> $OUT
               cat "$chapter" >> $OUT
               printf '\n\n---\n\n' >> $OUT
             done

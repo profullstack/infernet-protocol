@@ -13,3 +13,4 @@ coverage/
 
 # Local Supabase CLI state (project-ref, version pins, etc.)
 supabase/.temp/
+.claude/

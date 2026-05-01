@@ -35,6 +35,8 @@ import * as vast from "./vast.js";
 
 import { DeployProvider, NotSupportedError } from "./providers/base.js";
 import RunPodProvider from "./providers/runpod.js";
+import TensorDockProvider from "./providers/tensordock.js";
+import LambdaProvider from "./providers/lambda.js";
 
 // ---- Legacy module-export adapters (stable, used by existing CLI) ----
 
@@ -55,11 +57,11 @@ export { runpod, digitalocean, vast };
 // ---- IPIP-0019 DeployProvider class registry (forward-looking) ----
 
 export const providers = {
-    runpod: RunPodProvider,
-    // tensordock: TensorDockProvider,    // issue #4
-    // lambda:     LambdaProvider,        // issue #5
-    // vast:       VastProvider,          // refactor #3-style
-    // digitalocean: DigitalOceanProvider // refactor #3-style
+    runpod:     RunPodProvider,
+    tensordock: TensorDockProvider,
+    lambda:     LambdaProvider
+    // vast:       VastProvider,          // legacy adapter still works
+    // digitalocean: DigitalOceanProvider // legacy adapter still works
 };
 
 /**
@@ -80,14 +82,20 @@ export function listProviderIds() {
     return Object.keys(providers);
 }
 
-export { DeployProvider, NotSupportedError, RunPodProvider };
+export {
+    DeployProvider,
+    NotSupportedError,
+    RunPodProvider,
+    TensorDockProvider,
+    LambdaProvider
+};
 
 // ---- Provider key URLs (where to mint an API key) ----
 
 export const PROVIDER_KEY_URLS = {
     digitalocean: digitalocean.meta.keyUrl,
-    vast: vast.meta.keyUrl,
-    runpod: "https://www.runpod.io/console/user/settings"
-    // tensordock: "https://dashboard.tensordock.com/api"
-    // lambda:     "https://cloud.lambdalabs.com/api-keys"
+    vast:         vast.meta.keyUrl,
+    runpod:       "https://www.runpod.io/console/user/settings",
+    tensordock:   "https://dashboard.tensordock.com/api",
+    lambda:       "https://cloud.lambdalabs.com/api-keys"
 };

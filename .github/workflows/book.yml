@@ -102,27 +102,14 @@ jobs:
             --lua-filter=docs/book/rewrite-md-links.lua \
             -o docs/book/infernet-book.html
 
-      - name: Build per-chapter HTML pages (pandoc md → html)
+      - name: Build per-chapter HTML pages (pandoc md → html, with nav)
         run: |
-          # One pandoc invocation per .md file. The md-to-html-links.lua
-          # filter rewrites cross-chapter [link](other.md) references to
-          # [link](other.html), so the chapter HTML files cross-link
-          # naturally without any custom routing.
-          mkdir -p apps/web/public/book
-          find docs/book -name "*.md" -not -name "_combined.md" | while read md; do
-            rel="${md#docs/book/}"
-            out="apps/web/public/book/${rel%.md}.html"
-            mkdir -p "$(dirname "$out")"
-            pandoc "$md" \
-              --standalone \
-              --highlight-style=tango \
-              --metadata title="The Infernet Protocol Book" \
-              --resource-path="$(dirname "$md")":docs/book \
-              --lua-filter=docs/book/md-to-html-links.lua \
-              -o "$out"
-          done
-          echo "built per-chapter pages:"
-          find apps/web/public/book -name "*.html" | wc -l
+          # tooling/build-book-html.mjs walks docs/book/ in TOC order,
+          # invokes pandoc per .md file, and injects prev/next/home nav
+          # at the top + bottom of each page via --include-before-body
+          # and --include-after-body. Cross-chapter .md → .html rewriting
+          # comes from docs/book/md-to-html-links.lua.
+          node tooling/build-book-html.mjs
 
       - name: Copy to web public dir
         run: |

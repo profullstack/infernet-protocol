@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>The Infernet Protocol Book</title>
+  <title>Self-Hosting the Control Plane · The Infernet Book</title>
   <style>
     html {
       color: #1a1a1a;
@@ -226,10 +226,43 @@
     code span.vs { color: #4e9a06; } /* VerbatimString */
     code span.wa { color: #8f5902; font-weight: bold; font-style: italic; } /* Warning */
   </style>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+           max-width: 760px; margin: 0 auto; padding: 1.5rem;
+           line-height: 1.65; color: #1a1a1a; background: #fff; }
+    h1, h2, h3, h4 { line-height: 1.25; margin-top: 1.5em; }
+    h1 { font-size: 1.8rem; }
+    h2 { font-size: 1.4rem; border-bottom: 1px solid #eee; padding-bottom: 0.3rem; }
+    h3 { font-size: 1.15rem; }
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    pre { background: #f5f5f5; padding: 0.85rem; border-radius: 4px;
+          overflow-x: auto; font-size: 0.85rem; line-height: 1.5; }
+    code { background: #f5f5f5; padding: 0.1rem 0.35rem;
+           border-radius: 3px; font-size: 0.88em;
+           font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+    pre code { background: none; padding: 0; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.9rem; }
+    th, td { border: 1px solid #ddd; padding: 0.45rem 0.7rem; text-align: left; }
+    th { background: #f8f8f8; }
+    blockquote { border-left: 3px solid #2563eb; margin-left: 0;
+                 padding: 0.2rem 1rem; color: #555; background: #f9f9fb; }
+    hr { border: none; border-top: 1px solid #eee; margin: 2rem 0; }
+    .book-nav { display: flex; align-items: center; gap: 1rem;
+                padding: 0.75rem 0; font-size: 0.9rem; }
+    .book-nav-top    { border-bottom: 1px solid #eee; margin-bottom: 1.75rem; }
+    .book-nav-bottom { border-top: 1px solid #eee; margin-top: 2.5rem; }
+    .book-nav-home { font-weight: 600; }
+    .book-nav-prev, .book-nav-next { color: #2563eb; }
+    .book-nav-prev[hidden], .book-nav-next[hidden] { visibility: hidden; }
+    .book-nav-spacer { flex: 1; }
+  </style>
 </head>
 <body>
+<nav class="book-nav book-nav-top"><a href="/book/06-advanced/multi-gpu.html" class="book-nav-prev">← Multi-GPU Inference</a><span class="book-nav-spacer"></span><a href="/book" class="book-nav-home">📖 The Infernet Book</a><span class="book-nav-spacer"></span><span class="book-nav-next" hidden></span></nav>
 <header id="title-block-header">
-<h1 class="title">The Infernet Protocol Book</h1>
+<h1 class="title">Self-Hosting the Control Plane · The Infernet
+Book</h1>
 </header>
 <h1 id="self-hosting-the-control-plane">Self-Hosting the Control
 Plane</h1>
@@ -416,5 +449,6 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb18-1"><a href=
 <span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run build</span>
 <span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="ex">pm2</span> restart infernet-cp</span></code></pre></div>
 <p>Check the changelog for breaking migrations before upgrading.</p>
+<nav class="book-nav book-nav-bottom"><a href="/book/06-advanced/multi-gpu.html" class="book-nav-prev">← Multi-GPU Inference</a><span class="book-nav-spacer"></span><span class="book-nav-next" hidden></span></nav>
 </body>
 </html>

@@ -14,8 +14,8 @@
   "engines": { "node": ">=18" },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/infernetprotocol/infernet-protocol.git",
+    "url": "git+https://github.com/InfernetProtocol/infernet-protocol.git",
     "directory": "packages/engine"
   },
-  "homepage": "https://github.com/infernetprotocol/infernet-protocol#readme"
+  "homepage": "https://github.com/InfernetProtocol/infernet-protocol#readme"
 }

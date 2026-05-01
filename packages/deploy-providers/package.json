@@ -25,7 +25,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/infernetprotocol/infernet-protocol.git",
+    "url": "git+https://github.com/InfernetProtocol/infernet-protocol.git",
     "directory": "packages/deploy-providers"
   }
 }

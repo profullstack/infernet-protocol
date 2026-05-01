@@ -26,7 +26,12 @@ const PROVIDER_SCORES = Object.freeze({
     lambda:       { reliability: 0.90, dx: 0.80 },
     tensordock:   { reliability: 0.75, dx: 0.70 },
     digitalocean: { reliability: 0.90, dx: 0.85 },
-    vast:         { reliability: 0.65, dx: 0.65 }
+    vast:         { reliability: 0.65, dx: 0.65 },
+    // "Stable tier" — initial guesses, refine from observed deploy success.
+    hyperstack:   { reliability: 0.85, dx: 0.80 },
+    crusoe:       { reliability: 0.88, dx: 0.80 },
+    datacrunch:   { reliability: 0.82, dx: 0.75 },
+    voltagepark:  { reliability: 0.80, dx: 0.70 }
 });
 
 export function isValidPreset(name) {

@@ -37,6 +37,10 @@ import { DeployProvider, NotSupportedError } from "./providers/base.js";
 import RunPodProvider from "./providers/runpod.js";
 import TensorDockProvider from "./providers/tensordock.js";
 import LambdaProvider from "./providers/lambda.js";
+import HyperstackProvider from "./providers/hyperstack.js";
+import CrusoeProvider from "./providers/crusoe.js";
+import DataCrunchProvider from "./providers/datacrunch.js";
+import VoltageParkProvider from "./providers/voltagepark.js";
 import { VastProvider } from "./vast.js";
 import { DigitalOceanProvider } from "./digitalocean.js";
 
@@ -62,6 +66,10 @@ export const providers = {
     runpod:       RunPodProvider,
     tensordock:   TensorDockProvider,
     lambda:       LambdaProvider,
+    hyperstack:   HyperstackProvider,
+    crusoe:       CrusoeProvider,
+    datacrunch:   DataCrunchProvider,
+    voltagepark:  VoltageParkProvider,
     vast:         VastProvider,
     digitalocean: DigitalOceanProvider
 };
@@ -90,6 +98,10 @@ export {
     RunPodProvider,
     TensorDockProvider,
     LambdaProvider,
+    HyperstackProvider,
+    CrusoeProvider,
+    DataCrunchProvider,
+    VoltageParkProvider,
     VastProvider,
     DigitalOceanProvider
 };
@@ -101,5 +113,9 @@ export const PROVIDER_KEY_URLS = {
     vast:         vast.meta.keyUrl,
     runpod:       "https://www.runpod.io/console/user/settings",
     tensordock:   "https://dashboard.tensordock.com/api",
-    lambda:       "https://cloud.lambdalabs.com/api-keys"
+    lambda:       "https://cloud.lambdalabs.com/api-keys",
+    hyperstack:   "https://infrahub.nexgencloud.com/dashboard/api-keys",
+    crusoe:       "https://console.crusoecloud.com/security/tokens",
+    datacrunch:   "https://cloud.datacrunch.io/account/api",
+    voltagepark:  "https://dashboard.voltagepark.com/api-keys"
 };

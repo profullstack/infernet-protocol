@@ -15,6 +15,7 @@
 import { DeployProvider, NotSupportedError } from "./base.js";
 import { canonicalize, aliasesFor } from "../gpu-normalize.js";
 import * as state from "../state.js";
+import { pollVllmHealth } from "../vllm-bootstrap.js";
 
 const API_URL = "https://api.runpod.io/graphql";
 
@@ -24,6 +25,14 @@ const API_URL = "https://api.runpod.io/graphql";
 const DEFAULT_IMAGE =
     process.env.INFERNET_PROVIDER_IMAGE
     ?? "ghcr.io/infernetprotocol/infernet-provider:latest";
+
+// vLLM official OpenAI-compatible image. Used when engine="vllm" and
+// the operator hasn't passed an explicit image. RunPod's docker pods
+// can't easily install vLLM into the Infernet image post-boot, so we
+// swap to a vllm-ready image and let the daemon talk to localhost:8000.
+const DEFAULT_VLLM_IMAGE =
+    process.env.INFERNET_VLLM_IMAGE
+    ?? "vllm/vllm-openai:latest";
 
 export class RunPodProvider extends DeployProvider {
     constructor(config = {}) {
@@ -132,11 +141,24 @@ export class RunPodProvider extends DeployProvider {
 
     async createNode(request = {}) {
         const {
-            gpu, gpuTypeId, gpuCount = 1, name, image = DEFAULT_IMAGE,
-            env = {}, containerDiskGb = 20, volumeInGb = 0, ports = "46337/tcp",
+            gpu, gpuTypeId, gpuCount = 1, name,
+            env = {}, containerDiskGb = 20, volumeInGb = 0,
             controlPlaneUrl = "", engine = "ollama", model = null,
             hourlyPrice = 0, vramGb = 0, region = null
         } = request;
+
+        // For vLLM mode, swap the image + expose 8000 (vLLM API) alongside
+        // the Infernet daemon port. The vllm/vllm-openai image takes the
+        // model + flags as `docker run` ARGS, passed via dockerArgs below.
+        const isVllm = engine === "vllm";
+        const image = request.image
+            ?? (isVllm ? DEFAULT_VLLM_IMAGE : DEFAULT_IMAGE);
+        const ports = request.ports
+            ?? (isVllm ? "46337/tcp,8000/tcp" : "46337/tcp");
+        const vllmConfig = request.vllm ?? {};
+        const dockerArgs = isVllm
+            ? this._composeVllmDockerArgs({ model, ...vllmConfig })
+            : "";
 
         const finalGpuTypeId = gpuTypeId ?? await this._resolveGpuTypeId(gpu);
         if (!finalGpuTypeId) {
@@ -173,7 +195,7 @@ export class RunPodProvider extends DeployProvider {
                 volumeInGb,
                 ports,
                 env: envInput,
-                dockerArgs: ""
+                dockerArgs
             }
         });
 
@@ -237,11 +259,30 @@ export class RunPodProvider extends DeployProvider {
         );
     }
 
-    async bootstrapNode(node, _request) {
+    /** Compose `docker run` ARGS for vllm/vllm-openai. */
+    _composeVllmDockerArgs(cfg = {}) {
+        const args = [`--model ${shellQuote(cfg.model)}`, "--host 0.0.0.0", `--port ${cfg.port ?? 8000}`];
+        if (cfg.servedModelName) args.push(`--served-model-name ${shellQuote(cfg.servedModelName)}`);
+        if (cfg.maxModelLen) args.push(`--max-model-len ${Number(cfg.maxModelLen)}`);
+        if (cfg.tensorParallelSize) args.push(`--tensor-parallel-size ${Number(cfg.tensorParallelSize)}`);
+        if (cfg.gpuMemoryUtilization) args.push(`--gpu-memory-utilization ${Number(cfg.gpuMemoryUtilization)}`);
+        if (cfg.quantization && cfg.quantization !== "none") args.push(`--quantization ${shellQuote(cfg.quantization)}`);
+        if (cfg.dtype && cfg.dtype !== "auto") args.push(`--dtype ${shellQuote(cfg.dtype)}`);
+        return args.join(" ");
+    }
+
+    async bootstrapNode(node, request = {}) {
         // The Infernet provider Docker image starts the daemon on boot,
         // so bootstrap is just a health-check on the published port.
         if (!node?.endpointUrl) {
             return { ok: false, reason: "no endpointUrl on node — call waitUntilReady first" };
+        }
+        // vLLM mode: poll /v1/models on the vllm port (default 8000).
+        if ((request.engine ?? node.engine) === "vllm") {
+            // node.endpointUrl is the daemon URL (port 46337); we need
+            // the vllm port on the same IP. Extract the host.
+            const host = node.endpointUrl.replace(/^https?:\/\//, "").split(":")[0];
+            return pollVllmHealth(host, { port: request.vllm?.port ?? 8000 });
         }
         const healthEndpoint = `${node.endpointUrl}/health`;
         try {
@@ -331,6 +372,11 @@ export class RunPodProvider extends DeployProvider {
             `View logs at: ${dashUrl}`;
         throw err;
     }
+}
+
+/** Single-quote a string for safe inclusion in a shell command. */
+function shellQuote(s) {
+    return `'${String(s).replace(/'/g, "'\\''")}'`;
 }
 
 export default RunPodProvider;

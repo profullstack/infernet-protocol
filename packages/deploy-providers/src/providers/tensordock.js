@@ -14,6 +14,7 @@
 import { DeployProvider, NotSupportedError } from "./base.js";
 import { canonicalize, aliasesFor } from "../gpu-normalize.js";
 import * as state from "../state.js";
+import { composeInstallScript, pollVllmHealth } from "../vllm-bootstrap.js";
 
 const API_BASE = "https://marketplace.tensordock.com/api/v0";
 
@@ -138,8 +139,14 @@ export class TensorDockProvider extends DeployProvider {
 
     // ---- Lifecycle ----
 
-    /** Cloud-init payload that runs the Infernet installer + sets env. */
-    _buildCloudInit(envMap) {
+    /** Cloud-init payload — vLLM-aware (IPIP-0019 §9). */
+    _buildCloudInit(envMap, opts = {}) {
+        if (opts.engine === "vllm") {
+            return composeInstallScript({
+                infernetEnv: envMap,
+                vllmConfig: opts.vllmConfig ?? {}
+            });
+        }
         const exports = Object.entries(envMap)
             .map(([k, v]) => `export ${k}=${JSON.stringify(String(v))}`)
             .join("\n");
@@ -192,9 +199,9 @@ export class TensorDockProvider extends DeployProvider {
                 INFERNET_ENGINE: engine,
                 ...(model ? { INFERNET_MODEL: model } : {}),
                 ...env
-            }),
-            internal_ports: JSON.stringify([46337]),
-            external_ports: JSON.stringify([46337])
+            }, { engine, vllmConfig: { model, ...(request.vllm ?? {}) } }),
+            internal_ports: JSON.stringify(engine === "vllm" ? [46337, request.vllm?.port ?? 8000] : [46337]),
+            external_ports: JSON.stringify(engine === "vllm" ? [46337, request.vllm?.port ?? 8000] : [46337])
         });
 
         const vmId = data?.deployment ?? data?.id ?? data?.serverID;
@@ -257,14 +264,18 @@ export class TensorDockProvider extends DeployProvider {
         );
     }
 
-    async bootstrapNode(node, _request) {
-        // Cloud-init runs the Infernet installer at boot. Health-check the
-        // p2p port to confirm the daemon came up.
-        if (!node?.endpointUrl) {
-            return { ok: false, reason: "no endpointUrl on node — call waitUntilReady first" };
+    async bootstrapNode(node, request = {}) {
+        if (!node?.endpointUrl && !node?.ip) {
+            return { ok: false, reason: "no endpointUrl/ip on node — call waitUntilReady first" };
         }
+        // vLLM: poll /v1/models on the vLLM port (default 8000).
+        if ((request.engine ?? node.engine) === "vllm") {
+            return pollVllmHealth(node.ip ?? node.endpointUrl, {
+                port: request.vllm?.port ?? 8000
+            });
+        }
+        // Default: health-check the Infernet daemon on 46337.
         const healthEndpoint = `${node.endpointUrl}/health`;
-        // Cloud-init takes time after SSH is up; tolerate a few minutes.
         const deadline = Date.now() + 5 * 60 * 1000;
         let lastErr = null;
         while (Date.now() < deadline) {

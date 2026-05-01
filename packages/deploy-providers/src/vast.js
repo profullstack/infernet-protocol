@@ -171,6 +171,7 @@ export async function destroyDeployment({ apiKey, deploymentId }) {
 import { DeployProvider, NotSupportedError } from "./providers/base.js";
 import { canonicalize, aliasesFor } from "./gpu-normalize.js";
 import * as state from "./state.js";
+import { composeInstallScript, pollVllmHealth } from "./vllm-bootstrap.js";
 
 const DEFAULT_INSTALLER =
     process.env.INFERNET_INSTALLER_URL
@@ -246,7 +247,13 @@ export class VastProvider extends DeployProvider {
         return offers;
     }
 
-    _buildOnstart(envMap) {
+    _buildOnstart(envMap, opts = {}) {
+        if (opts.engine === "vllm") {
+            return composeInstallScript({
+                infernetEnv: envMap,
+                vllmConfig: opts.vllmConfig ?? {}
+            });
+        }
         const exports = Object.entries(envMap)
             .map(([k, v]) => `export ${k}=${JSON.stringify(String(v))}`)
             .join("\n");
@@ -281,7 +288,7 @@ export class VastProvider extends DeployProvider {
             INFERNET_ENGINE: engine,
             ...(model ? { INFERNET_MODEL: model } : {}),
             ...env
-        });
+        }, { engine, vllmConfig: { model, ...(request.vllm ?? {}) } });
 
         const result = await createDeployment({
             apiKey: this.config.apiKey,
@@ -324,9 +331,11 @@ export class VastProvider extends DeployProvider {
         throw new Error(`Vast.ai instance ${node.providerNodeId} did not reach RUNNING within ${Math.round(timeoutMs / 1000)}s`);
     }
 
-    async bootstrapNode(node, _request) {
-        // onstart already ran the installer; just health-check.
-        if (!node?.endpointUrl) return { ok: false, reason: "no endpointUrl on node" };
+    async bootstrapNode(node, request = {}) {
+        if (!node?.endpointUrl && !node?.ip) return { ok: false, reason: "no endpointUrl/ip on node" };
+        if ((request.engine ?? node.engine) === "vllm") {
+            return pollVllmHealth(node.ip ?? node.endpointUrl, { port: request.vllm?.port ?? 8000 });
+        }
         const healthEndpoint = `${node.endpointUrl}/health`;
         const deadline = Date.now() + 5 * 60 * 1000;
         let lastErr = null;

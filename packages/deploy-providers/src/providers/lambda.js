@@ -18,6 +18,7 @@ import { spawn } from "node:child_process";
 import { DeployProvider, NotSupportedError } from "./base.js";
 import { canonicalize, aliasesFor } from "../gpu-normalize.js";
 import * as state from "../state.js";
+import { composeInstallScript, pollVllmHealth } from "../vllm-bootstrap.js";
 
 const API_BASE = "https://cloud.lambdalabs.com/api/v1";
 
@@ -280,16 +281,29 @@ export class LambdaProvider extends DeployProvider {
             return { ok: false, reason: "ssh bootstrap requested but no sshKeyPath" };
         }
 
-        const envExports = Object.entries(node.envForBootstrap ?? {})
-            .map(([k, v]) => `export ${k}=${JSON.stringify(String(v))}`)
-            .join("\n");
-        const remoteCmd = [
-            "set -eux",
-            envExports,
-            `curl -fsSL ${DEFAULT_INSTALLER} | bash`,
-            "infernet register || true",
-            "infernet start || true"
-        ].join(" && ");
+        // Build the remote command. For vLLM, swap to the shared
+        // composeInstallScript so the install + systemd unit + Infernet
+        // daemon are all set up consistently with the cloud-init providers.
+        let remoteCmd;
+        if ((request.engine ?? node.engine) === "vllm") {
+            const script = composeInstallScript({
+                infernetEnv: node.envForBootstrap ?? {},
+                vllmConfig: { model: node.model, ...(request.vllm ?? {}) }
+            });
+            // Pipe the script to bash via stdin to avoid quoting issues.
+            remoteCmd = `cat <<'INFERNET_BOOTSTRAP_EOF' | sudo bash -s\n${script}\nINFERNET_BOOTSTRAP_EOF`;
+        } else {
+            const envExports = Object.entries(node.envForBootstrap ?? {})
+                .map(([k, v]) => `export ${k}=${JSON.stringify(String(v))}`)
+                .join("\n");
+            remoteCmd = [
+                "set -eux",
+                envExports,
+                `curl -fsSL ${DEFAULT_INSTALLER} | bash`,
+                "infernet register || true",
+                "infernet start || true"
+            ].join(" && ");
+        }
 
         const code = await new Promise((resolve, reject) => {
             const args = [
@@ -307,7 +321,10 @@ export class LambdaProvider extends DeployProvider {
             return { ok: false, reason: `ssh bootstrap exited ${code}` };
         }
 
-        // Health-check the daemon
+        // Health-check: vLLM polls /v1/models, otherwise daemon /health.
+        if ((request.engine ?? node.engine) === "vllm") {
+            return pollVllmHealth(node.ip, { port: request.vllm?.port ?? 8000 });
+        }
         const healthEndpoint = `${node.endpointUrl}/health`;
         try {
             const ctrl = new AbortController();

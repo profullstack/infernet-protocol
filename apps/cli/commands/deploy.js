@@ -412,9 +412,102 @@ async function presetSubcommand(presetName, args) {
         }
     }
 
-    // Hand off to the per-provider up-flow with the chosen offer pre-filled.
+    // vLLM mode: route through the new provider class so the cloud-init /
+    // dockerArgs / health-check pipeline runs end-to-end (IPIP-0019 §9).
+    const engine = args.get("engine");
+    if (engine === "vllm") {
+        return deployWithProviderClass(winner, args);
+    }
+
+    // Default (Ollama): hand off to the legacy per-provider up-flow.
     const provArgs = makeProviderArgsFromOffer(winner, args);
     return upSubcommand(provArgs);
+}
+
+async function deployWithProviderClass(offer, args) {
+    const Cls = providers?.[offer.providerId];
+    if (!Cls) {
+        process.stderr.write(
+            `vLLM deploy not yet wired for provider="${offer.providerId}".\n` +
+            `Try a preset that picks runpod/tensordock/lambda/vast/digitalocean.\n`
+        );
+        return 1;
+    }
+    const apiKey = await resolveApiKey(offer.providerId);
+    if (!apiKey) {
+        process.stderr.write(`No API key configured for ${offer.providerId}.\n`);
+        return 1;
+    }
+    const provider = new Cls({ apiKey, providerId: offer.providerId });
+
+    const model = args.get("model");
+    if (!model) {
+        process.stderr.write(`--model <hf-id> is required when --engine vllm.\n`);
+        return 1;
+    }
+    const vllm = {
+        model,
+        port: args.get("port") ? Number.parseInt(args.get("port"), 10) : 8000,
+        servedModelName: args.get("served-model-name") ?? undefined,
+        maxModelLen: args.get("max-model-len") ? Number.parseInt(args.get("max-model-len"), 10) : undefined,
+        tensorParallelSize: args.get("tensor-parallel-size") ? Number.parseInt(args.get("tensor-parallel-size"), 10) : undefined,
+        gpuMemoryUtilization: args.get("gpu-memory-utilization") ? Number.parseFloat(args.get("gpu-memory-utilization")) : undefined,
+        quantization: args.get("quantization") ?? undefined,
+        dtype: args.get("dtype") ?? undefined
+    };
+
+    process.stdout.write(`Creating ${offer.providerId} node (engine=vllm, model=${model})…\n`);
+    let node;
+    try {
+        node = await provider.createNode({
+            offerId: offer.offerId,
+            gpu: offer.gpu?.name,
+            gpuCount: offer.gpu?.count ?? 1,
+            vramGb: offer.gpu?.vramGb,
+            region: offer.region,
+            hourlyPrice: offer.pricePerHour,
+            engine: "vllm",
+            model,
+            vllm
+        });
+    } catch (err) {
+        process.stderr.write(`createNode failed: ${err?.message ?? err}\n`);
+        return 1;
+    }
+    process.stdout.write(`  local id:    ${node.id}\n  provider id: ${node.providerNodeId}\n`);
+
+    process.stdout.write("Waiting for node to come online…\n");
+    try {
+        node = await provider.waitUntilReady(node);
+    } catch (err) {
+        process.stderr.write(
+            `\nNode was created but did not become ready.\n` +
+            `Provider:    ${offer.providerId}\n` +
+            `Provider ID: ${node.providerNodeId}\n` +
+            `Local ID:    ${node.id}\n\n` +
+            `To clean up:\n  infernet deploy destroy ${node.id}\n\n` +
+            `(${err?.message ?? err})\n`
+        );
+        return 1;
+    }
+    process.stdout.write(`  endpoint:    ${node.endpointUrl}\n`);
+
+    process.stdout.write("Bootstrapping vLLM (this can take 5+ minutes — model download + first compile)…\n");
+    const health = await provider.bootstrapNode(node, { engine: "vllm", vllm });
+    if (!health.ok) {
+        process.stderr.write(
+            `\nvLLM health-check failed.\n` +
+            `Provider:    ${offer.providerId}\n` +
+            `Provider ID: ${node.providerNodeId}\n` +
+            `Local ID:    ${node.id}\n` +
+            `Reason:      ${health.reason ?? health.lastErr}\n\n` +
+            `To clean up:\n  infernet deploy destroy ${node.id}\n` +
+            `To debug:\n  infernet deploy logs ${node.id}\n`
+        );
+        return 1;
+    }
+    process.stdout.write(`✓ vLLM ready at ${health.healthEndpoint}\n`);
+    return 0;
 }
 
 async function collectOffersAcrossProviders({ canonicalGpu, maxPrice, request }) {

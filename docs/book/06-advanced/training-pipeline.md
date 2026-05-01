@@ -1,0 +1,150 @@
+# End-to-end training pipeline
+
+Walk through training a custom model from a search query to a published
+artifact on both HuggingFace and Ollama. We'll mirror the
+[ollama.com/rockypod/svelte-coder](https://ollama.com/rockypod/svelte-coder)
+shape — fine-tune a coder on Svelte docs, ship as a one-line `ollama pull`.
+
+## The four steps
+
+```
+┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+│  infernet train  │ →  │  infernet train  │ →  │  infernet train  │ →  │  infernet publish│
+│  data            │    │  init            │    │  run             │    │                  │
+│  (crawl)         │    │  (config)        │    │  (fine-tune)     │    │  (HF + Ollama)   │
+└──────────────────┘    └──────────────────┘    └──────────────────┘    └──────────────────┘
+   web → JSONL          JSONL → train.yml          → trained model        → ollama.com URL
+```
+
+## 1. Crawl training data from a search query
+
+```bash
+infernet train data \
+    --query "svelte 5 framework documentation" \
+    --domains svelte.dev,kit.svelte.dev,github.com \
+    --num 30 \
+    --out ./data/svelte5.jsonl
+```
+
+This hits [ValueSerp](https://valueserp.com) for the top 30 Google
+results, optionally filtered to a domain whitelist, then fetches each
+URL, extracts the readable text, and chunks it into ChatML-format JSONL:
+
+```json
+{"messages":[{"role":"system","content":"You are an expert..."},
+             {"role":"user","content":"svelte 5 framework documentation — section 1"},
+             {"role":"assistant","content":"Svelte 5 introduces runes — the primary..."}],
+ "meta":{"source_url":"https://svelte.dev/docs/svelte/runes","paragraph_index":0}}
+```
+
+Set `VALUESERP_API_KEY` in your env (or under
+`integrations.valueserp.api_key` in `~/.config/infernet/config.json`).
+
+The crawler will skip paragraphs shorter than `--min-chars` (default 200)
+and truncate paragraphs longer than `--max-chars` (default 4000) so each
+training sample fits comfortably in a 4K context.
+
+## 2. Scaffold a training config
+
+```bash
+infernet train init --output ./run
+```
+
+Edit the generated `run/infernet.train.yml`:
+
+```yaml
+name: svelte5-coder
+base_model: qwen2.5-coder:7b     # 7B coder is plenty for a domain-specific tune
+method: qlora                    # 4-bit LoRA; trains on a single 24GB GPU
+runtime: unsloth                 # fastest on consumer hardware
+
+input:
+  dataset: ./data/svelte5.jsonl  # what we just generated
+  format: chatml
+  validation_split: 0.1
+
+training:
+  epochs: 3
+  learning_rate: 2.0e-4
+  batch_size: 4
+  gradient_accumulation_steps: 4
+  max_seq_len: 4096
+
+lora:
+  rank: 16
+  alpha: 32
+  target_modules: [q_proj, v_proj, k_proj, o_proj]
+
+resources:
+  min_vram_gb: 24
+  max_runtime_hours: 4
+```
+
+## 3. Run the fine-tune
+
+```bash
+# Local training on this box (single GPU)
+infernet train run --local --config ./run/infernet.train.yml
+
+# Or submit to the P2P network (when workload_class: C1+ is set)
+infernet train run --config ./run/infernet.train.yml
+```
+
+Local mode shells out to the `runtime:` you specified (Unsloth, TRL,
+Axolotl, or the bundled microgpt for tiny demos) and writes:
+
+```
+run/
+├── infernet.train.yml      (frozen copy of the config used)
+├── metrics.jsonl           (one line per logging step)
+├── README.md               (auto-generated — what was trained, when)
+└── checkpoint-final/       (HF-shape directory: config.json + safetensors)
+```
+
+## 4. Publish
+
+```bash
+infernet publish ./run/checkpoint-final \
+    --hf InfernetProtocol/svelte5-coder \
+    --ollama infernet/svelte5-coder \
+    --quant q4_k_m
+```
+
+What this does:
+
+1. **HuggingFace push** — uploads the safetensors directory to
+   `huggingface.co/InfernetProtocol/svelte5-coder`. Needs
+   `HUGGINGFACE_TOKEN` with write scope on the org.
+2. **GGUF convert** — runs `convert_hf_to_gguf.py` from your local
+   `llama.cpp` checkout (`~/llama.cpp` by default; override with
+   `--llama-cpp-path`). Emits `model.f16.gguf` then quantizes to
+   `model.q4_k_m.gguf`.
+3. **Modelfile generation** — writes a `Modelfile` with the ChatML
+   template and sane defaults (`temperature=0.7`, `top_p=0.9`).
+4. **Ollama push** — `ollama create` + `ollama push` so it lands at
+   [ollama.com/infernet/svelte5-coder](https://ollama.com/infernet/svelte5-coder).
+   Run `ollama signin` once before the first publish.
+
+After this, anyone with Ollama can pull your model:
+
+```bash
+ollama pull infernet/svelte5-coder
+ollama run infernet/svelte5-coder "How do runes work in Svelte 5?"
+```
+
+## Variants
+
+- **Just the data**: `infernet train data --query …` and stop. The JSONL
+  is portable to any HF/Unsloth/Axolotl/TRL pipeline.
+- **Just the publish**: `infernet publish <dir> --modelfile-only` to
+  generate the Modelfile + GGUF locally without pushing anywhere.
+- **HF only**: `--skip-ollama`. Or **Ollama only**: `--skip-hf`.
+
+## Prerequisites
+
+- `VALUESERP_API_KEY` for crawling (free tier covers experiments)
+- `HUGGINGFACE_TOKEN` with write scope on your target org
+- `ollama signin` already done
+- `llama.cpp` cloned + built at `$HOME/llama.cpp` for the GGUF convert
+- A GPU with enough VRAM for the chosen base model — see
+  `infernet model info hf:Qwen/Qwen2.5-Coder-7B-Instruct` for fit estimates

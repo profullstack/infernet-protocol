@@ -19,10 +19,15 @@ import os from "node:os";
 import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import { loadConfig } from "../lib/config.js";
+import { resolveValueSerpKey, buildTrainingDataset } from "../lib/data-crawler.js";
 
 const HELP = `infernet train — fine-tune or train models on the P2P GPU network
 
 Usage:
+  infernet train data --query <q>             Crawl ValueSerp + emit JSONL
+                      [--out <file>]            (default: ./data/train.jsonl)
+                      [--num <n>]               (default: 20 results)
+                      [--domains <a,b,c>]       (whitelist filter)
   infernet train init [--output <dir>]        Scaffold infernet.train.yml
   infernet train run  [--config <file>]       Run training (local or P2P)
                       [--local]               Force local execution
@@ -32,6 +37,7 @@ Usage:
   infernet train logs  [<run-id>]             Tail run logs
 
 Examples:
+  infernet train data --query "svelte 5 framework docs" --domains svelte.dev,github.com
   infernet train init --output ./my-run
   infernet train run --local --output ./my-run
   infernet train run --config infernet.train.yml
@@ -524,6 +530,47 @@ async function cmdLogs(args) {
     return 0;
 }
 
+async function cmdData(args) {
+    const query = args.get("query") ?? args.get("q");
+    if (!query) {
+        process.stderr.write("error: --query <text> is required\n");
+        process.stderr.write(`example: infernet train data --query "svelte 5 framework docs"\n`);
+        return 2;
+    }
+    const apiKey = await resolveValueSerpKey();
+    if (!apiKey) {
+        process.stderr.write(
+            "error: VALUESERP_API_KEY is not set.\n" +
+            "Get a key at https://valueserp.com → set in env or in\n" +
+            "~/.config/infernet/config.json under integrations.valueserp.api_key\n"
+        );
+        return 1;
+    }
+    const out = args.get("out") ?? args.get("output") ?? "./data/train.jsonl";
+    const num = Number.parseInt(args.get("num") ?? "20", 10) || 20;
+    const domains = args.get("domains")?.split(",").map((s) => s.trim()).filter(Boolean) ?? null;
+    const minChars = Number.parseInt(args.get("min-chars") ?? "200", 10) || 200;
+    const maxChars = Number.parseInt(args.get("max-chars") ?? "4000", 10) || 4000;
+
+    process.stdout.write(`Searching ValueSerp for: "${query}"\n`);
+    if (domains) process.stdout.write(`  domain whitelist: ${domains.join(", ")}\n`);
+
+    const result = await buildTrainingDataset({
+        query, apiKey, outPath: out, num, domains, minChars, maxChars,
+        onProgress: ({ stage, index, total, url }) => {
+            if (stage === "fetch") {
+                process.stdout.write(`  [${index}/${total}] ${url}\n`);
+            }
+        }
+    });
+
+    process.stdout.write(`\n✓ Wrote ${result.examples} examples from ${result.urls} URLs to ${result.outPath}\n`);
+    process.stdout.write(`\nNext steps:\n`);
+    process.stdout.write(`  infernet train init --output ./run         # scaffold infernet.train.yml\n`);
+    process.stdout.write(`  infernet train run  --local --output ./run # train against ${out}\n`);
+    return 0;
+}
+
 export default async function train(args) {
     if (args.has("help") || args.has("h")) {
         process.stdout.write(HELP);
@@ -535,6 +582,9 @@ export default async function train(args) {
 
     try {
         switch (sub) {
+            case "data":
+            case "crawl":
+                return await cmdData(args);
             case "init":
                 return await cmdInit(args);
             case "run":

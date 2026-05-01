@@ -6,9 +6,7 @@ const PUBLIC_NAV = [
     { href: "/docs", label: "Docs" },
     { href: "/chat", label: "Chat" },
     { href: "/deploy", label: "Deploy" },
-    { href: "/status", label: "Status" },
-    { href: "/careers", label: "Careers" },
-    { href: "/contact", label: "Contact" }
+    { href: "/status", label: "Status" }
 ];
 
 const SIGNED_IN_NAV = [
@@ -18,7 +16,6 @@ const SIGNED_IN_NAV = [
     { href: "/docs", label: "Docs" },
     { href: "/chat", label: "Chat" },
     { href: "/status", label: "Status" },
-    { href: "/careers", label: "Careers" },
     { href: "/settings", label: "Settings" }
 ];
 
@@ -56,7 +53,7 @@ export default async function SiteHeader() {
                             <form action="/api/auth/logout" method="post">
                                 <button
                                     type="submit"
-                                    className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+                                    className="whitespace-nowrap rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
                                 >
                                     Sign out
                                 </button>

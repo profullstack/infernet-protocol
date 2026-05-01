@@ -97,6 +97,14 @@ export default function BookLandingPage() {
                         >
                             Download EPUB
                         </a>
+                        <a
+                            href="/book/infernet-book.html"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-full border border-white/15 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
+                        >
+                            Single-page HTML
+                        </a>
                     </div>
                     <p className="pt-2 text-xs text-[var(--muted)]">
                         Sources live at{" "}

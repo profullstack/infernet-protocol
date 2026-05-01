@@ -21,7 +21,7 @@
 
 import { loadConfig, saveConfig } from "../lib/config.js";
 import { question } from "../lib/prompt.js";
-import { getAdapter, adapters, PROVIDER_KEY_URLS } from "@infernetprotocol/deploy-providers";
+import { getAdapter, adapters, providers, PROVIDER_KEY_URLS } from "@infernetprotocol/deploy-providers";
 import { canonicalize } from "@infernetprotocol/deploy-providers/gpu-normalize";
 import { rankOffers, costBlock, isValidPreset } from "@infernetprotocol/deploy-providers/pricing";
 import { formatFitWarning } from "@infernetprotocol/deploy-providers/model-fit";
@@ -418,14 +418,33 @@ async function presetSubcommand(presetName, args) {
 }
 
 async function collectOffersAcrossProviders({ canonicalGpu, maxPrice, request }) {
-    const config = (await loadConfig()) ?? {};
     const offers = [];
-    for (const provider of PROVIDERS) {
+    // Union of providers with either a class adapter (IPIP-0019) or a
+    // legacy module adapter. The class wins when both exist.
+    const allProviders = new Set([...Object.keys(providers ?? {}), ...PROVIDERS]);
+
+    for (const provider of allProviders) {
         const apiKey = await resolveApiKey(provider);
         if (!apiKey) continue; // skip unconfigured
+
+        // Prefer the new DeployProvider class (uniform Offer[] shape).
+        const Cls = providers?.[provider];
+        if (Cls) {
+            try {
+                const inst = new Cls({ apiKey, providerId: provider });
+                const found = await inst.findOffers(request);
+                for (const o of found ?? []) offers.push(o);
+                continue;
+            } catch (err) {
+                process.stderr.write(`  (${provider}: ${err?.message ?? err})\n`);
+                continue;
+            }
+        }
+
+        // Fall back to the legacy module adapter shape.
         const adapter = adapters[provider];
         const fn = adapter?.findOffers ?? adapter?.searchOffers;
-        if (typeof fn !== "function") continue; // adapter doesn't support discovery yet
+        if (typeof fn !== "function") continue;
         try {
             const found = await fn({ apiKey, ...request });
             for (const o of found ?? []) {

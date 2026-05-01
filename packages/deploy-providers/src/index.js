@@ -37,6 +37,8 @@ import { DeployProvider, NotSupportedError } from "./providers/base.js";
 import RunPodProvider from "./providers/runpod.js";
 import TensorDockProvider from "./providers/tensordock.js";
 import LambdaProvider from "./providers/lambda.js";
+import { VastProvider } from "./vast.js";
+import { DigitalOceanProvider } from "./digitalocean.js";
 
 // ---- Legacy module-export adapters (stable, used by existing CLI) ----
 
@@ -57,11 +59,11 @@ export { runpod, digitalocean, vast };
 // ---- IPIP-0019 DeployProvider class registry (forward-looking) ----
 
 export const providers = {
-    runpod:     RunPodProvider,
-    tensordock: TensorDockProvider,
-    lambda:     LambdaProvider
-    // vast:       VastProvider,          // legacy adapter still works
-    // digitalocean: DigitalOceanProvider // legacy adapter still works
+    runpod:       RunPodProvider,
+    tensordock:   TensorDockProvider,
+    lambda:       LambdaProvider,
+    vast:         VastProvider,
+    digitalocean: DigitalOceanProvider
 };
 
 /**
@@ -87,7 +89,9 @@ export {
     NotSupportedError,
     RunPodProvider,
     TensorDockProvider,
-    LambdaProvider
+    LambdaProvider,
+    VastProvider,
+    DigitalOceanProvider
 };
 
 // ---- Provider key URLs (where to mint an API key) ----

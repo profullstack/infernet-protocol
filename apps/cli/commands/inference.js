@@ -32,6 +32,7 @@ Usage:
   infernet inference serve --model <hf-id> [flags]
   infernet inference status
   infernet inference stop
+  infernet inference list
 
 Flags (serve):
   --model <hf-id>          Required. e.g. meta-llama/Llama-3.1-70B-Instruct
@@ -171,6 +172,30 @@ async function cmdStatus() {
     return 0;
 }
 
+async function cmdList() {
+    const cfg = await loadConfig().catch(() => ({}));
+    const controlPlaneUrl = cfg?.controlPlane?.url ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://infernetprotocol.com";
+    const res = await fetch(`${controlPlaneUrl}/api/v1/petals/swarm`);
+    if (!res.ok) {
+        process.stderr.write(`error: HTTP ${res.status} from ${controlPlaneUrl}\n`);
+        return 1;
+    }
+    const { data } = await res.json();
+    if (!data?.models?.length) {
+        process.stdout.write(`(no Petals swarms active right now)\n`);
+        process.stdout.write(`Be the first — \`infernet inference serve --backend petals --model <hf-id>\`\n`);
+        return 0;
+    }
+    process.stdout.write(`\nPetals swarms — ${data.total_models} models · ${data.total_nodes} nodes serving\n\n`);
+    process.stdout.write(`  ${"NODES".padEnd(7)} MODEL\n`);
+    process.stdout.write(`  ${"─────".padEnd(7)} ─────\n`);
+    for (const m of data.models) {
+        process.stdout.write(`  ${String(m.node_count).padEnd(7)} ${m.model}\n`);
+    }
+    process.stdout.write(`\nQuery as a user: tick \"Distribute across all nodes\" on /chat and pick a model above.\n\n`);
+    return 0;
+}
+
 async function cmdStop() {
     const state = await readState();
     if (!state?.pid) {
@@ -197,6 +222,7 @@ export default async function inference(args) {
         case "serve": case "start":  return cmdServe(args);
         case "status":               return cmdStatus();
         case "stop":                 return cmdStop();
+        case "list": case "ls":      return cmdList();
         default:
             process.stderr.write(sub ? `unknown subcommand: ${sub}\n\n` : "error: missing subcommand\n\n");
             process.stderr.write(HELP);

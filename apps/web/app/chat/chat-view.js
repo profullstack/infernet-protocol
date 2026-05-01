@@ -30,6 +30,22 @@ export default function ChatView({ initialModels = [] }) {
   const [error, setError] = useState(null);
   const [provider, setProvider] = useState(null);
   const [e2eActive, setE2eActive] = useState(false);
+  // IPIP-0031: Petals swarm map. Populates "distributed across N nodes"
+  // badge in the model picker + the checkbox helper text.
+  const [swarmByModel, setSwarmByModel] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/v1/petals/swarm")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => {
+        if (cancelled || !b?.data?.models) return;
+        const map = {};
+        for (const m of b.data.models) map[m.model] = m.node_count;
+        setSwarmByModel(map);
+      })
+      .catch(() => { /* non-fatal */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const esRef = useRef(null);
   const scrollRef = useRef(null);
@@ -285,11 +301,22 @@ export default function ChatView({ initialModels = [] }) {
               className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-4 py-2 text-sm text-white outline-none disabled:opacity-50"
             >
               <option value="">(any available)</option>
-              {initialModels.map((m) => (
-                <option key={m.id} value={m.name}>
-                  {m.name}
-                </option>
-              ))}
+              {initialModels.map((m) => {
+                const n = swarmByModel[m.name];
+                return (
+                  <option key={m.id} value={m.name}>
+                    {m.name}{n ? ` · ${n} node${n === 1 ? "" : "s"} via Petals` : ""}
+                  </option>
+                );
+              })}
+              {/* Petals-only models that aren't in initialModels (Ollama) */}
+              {Object.keys(swarmByModel)
+                .filter((m) => !initialModels.some((im) => im.name === m))
+                .map((m) => (
+                  <option key={m} value={m}>
+                    {m} · {swarmByModel[m]} node{swarmByModel[m] === 1 ? "" : "s"} via Petals
+                  </option>
+                ))}
             </select>
             <label
               className="flex cursor-pointer items-center gap-2 text-xs text-[var(--muted)] hover:text-white"

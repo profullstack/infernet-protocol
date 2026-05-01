@@ -270,6 +270,23 @@ async function runPetalsProxy({ supabase, job, safeEnqueue, sseFrame }) {
           status: "completed",
           result: { type: "chat", text: fullText, source: "petals", provider_id: provider.id }
         });
+        // IPIP-0007 + IPIP-0031: emit a CPR receipt to the proxying
+        // operator. Layer-level attribution across the swarm is a
+        // future thing — for now the proxying provider gets credit
+        // for the whole inference.
+        try {
+          const { buildReceiptBody } = await import("@/lib/cpr/receipts");
+          const { enqueueAndFlush } = await import("@/lib/cpr/queue");
+          const receipt = buildReceiptBody({
+            job: { id: job.id, type: "inference", status: "completed", payment_offer: 0 },
+            provider: { public_key: provider.public_key, id: provider.id }
+          });
+          await enqueueAndFlush({ receipt, jobId: job.id }).catch((err) => {
+            console.warn(`CPR enqueueAndFlush (petals) failed: ${err?.message ?? err}`);
+          });
+        } catch (err) {
+          console.warn(`CPR receipt emission (petals) failed: ${err?.message ?? err}`);
+        }
       } else if (evName === "error") {
         const persisted = await insertJobEvent(supabase, job.id, "error", evData);
         safeEnqueue(sseFrame("error", evData, persisted?.id));

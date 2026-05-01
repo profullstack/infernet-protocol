@@ -359,6 +359,13 @@ async function cmdRun(args) {
  * IPIP-0030: post a training job to the open market. Any operator on
  * the network running with --accept-training claims shards and reports
  * back; we poll until all shards complete, then FedAvg the adapters.
+ *
+ * Shards are hosted by the SUBMITTER'S OWN DAEMON — no S3, no HF, no
+ * IPFS, no third-party storage. The local daemon's HTTP server already
+ * has a reachable endpoint registered with the control plane; we just
+ * drop shard files in ~/.infernet/training-runs/<run_id>/shards/ and
+ * the daemon serves them at /v1/training/shards/<run_id>/shard-<i>.jsonl
+ * (handler in commands/start.js handleTrainingHttp).
  */
 async function runOpenMarket({ trainConfig, runDir, runId, args }) {
     const cfg = await loadConfig().catch(() => ({}));
@@ -368,15 +375,27 @@ async function runOpenMarket({ trainConfig, runDir, runId, args }) {
         process.stderr.write(`error: open-market training needs a logged-in session — run \`infernet login\` first\n`);
         return 1;
     }
-    const datasetBaseUrl = args.get("shard-base-url") ?? process.env.INFERNET_SHARD_BASE_URL;
-    const uploadBaseUrl = args.get("upload-base-url") ?? process.env.INFERNET_ADAPTER_UPLOAD_URL;
-    if (!datasetBaseUrl) {
+
+    // Discover this submitter's own daemon endpoint. The daemon
+    // registered an endpoint_url at startup; it's stored locally in
+    // config under node.endpoint_url OR can be derived from advertised
+    // address + PORT (default 8080 — the same /healthz HTTP server).
+    const advertised = cfg?.node?.advertised_endpoint
+        ?? cfg?.node?.endpoint_url
+        ?? process.env.INFERNET_DAEMON_ENDPOINT;
+    if (!advertised) {
         process.stderr.write(
-            `error: --shard-base-url or INFERNET_SHARD_BASE_URL is required.\n` +
-            `Host shards somewhere reachable by daemons (S3 / HF / ngrok / etc).\n`
+            `error: can't find this node's public endpoint. Either:\n` +
+            `  - run \`infernet start\` so the daemon registers an endpoint, OR\n` +
+            `  - set INFERNET_DAEMON_ENDPOINT=http://<your-public-ip>:8080\n` +
+            `\nThe submitter's daemon hosts the shards directly — no S3, no HF.\n` +
+            `If your machine is behind NAT, run a tunnel:\n` +
+            `  cloudflared tunnel --url http://localhost:8080\n` +
+            `and set INFERNET_DAEMON_ENDPOINT to the cloudflared URL.\n`
         );
         return 1;
     }
+
     const numShards = Number.parseInt(args.get("max-nodes") ?? args.get("num-shards") ?? "5", 10);
     const budget = Number.parseFloat(args.get("budget") ?? "0");
     const pricePerShard = numShards > 0 ? budget / numShards : 0;
@@ -387,12 +406,31 @@ async function runOpenMarket({ trainConfig, runDir, runId, args }) {
         return 1;
     }
 
-    // Split the local JSONL into N shards in runDir/shards/
+    // Split the local JSONL into N shards under ~/.infernet/training-runs/<run_id>/.
+    // The daemon's HTTP server reads from this exact path.
     const { splitJsonl } = await import("../lib/training/p2p-coordinator.js");
-    const shardsDir = path.join(runDir, "shards");
+    const home = process.env.HOME ?? "/tmp";
+    const localRunDir = path.join(home, ".infernet", "training-runs", runId);
+    const shardsDir = path.join(localRunDir, "shards");
     process.stdout.write(`Splitting ${datasetPath} into ${numShards} shard(s)…\n`);
     const shards = await splitJsonl({ inputPath: datasetPath, outDir: shardsDir, numShards });
-    process.stdout.write(`  shards written to ${shardsDir} (operator must upload to ${datasetBaseUrl})\n`);
+
+    // Mint a per-run upload token so operators that complete a shard
+    // can PUT their adapter back to the submitter's daemon, and only
+    // those who claimed the shard via the control plane have the token.
+    const uploadToken = (await import("node:crypto")).randomBytes(16).toString("hex");
+    await fs.writeFile(
+        path.join(localRunDir, "manifest.json"),
+        JSON.stringify({ run_id: runId, num_shards: shards.length, upload_token: uploadToken, created_at: new Date().toISOString() }, null, 2)
+    );
+
+    // Build the canonical URLs the control plane will hand out to claimers.
+    const base = advertised.replace(/\/$/, "");
+    const datasetBaseUrl = `${base}/v1/training/shards/${runId}`;
+    const uploadBaseUrl = `${base}/v1/training/adapters/${runId}?token=${uploadToken}`;
+
+    process.stdout.write(`  shard URLs: ${datasetBaseUrl}/shard-N.jsonl\n`);
+    process.stdout.write(`  adapter PUT URL: ${uploadBaseUrl.replace(uploadToken, "<token>")}\n`);
 
     // Submit the job
     process.stdout.write(`\nPosting job to the open market…\n`);
@@ -419,11 +457,11 @@ async function runOpenMarket({ trainConfig, runDir, runId, args }) {
         return 1;
     }
     const { data } = await res.json();
-    process.stdout.write(`✓ job ${data.job.id} posted (${data.shards.length} shards · $${pricePerShard.toFixed(4)}/shard · $${budget.toFixed(2)} budget)\n`);
-    process.stdout.write(`\nMonitor at: ${controlPlaneUrl}/training/${data.job.id}\n`);
-    process.stdout.write(`Poll status: curl ${controlPlaneUrl}/api/v1/training/jobs/${data.job.id}\n\n`);
-    process.stdout.write(`Tip: opted-in operators see your shards next poll cycle (~60s). When all\n`);
-    process.stdout.write(`     report back, FedAvg the adapter URLs from the job status.\n`);
+    process.stdout.write(`\n✓ job ${data.job.id} posted (${data.shards.length} shards · $${pricePerShard.toFixed(4)}/shard · $${budget.toFixed(2)} budget)\n`);
+    process.stdout.write(`Shards hosted by your local daemon at ${base}\n`);
+    process.stdout.write(`Adapters land in ${path.join(localRunDir, "adapters")} as operators report\n`);
+    process.stdout.write(`\nKeep the daemon running until all shards complete. When done:\n`);
+    process.stdout.write(`  python3 ${path.join(runDir, "_fedavg.py")} --out ${path.join(runDir, "checkpoint-final")} ${path.join(localRunDir, "adapters")}/*\n`);
 
     await fs.writeFile(path.join(runDir, "open-market-job.json"), JSON.stringify(data, null, 2));
     return 0;

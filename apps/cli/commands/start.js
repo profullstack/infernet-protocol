@@ -776,6 +776,81 @@ async function runDaemon(args, ctx) {
         };
     }
 
+    /**
+     * IPIP-0030: shard-hosting routes layered on top of /healthz.
+     * Returns true if the request matched and was handled.
+     */
+    async function handleTrainingHttp(req, res) {
+        if (!req.url) return false;
+        const url = new URL(req.url, 'http://localhost');
+        const pathname = url.pathname;
+
+        // GET /v1/training/shards/<run_id>/<shard_index>.jsonl
+        const shardMatch = pathname.match(/^\/v1\/training\/shards\/([A-Za-z0-9_-]+)\/shard-(\d+)\.jsonl$/);
+        if (shardMatch && req.method === 'GET') {
+            const fs = await import('node:fs');
+            const path = await import('node:path');
+            const [, runId, idx] = shardMatch;
+            const filePath = path.join(
+                process.env.HOME ?? '/tmp',
+                '.infernet', 'training-runs', runId, 'shards', `shard-${idx}.jsonl`
+            );
+            if (!fs.existsSync(filePath)) {
+                res.writeHead(404, { 'content-type': 'text/plain' });
+                res.end('shard not found\n');
+                return true;
+            }
+            res.writeHead(200, {
+                'content-type': 'application/jsonl',
+                'content-length': fs.statSync(filePath).size,
+                'cache-control': 'no-store'
+            });
+            fs.createReadStream(filePath).pipe(res);
+            return true;
+        }
+
+        // PUT /v1/training/adapters/<run_id>/<shard_index>?token=<t>
+        const adapterMatch = pathname.match(/^\/v1\/training\/adapters\/([A-Za-z0-9_-]+)\/(\d+)$/);
+        if (adapterMatch && req.method === 'PUT') {
+            const fsp = await import('node:fs/promises');
+            const fs = await import('node:fs');
+            const path = await import('node:path');
+            const [, runId, idx] = adapterMatch;
+            const runDir = path.join(process.env.HOME ?? '/tmp', '.infernet', 'training-runs', runId);
+            const manifestPath = path.join(runDir, 'manifest.json');
+            if (!fs.existsSync(manifestPath)) {
+                res.writeHead(404, { 'content-type': 'text/plain' });
+                res.end('run not found\n');
+                return true;
+            }
+            // Token check: only accept PUTs whose ?token=<t> matches the
+            // run's manifest. The submitter mints the token at run-start
+            // and shares it with the control plane only via upload_url.
+            const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf8'));
+            const presentedToken = url.searchParams.get('token');
+            if (!presentedToken || presentedToken !== manifest.upload_token) {
+                res.writeHead(403, { 'content-type': 'text/plain' });
+                res.end('bad token\n');
+                return true;
+            }
+            const adapterDir = path.join(runDir, 'adapters');
+            await fsp.mkdir(adapterDir, { recursive: true });
+            const outPath = path.join(adapterDir, `shard-${idx}.adapter.safetensors`);
+            await new Promise((resolve, reject) => {
+                const ws = fs.createWriteStream(outPath);
+                req.pipe(ws);
+                ws.on('finish', resolve);
+                ws.on('error', reject);
+                req.on('error', reject);
+            });
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, path: outPath }));
+            return true;
+        }
+
+        return false;
+    }
+
     function snapshot() {
         return {
             pid: process.pid,
@@ -946,7 +1021,7 @@ async function runDaemon(args, ctx) {
     // firewalled). Returns 200 + a JSON daemon snapshot.
     const healthPort = Number.parseInt(process.env.PORT ?? '', 10) || 8080;
     try {
-        healthServer = http.createServer((req, res) => {
+        healthServer = http.createServer(async (req, res) => {
             if (req.url === '/healthz' || req.url === '/health' || req.url === '/') {
                 const snap = snapshot();
                 const body = JSON.stringify({
@@ -968,6 +1043,26 @@ async function runDaemon(args, ctx) {
                 res.end(body);
                 return;
             }
+
+            // IPIP-0030: serve training shards directly from this node's
+            // local filesystem. The submitter's CLI writes shards to
+            // ~/.infernet/training-runs/<run_id>/shards/shard-<i>.jsonl
+            // and posts the URL referencing this same daemon's endpoint.
+            // No third-party storage, no separate ports, no signup —
+            // the daemon's already on a reachable port.
+            //
+            // Routes:
+            //   GET /v1/training/shards/<run_id>/<shard_index>.jsonl
+            //   PUT /v1/training/adapters/<run_id>/<shard_index>?token=<t>
+            try {
+                const handled = await handleTrainingHttp(req, res);
+                if (handled) return;
+            } catch (err) {
+                res.writeHead(500, { 'content-type': 'text/plain' });
+                res.end(`training http error: ${err?.message ?? err}\n`);
+                return;
+            }
+
             res.writeHead(404, { 'content-type': 'text/plain' });
             res.end('not found\n');
         });

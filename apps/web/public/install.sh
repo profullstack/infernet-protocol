@@ -955,10 +955,34 @@ EOF
 # so symlink the npm-installed binary to $WRAPPER. Then check_path
 # wires the same dirs as the git path.
 link_npm_binary_to_wrapper() {
-    NPM_BIN="$(npm bin -g 2>/dev/null || npm prefix -g 2>/dev/null | sed 's|$|/bin|')"
-    NPM_INFERNET="$NPM_BIN/infernet"
-    if [ ! -x "$NPM_INFERNET" ] && [ ! -L "$NPM_INFERNET" ]; then
-        # Fallback: command -v in case npm bin -g returned the wrong dir.
+    # Refresh mise shims first — when mise IS the node provider,
+    # `npm install -g` lands the binary in mise's installs/ tree but
+    # mise's shim only points to it after `mise reshim` runs. Without
+    # this, `infernet` either fails with "not a valid shim" (stale) or
+    # we end up symlinking to a broken shim instead of the real file.
+    if command -v mise >/dev/null 2>&1; then
+        mise reshim >/dev/null 2>&1 || true
+    fi
+
+    # Resolve the actual installed binary, NOT the mise shim.
+    # 1. Prefer `npm prefix -g`/bin/infernet — this is the real install
+    #    location, even when `npm bin -g` returns a mise shims dir.
+    # 2. Fall back to walking mise's installs tree directly.
+    # 3. Last resort: command -v.
+    NPM_PREFIX="$(npm prefix -g 2>/dev/null || true)"
+    NPM_BIN="${NPM_PREFIX:+$NPM_PREFIX/bin}"
+    NPM_INFERNET=""
+    if [ -n "$NPM_BIN" ] && { [ -x "$NPM_BIN/infernet" ] || [ -L "$NPM_BIN/infernet" ]; }; then
+        NPM_INFERNET="$NPM_BIN/infernet"
+    fi
+    if [ -z "$NPM_INFERNET" ]; then
+        # mise installs are typically under $MISE_DATA_DIR/installs/node/<ver>/bin
+        for _candidate in $(ls -1 "${MISE_DATA_DIR:-$HOME/.local/share/mise}"/installs/node/*/bin/infernet 2>/dev/null); do
+            NPM_INFERNET="$_candidate"
+            break
+        done
+    fi
+    if [ -z "$NPM_INFERNET" ]; then
         NPM_INFERNET="$(command -v infernet 2>/dev/null || true)"
     fi
     if [ -z "$NPM_INFERNET" ] || { [ ! -x "$NPM_INFERNET" ] && [ ! -L "$NPM_INFERNET" ]; }; then

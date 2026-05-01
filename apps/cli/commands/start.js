@@ -505,6 +505,73 @@ async function runDaemon(args, ctx) {
         }
     }
 
+    /**
+     * IPIP-0030: poll the open training market, claim a shard if any
+     * fit our hardware, run it via runTrainShard, report back. Single
+     * shard per poll cycle — keeps a node from monopolizing a job.
+     */
+    let trainingBusy = false;
+    async function pollTrainingMarket() {
+        if (node.role !== 'provider') return;
+        if (trainingBusy) return; // one at a time
+
+        let listing;
+        try {
+            listing = await client.listAvailableTrainingShards(3);
+        } catch (err) {
+            process.stderr.write(`training market poll error: ${err?.message ?? err}\n`);
+            return;
+        }
+        const shards = listing?.shards ?? [];
+        if (shards.length === 0) return;
+
+        // Race-claim the first one. If another node beats us, just exit;
+        // we'll retry on the next poll cycle.
+        let claimed = null;
+        for (const shard of shards) {
+            try {
+                const res = await client.claimTrainingShard(shard.shard_id);
+                claimed = res;
+                break;
+            } catch (err) {
+                if (err?.status === 409) continue; // someone else got it
+                process.stderr.write(`training claim error: ${err?.message ?? err}\n`);
+            }
+        }
+        if (!claimed) return;
+
+        trainingBusy = true;
+        const shardId = claimed.shard_id;
+        process.stdout.write(
+            `[training] claimed shard ${shardId} of job ${claimed.job_id} ` +
+            `(base ${claimed.base_model}, idx ${claimed.shard_index})\n`
+        );
+        const t0 = Date.now();
+        try {
+            // Reuse the same daemon-side handler used by node_commands.
+            const result = await runTrainShard({
+                shard_url: claimed.shard_url,
+                upload_url: claimed.upload_url,
+                base_model: claimed.base_model,
+                ...(claimed.config ?? {})
+            }, shardId);
+            await client.reportTrainingShard(shardId, {
+                status: 'completed',
+                adapter_url: result?.uploaded ? claimed.upload_url : null,
+                metrics: { duration_ms: Date.now() - t0 }
+            });
+            process.stdout.write(`[training] reported completed shard ${shardId}\n`);
+        } catch (err) {
+            const msg = err?.message ?? String(err);
+            process.stderr.write(`[training] shard ${shardId} failed: ${msg}\n`);
+            try {
+                await client.reportTrainingShard(shardId, { status: 'failed', error: msg });
+            } catch { /* swallow */ }
+        } finally {
+            trainingBusy = false;
+        }
+    }
+
     async function runNodeCommand(cmd) {
         const { id, command, args } = cmd;
         const t0 = new Date().toISOString();
@@ -976,6 +1043,24 @@ async function runDaemon(args, ctx) {
         );
     }, commandPollMs);
     if (typeof commandTimer.unref === 'function') commandTimer.unref();
+
+    // Open-market training (IPIP-0030). Daemons that opted in via
+    // `infernet config set engine.acceptTraining true` (or env var
+    // INFERNET_ACCEPT_TRAINING=1) poll for available shards and run them
+    // for pay. Every ~60s — training shards are rare + slow, so polling
+    // hot wastes RPS.
+    const acceptTraining = process.env.INFERNET_ACCEPT_TRAINING === '1'
+        || config?.engine?.acceptTraining === true;
+    if (acceptTraining) {
+        process.stdout.write('[training] open-market shard claiming enabled\n');
+        const trainingPollMs = 60_000;
+        const trainingTimer = setInterval(() => {
+            pollTrainingMarket().catch((err) =>
+                process.stderr.write(`training poll threw: ${err?.message ?? err}\n`)
+            );
+        }, trainingPollMs);
+        if (typeof trainingTimer.unref === 'function') trainingTimer.unref();
+    }
 
     // Self-update: check npm registry every 5 minutes. If a newer version is
     // available, pull the installer, re-generate any missing keys + re-register

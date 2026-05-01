@@ -34,8 +34,14 @@ Usage:
                       [--num <n>]               (default: 20 results)
                       [--domains <a,b,c>]       (whitelist filter)
   infernet train init [--output <dir>]        Scaffold infernet.train.yml
-  infernet train run  [--config <file>]       Run training (local or P2P)
+  infernet train run  [--config <file>]       Run training (local | P2P | market)
                       [--local]               Force local execution
+                      [--open-market]         Post to the open network market — any
+                                              opted-in operator can claim shards
+                                              for pay (--budget <usd>, --max-nodes)
+                      [--shard-base-url <url>] Public prefix where daemons fetch shards
+                      [--budget <usd>]        Total budget; per-shard = budget / max-nodes
+                      [--max-nodes <n>]       Number of shards to split into
                       [--output <dir>]        Where to write run artifacts
   infernet train status [<run-id>]            Show run status
   infernet train list                         List recent runs
@@ -329,6 +335,13 @@ async function cmdRun(args) {
 
     const useLocal = forceLocal || workloadClass === "C1";
 
+    // Open-market: distribute across the entire network of opted-in
+    // operators (--open-market). The submitter pays per shard via the
+    // existing payment rails.
+    if (args.has("open-market")) {
+        return runOpenMarket({ trainConfig, runDir, runId, args });
+    }
+
     // P2P (federated LoRA) — workload_class C2/C3 or explicit --p2p flag.
     if (!useLocal) {
         return runP2PFederated({ trainConfig, runDir, runId });
@@ -340,6 +353,80 @@ async function cmdRun(args) {
         return runUnslothLocal({ trainConfig, runDir, runId });
     }
     return runMicrogptLocal({ trainConfig, runDir, runId });
+}
+
+/**
+ * IPIP-0030: post a training job to the open market. Any operator on
+ * the network running with --accept-training claims shards and reports
+ * back; we poll until all shards complete, then FedAvg the adapters.
+ */
+async function runOpenMarket({ trainConfig, runDir, runId, args }) {
+    const cfg = await loadConfig().catch(() => ({}));
+    const controlPlaneUrl = cfg?.controlPlane?.url ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://infernetprotocol.com";
+    const sessionToken = cfg?.session?.token ?? process.env.INFERNET_SESSION_TOKEN;
+    if (!sessionToken) {
+        process.stderr.write(`error: open-market training needs a logged-in session — run \`infernet login\` first\n`);
+        return 1;
+    }
+    const datasetBaseUrl = args.get("shard-base-url") ?? process.env.INFERNET_SHARD_BASE_URL;
+    const uploadBaseUrl = args.get("upload-base-url") ?? process.env.INFERNET_ADAPTER_UPLOAD_URL;
+    if (!datasetBaseUrl) {
+        process.stderr.write(
+            `error: --shard-base-url or INFERNET_SHARD_BASE_URL is required.\n` +
+            `Host shards somewhere reachable by daemons (S3 / HF / ngrok / etc).\n`
+        );
+        return 1;
+    }
+    const numShards = Number.parseInt(args.get("max-nodes") ?? args.get("num-shards") ?? "5", 10);
+    const budget = Number.parseFloat(args.get("budget") ?? "0");
+    const pricePerShard = numShards > 0 ? budget / numShards : 0;
+
+    const datasetPath = trainConfig.input?.dataset;
+    if (!datasetPath) {
+        process.stderr.write(`error: input.dataset is required\n`);
+        return 1;
+    }
+
+    // Split the local JSONL into N shards in runDir/shards/
+    const { splitJsonl } = await import("../lib/training/p2p-coordinator.js");
+    const shardsDir = path.join(runDir, "shards");
+    process.stdout.write(`Splitting ${datasetPath} into ${numShards} shard(s)…\n`);
+    const shards = await splitJsonl({ inputPath: datasetPath, outDir: shardsDir, numShards });
+    process.stdout.write(`  shards written to ${shardsDir} (operator must upload to ${datasetBaseUrl})\n`);
+
+    // Submit the job
+    process.stdout.write(`\nPosting job to the open market…\n`);
+    const res = await fetch(`${controlPlaneUrl}/api/v1/training/jobs`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${sessionToken}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            name: trainConfig.name ?? runId,
+            base_model: trainConfig.base_model,
+            config: trainConfig,
+            dataset_base_url: datasetBaseUrl,
+            upload_base_url: uploadBaseUrl,
+            num_shards: shards.length,
+            min_vram_gb: trainConfig.resources?.min_vram_gb ?? 16,
+            price_per_shard_usd: pricePerShard
+        })
+    });
+    if (!res.ok) {
+        const body = await res.text();
+        process.stderr.write(`submit failed: HTTP ${res.status} ${body.slice(0, 300)}\n`);
+        return 1;
+    }
+    const { data } = await res.json();
+    process.stdout.write(`✓ job ${data.job.id} posted (${data.shards.length} shards · $${pricePerShard.toFixed(4)}/shard · $${budget.toFixed(2)} budget)\n`);
+    process.stdout.write(`\nMonitor at: ${controlPlaneUrl}/training/${data.job.id}\n`);
+    process.stdout.write(`Poll status: curl ${controlPlaneUrl}/api/v1/training/jobs/${data.job.id}\n\n`);
+    process.stdout.write(`Tip: opted-in operators see your shards next poll cycle (~60s). When all\n`);
+    process.stdout.write(`     report back, FedAvg the adapter URLs from the job status.\n`);
+
+    await fs.writeFile(path.join(runDir, "open-market-job.json"), JSON.stringify(data, null, 2));
+    return 0;
 }
 
 async function runUnslothLocal({ trainConfig, runDir, runId }) {

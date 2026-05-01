@@ -31,7 +31,7 @@ export async function POST(request) {
     return err(400, "Invalid JSON body");
   }
 
-  const { messages, encryptedMessages, clientPubkey, modelPubkey, providerId, modelName, maxTokens, temperature } = payload ?? {};
+  const { messages, encryptedMessages, clientPubkey, modelPubkey, providerId, modelName, maxTokens, temperature, distributed } = payload ?? {};
 
   // Accept either plaintext messages[] or an encrypted NIP-44 payload.
   const hasPlain = Array.isArray(messages) && messages.length > 0;
@@ -56,7 +56,12 @@ export async function POST(request) {
       providerId: typeof providerId === "string" ? providerId : undefined,
       modelName,
       maxTokens,
-      temperature
+      temperature,
+      // IPIP-0031: when set, the router routes the request through a
+      // Petals client that fans out across the volunteer swarm instead
+      // of dispatching to a single provider. Persisted on the job so
+      // the SSE handler picks the correct streaming path.
+      distributed: distributed === true
     });
     if (source === "none") {
       return err(503, "The Infernet network has no live providers and the NVIDIA NIM fallback is not configured.", {

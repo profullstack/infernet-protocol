@@ -175,7 +175,8 @@ export async function createChatJob({
   providerId,
   modelName,
   maxTokens = 512,
-  temperature = 0.7
+  temperature = 0.7,
+  distributed = false
 }) {
   const supabase = getSupabaseServerClient();
   const now = new Date().toISOString();
@@ -207,7 +208,8 @@ export async function createChatJob({
       : { messages }),
     max_tokens: maxTokens,
     temperature,
-    ...(nimAvailable ? { fallback: "nvidia-nim" } : {})
+    ...(nimAvailable ? { fallback: "nvidia-nim" } : {}),
+    ...(distributed ? { distributed: true } : {})
   };
 
   const status = p2pProvider ? "assigned" : nimAvailable ? "running" : "pending";

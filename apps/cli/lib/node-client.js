@@ -131,6 +131,26 @@ export function createNodeClient({ url, publicKey, privateKey, role, timeoutMs =
             );
         },
 
+        // ---- Open-market training (IPIP-0030) ----
+
+        listAvailableTrainingShards(limit = 5) {
+            return signedFetch('/api/v1/training/shards/available', { limit });
+        },
+
+        claimTrainingShard(shardId) {
+            return signedFetch(
+                `/api/v1/training/shards/${encodeURIComponent(shardId)}/claim`,
+                {}
+            );
+        },
+
+        reportTrainingShard(shardId, payload) {
+            return signedFetch(
+                `/api/v1/training/shards/${encodeURIComponent(shardId)}/report`,
+                payload
+            );
+        },
+
         listPayouts() {
             return signedFetch('/api/v1/node/payouts/list', {});
         },

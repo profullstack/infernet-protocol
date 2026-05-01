@@ -26,6 +26,7 @@ export default function ChatView({ initialModels = [] }) {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [modelName, setModelName] = useState(initialModels[0]?.name ?? "");
+  const [distributed, setDistributed] = useState(false);
   const [error, setError] = useState(null);
   const [provider, setProvider] = useState(null);
   const [e2eActive, setE2eActive] = useState(false);
@@ -77,7 +78,7 @@ export default function ChatView({ initialModels = [] }) {
     const outgoingMessages = [...messages, nextUser].map((m) => ({ role: m.role, content: m.content }));
 
     // Attempt E2E encryption: pre-select a provider and get their pubkey.
-    let postBody = { messages: outgoingMessages, modelName, maxTokens: 512, temperature: 0.7 };
+    let postBody = { messages: outgoingMessages, modelName, maxTokens: 512, temperature: 0.7, distributed };
     let currentJobConvKey = null;
     try {
       const provRes = await fetch(`/api/chat/provider${modelName ? `?modelName=${encodeURIComponent(modelName)}` : ""}`);
@@ -290,6 +291,19 @@ export default function ChatView({ initialModels = [] }) {
                 </option>
               ))}
             </select>
+            <label
+              className="flex cursor-pointer items-center gap-2 text-xs text-[var(--muted)] hover:text-white"
+              title="Split the inference across multiple GPU nodes via Petals (experimental). Higher latency, but lets you run models too big for any single node."
+            >
+              <input
+                type="checkbox"
+                checked={distributed}
+                onChange={(e) => setDistributed(e.target.checked)}
+                disabled={streaming}
+                className="h-3.5 w-3.5 rounded border-white/30 bg-transparent text-[var(--accent)] disabled:opacity-50"
+              />
+              <span>Distribute across all nodes <span className="text-[10px] text-amber-300">experimental</span></span>
+            </label>
           </div>
         </header>
 

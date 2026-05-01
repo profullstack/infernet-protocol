@@ -1,7 +1,17 @@
 import Link from "next/link";
-import { getBookToc } from "@/lib/book";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { getBookToc, getChapter } from "@/lib/book";
 
 export const dynamic = "force-static";
+
+/** Strip the leading H1 and the inline cover <img> — both are already in the hero. */
+function stripFrontMatter(md) {
+    if (!md) return "";
+    return md
+        .replace(/^#[^\n]*\n+/, "")
+        .replace(/^<img[^>]*\/>\s*\n+/, "");
+}
 
 export const metadata = {
     title: "The Infernet Protocol Book — operator + developer guide",
@@ -29,11 +39,14 @@ const AUDIENCES = [
 
 export default function BookLandingPage() {
     let toc = [];
+    let intro = "";
     try {
         toc = getBookToc();
+        const chapter = getChapter([]);
+        intro = stripFrontMatter(chapter?.content);
     } catch {
         // Production deployment may not include docs/book/. Hero +
-        // download links still render; chapter list just collapses.
+        // download links still render; chapter list / intro just collapse.
     }
 
     return (
@@ -121,6 +134,32 @@ export default function BookLandingPage() {
                     ))}
                 </div>
             </section>
+
+            {/* Rendered intro chapter — server-side HTML for SEO */}
+            {intro && (
+                <section className="space-y-4">
+                    <h2 className="text-sm font-semibold uppercase tracking-[0.3em] text-[var(--muted)]">
+                        Introduction
+                    </h2>
+                    <div className="prose prose-invert prose-sm sm:prose-base max-w-none
+                        prose-headings:text-white prose-headings:font-semibold
+                        prose-h2:text-xl prose-h2:mt-8 prose-h2:mb-3
+                        prose-h3:text-base prose-h3:mt-6 prose-h3:mb-2
+                        prose-p:text-[var(--muted)] prose-p:leading-7
+                        prose-a:text-[var(--accent)] prose-a:no-underline hover:prose-a:underline
+                        prose-code:text-[var(--accent)] prose-code:bg-white/5 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
+                        prose-pre:bg-[var(--panel-strong)] prose-pre:border prose-pre:border-white/10 prose-pre:rounded-lg prose-pre:text-sm
+                        prose-blockquote:border-l-[var(--accent)] prose-blockquote:text-[var(--muted)]
+                        prose-strong:text-white
+                        prose-table:text-sm prose-th:text-white prose-td:text-[var(--muted)]
+                        prose-li:text-[var(--muted)]
+                        prose-hr:border-white/10">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {intro}
+                        </ReactMarkdown>
+                    </div>
+                </section>
+            )}
 
             {/* Table of contents */}
             {toc.length > 0 && (

@@ -23,7 +23,10 @@ const nextConfig = {
         permanent: true
       },
       {
-        source: "/book/:section(\\d{2}-[^/.]+)/:page",
+        // Constrain :page to NOT contain a dot, otherwise the existing
+        // /book/<section>/<page>.html files match this rule and redirect
+        // back to themselves with another .html appended (loop).
+        source: "/book/:section(\\d{2}-[^/.]+)/:page([^/.]+)",
         destination: "/book/:section/:page.html",
         permanent: true
       }

@@ -203,6 +203,20 @@ async function cmdPull(host, name, opts = {}) {
         return cmdHfPull(name.slice(3), opts);
     }
 
+    // Looks like "Org/Repo" — almost certainly a HuggingFace name. Ollama
+    // would just 404 with "pull model manifest: file does not exist", so
+    // catch it here and point the operator at the right verb.
+    if (name.includes('/') && !name.startsWith('hf:')) {
+        process.stderr.write(
+            `error: "${name}" looks like a HuggingFace repo, not an Ollama model.\n` +
+            `\nOllama can only pull from ollama.com. For HuggingFace, use the hf: prefix:\n` +
+            `  infernet model pull hf:${name}\n` +
+            `\nFor Ollama models, browse https://ollama.com/library — names look like\n` +
+            `qwen2.5:7b, llama3.1:8b, dolphin3:8b (no slash, with optional tag).\n`
+        );
+        return 1;
+    }
+
     // Quick reachability check before spawning ollama, so we get a friendly
     // error rather than a confusing CLI-not-found if Ollama isn't installed.
     await fetchTags(host);
@@ -226,13 +240,28 @@ async function cmdPull(host, name, opts = {}) {
     try {
         await streamPull(name);
     } catch (err) {
-        process.stderr.write(`error: ${err?.message ?? err}\n`);
-        process.stderr.write(
-            `\nNothing pulled. Common causes:\n` +
-            `  - typo in the model spec (try \`ollama list\` on the registry: https://ollama.com/library)\n` +
-            `  - missing tag — try the bare model name (e.g. qwen2.5 → qwen2.5:latest)\n` +
-            `  - private / gated model — pull manually with \`ollama pull ${name}\` to see the raw error\n`
-        );
+        const msg = err?.message ?? String(err);
+        process.stderr.write(`error: ${msg}\n`);
+        // "pull model manifest: file does not exist" is Ollama-speak for
+        // "registry returned 404 for that name+tag". Surface that clearly.
+        if (/manifest.*does not exist|manifest.*not found/i.test(msg)) {
+            process.stderr.write(
+                `\nThat model + tag combination doesn't exist in the Ollama registry.\n` +
+                `Browse exact names at https://ollama.com/library\n` +
+                `\nCommon gotchas:\n` +
+                `  - qwen2.5 only has :0.5b :1.5b :3b :7b :14b :32b :72b (no :8b)\n` +
+                `  - llama3.1 has :8b and :70b (no :7b)\n` +
+                `  - dolphin3 has :2b and :8b (no :7b)\n` +
+                `  - HuggingFace models need the hf: prefix: \`infernet model pull hf:org/repo\`\n`
+            );
+        } else {
+            process.stderr.write(
+                `\nNothing pulled. Common causes:\n` +
+                `  - typo in the model spec (try \`ollama list\` on the registry: https://ollama.com/library)\n` +
+                `  - missing tag — try the bare model name (e.g. qwen2.5 → qwen2.5:latest)\n` +
+                `  - private / gated model — pull manually with \`ollama pull ${name}\` to see the raw error\n`
+            );
+        }
         return 1;
     }
     return 0;

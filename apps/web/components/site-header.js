@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/supabase/auth-server";
 
 const PUBLIC_NAV = [
+    { href: "/protocol", label: "Protocol" },
     { href: "/docs", label: "Docs" },
     { href: "/chat", label: "Chat" },
     { href: "/deploy", label: "Deploy" },
@@ -12,6 +13,7 @@ const PUBLIC_NAV = [
 
 const SIGNED_IN_NAV = [
     { href: "/dashboard", label: "Dashboard" },
+    { href: "/protocol", label: "Protocol" },
     { href: "/deploy", label: "Deploy" },
     { href: "/docs", label: "Docs" },
     { href: "/chat", label: "Chat" },

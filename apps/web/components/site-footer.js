@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 const PRODUCT = [
+    { href: "/protocol", label: "Protocol" },
     { href: "/docs", label: "Docs" },
     { href: "/book", label: "Book" },
     { href: "/faq", label: "FAQ" },

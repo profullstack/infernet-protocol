@@ -807,6 +807,7 @@ main Infernet Protocol repository. Pull requests are welcome.
 Corrections, new examples, and translations are especially
 appreciated.</p>
 <hr />
+<p><a id="introduction"></a></p>
 <h1 id="chapter-1-introduction">Chapter 1: Introduction</h1>
 <p>This chapter explains what Infernet Protocol is, why it exists, and
 how the pieces fit together. By the end you’ll have a mental model of
@@ -834,6 +835,7 @@ routing, pricing, or what models are available. The cryptographic auth
 layer means nodes never need to trust the control plane with private
 keys.</p>
 <hr />
+<p><a id="architecture"></a></p>
 <h1 id="architecture">Architecture</h1>
 <p>Infernet Protocol has four major components: the control plane, node
 daemons, inference backends, and the on-chain payment layer. Here’s how
@@ -990,6 +992,7 @@ of implementing the adapter, not changing the protocol.</p>
 than WebSockets for unidirectional streaming and work through most
 proxies and CDNs without special configuration.</p>
 <hr />
+<p><a id="quick-start"></a></p>
 <h1 id="quick-start">Quick Start</h1>
 <p>Get a node online in under 5 minutes. This walkthrough installs the
 CLI, runs setup, and verifies the node is heartbeating to the control
@@ -1116,6 +1119,7 @@ href="#inference-backends">Chapter 3</a> to swap Ollama for vLLM,
 SGLang, or MAX.</li>
 </ul>
 <hr />
+<p><a id="what-is-infernet"></a></p>
 <h1 id="what-is-infernet-protocol">What Is Infernet Protocol?</h1>
 <h2 id="the-problem">The Problem</h2>
 <p>Modern AI applications depend almost entirely on a handful of
@@ -1194,6 +1198,7 @@ per node, and no managed infrastructure. The network’s reliability comes
 from having many nodes, not from any individual node being highly
 available.</p>
 <hr />
+<p><a id="node-operators"></a></p>
 <h1 id="chapter-2-node-operators">Chapter 2: Node Operators</h1>
 <p>Running a node is how you contribute compute to the network and earn
 crypto. This chapter covers everything from hardware selection through
@@ -1237,6 +1242,7 @@ to your wallet.</li>
 </ul>
 <p>The rest of this chapter covers each of these in detail.</p>
 <hr />
+<p><a id="earnings"></a></p>
 <h1 id="earnings">Earnings</h1>
 <h2 id="how-payments-work">How Payments Work</h2>
 <p>Every completed inference job generates a <strong>Compute Payment
@@ -1422,6 +1428,7 @@ secure. Back it up somewhere safe. If you lose it, you can’t claim any
 pending unclaimed earnings, and you’ll need to re-register with a new
 keypair.</p>
 <hr />
+<p><a id="installation"></a></p>
 <h1 id="installation">Installation</h1>
 <h2 id="install-the-cli">Install the CLI</h2>
 <div class="sourceCode" id="cb28"><pre
@@ -1588,6 +1595,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb40-1"><a href=
 optionally removes your config and keys (it will ask). The node’s
 registration on the control plane is deactivated.</p>
 <hr />
+<p><a id="model-management"></a></p>
 <h1 id="model-management">Model Management</h1>
 <p>Models are the inventory of your node. The more relevant models you
 have loaded, the more jobs you’ll match. Managing this inventory well is
@@ -1752,6 +1760,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb53-1"><a href=
 <span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a><span class="va">OLLAMA_KEEP_ALIVE</span><span class="op">=</span>-1 <span class="ex">ollama</span> run qwen2.5:14b</span></code></pre></div>
 <p>Or set the env var in your config and restart the daemon.</p>
 <hr />
+<p><a id="monitoring"></a></p>
 <h1 id="monitoring-your-node">Monitoring Your Node</h1>
 <h2 id="status-overview">Status Overview</h2>
 <div class="sourceCode" id="cb54"><pre
@@ -1879,6 +1888,7 @@ Healthchecks.io, etc.</p>
 → Notifications</strong> for Slack or Discord alerts when your node goes
 offline.</p>
 <hr />
+<p><a id="requirements"></a></p>
 <h1 id="hardware-requirements">Hardware Requirements</h1>
 <h2 id="gpu-tiers">GPU Tiers</h2>
 <p>Infernet classifies nodes into VRAM tiers. Your tier determines which
@@ -2067,6 +2077,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb63-1"><a href=
 <span id="cb63-7"><a href="#cb63-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Apple Silicon</span></span>
 <span id="cb63-8"><a href="#cb63-8" aria-hidden="true" tabindex="-1"></a><span class="ex">system_profiler</span> SPDisplaysDataType <span class="kw">|</span> <span class="fu">grep</span> <span class="st">&quot;Metal&quot;</span></span></code></pre></div>
 <hr />
+<p><a id="inference-backends"></a></p>
 <h1 id="chapter-3-inference-backends">Chapter 3: Inference Backends</h1>
 <p>Infernet Protocol supports five inference backends. The daemon
 auto-detects which one to use, but understanding your options lets you
@@ -2122,6 +2133,7 @@ request</li>
 native API. You don’t need to know the backend’s native API unless
 you’re doing advanced configuration.</p>
 <hr />
+<p><a id="choosing"></a></p>
 <h1 id="choosing-a-backend">Choosing a Backend</h1>
 <h2 id="decision-guide">Decision Guide</h2>
 <p>Start with these questions:</p>
@@ -2366,6 +2378,7 @@ token — affects perceived responsiveness - <strong>Inter-token
 latency</strong>: time between tokens in a stream — should be consistent
 - <strong>P99 latency</strong>: worst-case latency under load</p>
 <hr />
+<p><a id="llamacpp"></a></p>
 <h1 id="llama.cpp">llama.cpp</h1>
 <p>llama.cpp is a C++ implementation of LLM inference with no Python
 dependency. It runs on CPU, NVIDIA (CUDA), AMD (ROCm), Apple Silicon
@@ -2581,6 +2594,7 @@ class="sourceCode ini"><code class="sourceCode ini"><span id="cb87-1"><a href="#
 <span id="cb87-12"><a href="#cb87-12" aria-hidden="true" tabindex="-1"></a><span class="kw">[Install]</span></span>
 <span id="cb87-13"><a href="#cb87-13" aria-hidden="true" tabindex="-1"></a><span class="dt">WantedBy</span><span class="ot">=</span><span class="st">multi-user.target</span></span></code></pre></div>
 <hr />
+<p><a id="max"></a></p>
 <h1 id="modular-max">Modular MAX</h1>
 <p>Modular MAX (formerly Modular Engine) is a high-performance inference
 runtime from Modular, the company behind the Mojo programming language.
@@ -2766,6 +2780,7 @@ the current supported model list. For models not yet natively supported,
 MAX can often serve them via HuggingFace Transformers compatibility mode
 (slower but still works).</p>
 <hr />
+<p><a id="ollama"></a></p>
 <h1 id="ollama">Ollama</h1>
 <p>Ollama is the default backend. It handles NVIDIA, AMD (ROCm), Apple
 Silicon (Metal), and CPU inference with no additional configuration. If
@@ -2923,6 +2938,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb120-1"><a href
 <span id="cb120-4"><a href="#cb120-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Unload all models</span></span>
 <span id="cb120-5"><a href="#cb120-5" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> stop <span class="at">--all</span></span></code></pre></div>
 <hr />
+<p><a id="sglang"></a></p>
 <h1 id="sglang">SGLang</h1>
 <p>SGLang (Structured Generation Language) is an inference engine that
 focuses on KV-cache reuse and structured output generation. It’s
@@ -3097,6 +3113,7 @@ class="sourceCode ini"><code class="sourceCode ini"><span id="cb133-1"><a href="
 <span id="cb133-16"><a href="#cb133-16" aria-hidden="true" tabindex="-1"></a><span class="kw">[Install]</span></span>
 <span id="cb133-17"><a href="#cb133-17" aria-hidden="true" tabindex="-1"></a><span class="dt">WantedBy</span><span class="ot">=</span><span class="st">multi-user.target</span></span></code></pre></div>
 <hr />
+<p><a id="vllm"></a></p>
 <h1 id="vllm">vLLM</h1>
 <p>vLLM is a high-throughput inference engine for NVIDIA GPUs. It uses
 PagedAttention to manage KV-cache memory more efficiently than naive
@@ -3282,6 +3299,7 @@ class="sourceCode ini"><code class="sourceCode ini"><span id="cb147-1"><a href="
 <span id="cb147-17"><a href="#cb147-17" aria-hidden="true" tabindex="-1"></a><span class="kw">[Install]</span></span>
 <span id="cb147-18"><a href="#cb147-18" aria-hidden="true" tabindex="-1"></a><span class="dt">WantedBy</span><span class="ot">=</span><span class="st">multi-user.target</span></span></code></pre></div>
 <hr />
+<p><a id="building-apps"></a></p>
 <h1 id="chapter-4-building-apps">Chapter 4: Building Apps</h1>
 <p>This chapter is for developers building applications on top of
 Infernet Protocol. You don’t need to run a node — you submit jobs to the
@@ -3337,6 +3355,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb148-1"><a href
 <p>You should get back a JSON response with the job result in under a
 few seconds.</p>
 <hr />
+<p><a id="api-overview"></a></p>
 <h1 id="api-overview">API Overview</h1>
 <h2 id="base-url">Base URL</h2>
 <p>All API requests go to the control plane:</p>
@@ -3631,6 +3650,7 @@ X-RateLimit-Reset: 1746020400</code></pre>
 <pre><code>HTTP/1.1 429 Too Many Requests
 Retry-After: 13</code></pre>
 <hr />
+<p><a id="job-lifecycle"></a></p>
 <h1 id="job-lifecycle">Job Lifecycle</h1>
 <h2 id="states">States</h2>
 <p>A job moves through these states:</p>
@@ -3969,6 +3989,7 @@ class="sourceCode javascript"><code class="sourceCode javascript"><span id="cb16
 <p>Rate limits apply per token. For large batches, use the rate limit
 headers to stay within bounds.</p>
 <hr />
+<p><a id="streaming-chat"></a></p>
 <h1 id="streaming-chat">Streaming Chat</h1>
 <p>Streaming delivers tokens to the client as they’re generated instead
 of waiting for the full response. For any user-facing chat application,
@@ -4294,6 +4315,7 @@ backend confirms the generation is complete. You won’t receive
 <code>[DONE]</code> after a node disconnection error — only after a
 clean finish.</p>
 <hr />
+<p><a id="protocol"></a></p>
 <h1 id="chapter-5-protocol-internals">Chapter 5: Protocol Internals</h1>
 <p>This chapter covers the cryptographic and economic primitives that
 make Infernet Protocol work without central trust.</p>
@@ -4328,6 +4350,7 @@ receipt.</p>
 centralized billing model, but they’re what make the protocol genuinely
 decentralized.</p>
 <hr />
+<p><a id="nostr-keys"></a></p>
 <h1 id="nostr-key-hierarchy-ipip-0028">Nostr Key Hierarchy
 (IPIP-0028)</h1>
 <p>Infernet Protocol uses a three-party key hierarchy (specified in
@@ -4469,6 +4492,7 @@ keypair interaction, and no one else can read the conversation.</p>
 <p>This feature requires a client-side library that supports NIP-44.
 Check the SDK documentation for current support status.</p>
 <hr />
+<p><a id="payments"></a></p>
 <h1 id="payments">Payments</h1>
 <h2 id="compute-payment-receipts-cprs">Compute Payment Receipts
 (CPRs)</h2>
@@ -4665,6 +4689,7 @@ $0.000234.</p>
 <p>The fee is governed on-chain and changes require a governance
 vote.</p>
 <hr />
+<p><a id="security"></a></p>
 <h1 id="security-model">Security Model</h1>
 <h2 id="the-problem-with-api-keys">The Problem with API Keys</h2>
 <p>Traditional node auth uses API keys: the server has a key, the client
@@ -4798,6 +4823,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb199-1"><a href
 <span id="cb199-2"><a href="#cb199-2" aria-hidden="true" tabindex="-1"></a><span class="ex">gpg</span> <span class="at">--symmetric</span> <span class="at">--cipher-algo</span> AES256 ~/.infernet/keys/node.key</span>
 <span id="cb199-3"><a href="#cb199-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Stores as ~/.infernet/keys/node.key.gpg</span></span></code></pre></div>
 <hr />
+<p><a id="advanced"></a></p>
 <h1 id="chapter-6-advanced-topics">Chapter 6: Advanced Topics</h1>
 <p>This chapter covers configurations and capabilities beyond the
 standard single-node setup.</p>
@@ -4825,6 +4851,7 @@ using the public control plane.</p>
 follow the roadmap for the next major feature: fine-tuning jobs
 distributed across the network.</p>
 <hr />
+<p><a id="distributed-training"></a></p>
 <h1 id="distributed-training-roadmap">Distributed Training
 (Roadmap)</h1>
 <p>This chapter describes the planned distributed training feature.
@@ -4996,6 +5023,7 @@ for training-related issues and PRs. The IPIP (Infernet Protocol
 Improvement Proposals) repository tracks protocol design decisions,
 including the distributed training spec.</p>
 <hr />
+<p><a id="multi-gpu"></a></p>
 <h1 id="multi-gpu-inference">Multi-GPU Inference</h1>
 <p>Running models larger than your single GPU’s VRAM requires splitting
 them across multiple GPUs. vLLM with Ray is the primary tool for this on
@@ -5227,6 +5255,7 @@ class="sourceCode json"><code class="sourceCode json"><span id="cb215-1"><a href
 <p>These are approximate single-request throughputs. Concurrent requests
 increase total throughput thanks to continuous batching.</p>
 <hr />
+<p><a id="self-hosting"></a></p>
 <h1 id="self-hosting-the-control-plane">Self-Hosting the Control
 Plane</h1>
 <p>The Infernet control plane is open source. You can run your own

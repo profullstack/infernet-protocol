@@ -717,17 +717,17 @@ the hood.</p>
 <p><strong>Node operators</strong> who want to earn crypto by
 contributing GPU compute. You have an NVIDIA, AMD, or Apple Silicon
 machine and want to put it to work. Start with <a
-href="02-node-operators/index.md">Chapter 2: Node Operators</a>.</p>
+href="#node-operators">Chapter 2: Node Operators</a>.</p>
 <p><strong>Application developers</strong> who want to call LLM
 inference without locking into OpenAI, Anthropic, or any other
 centralized provider. You want reliable APIs, streaming responses, and
-predictable costs. Start with <a
-href="04-building-apps/index.md">Chapter 4: Building Apps</a>.</p>
+predictable costs. Start with <a href="#building-apps">Chapter 4:
+Building Apps</a>.</p>
 <p><strong>Protocol contributors</strong> interested in the
 cryptographic architecture, payment flows, and key hierarchy. Start with
-<a href="05-protocol/index.md">Chapter 5: Protocol</a>.</p>
+<a href="#protocol">Chapter 5: Protocol</a>.</p>
 <p>If you’re new to Infernet entirely, read <a
-href="01-introduction/index.md">Chapter 1: Introduction</a> first.</p>
+href="#introduction">Chapter 1: Introduction</a> first.</p>
 <hr />
 <h2 id="what-youll-learn">What You’ll Learn</h2>
 <p><strong>Chapter 1 — Introduction</strong> What Infernet Protocol is,
@@ -765,26 +765,24 @@ training roadmap.</p>
 <tbody>
 <tr class="odd">
 <td>Install a node</td>
-<td><a
-href="02-node-operators/installation.md">02-node-operators/installation.md</a></td>
+<td><a href="#installation">02-node-operators/installation.md</a></td>
 </tr>
 <tr class="even">
 <td>Pick an inference backend</td>
-<td><a
-href="03-inference-backends/choosing.md">03-inference-backends/choosing.md</a></td>
+<td><a href="#choosing">03-inference-backends/choosing.md</a></td>
 </tr>
 <tr class="odd">
 <td>Stream tokens from the API</td>
 <td><a
-href="04-building-apps/streaming-chat.md">04-building-apps/streaming-chat.md</a></td>
+href="#streaming-chat">04-building-apps/streaming-chat.md</a></td>
 </tr>
 <tr class="even">
 <td>Understand auth headers</td>
-<td><a href="05-protocol/security.md">05-protocol/security.md</a></td>
+<td><a href="#security">05-protocol/security.md</a></td>
 </tr>
 <tr class="odd">
 <td>Run a 70B model on 2 GPUs</td>
-<td><a href="06-advanced/multi-gpu.md">06-advanced/multi-gpu.md</a></td>
+<td><a href="#multi-gpu">06-advanced/multi-gpu.md</a></td>
 </tr>
 </tbody>
 </table>
@@ -801,9 +799,7 @@ from your control plane</li>
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">INFERNET_NODE_URL</span><span class="op">=</span>http://localhost:3000</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">INFERNET_BEARER_TOKEN</span><span class="op">=</span>your_token_here</span></code></pre></div>
 <p>For the CLI examples, <code>infernet</code> must be installed and on
-your PATH. See <a
-href="02-node-operators/installation.md">installation</a> if it
-isn’t.</p>
+your PATH. See <a href="#installation">installation</a> if it isn’t.</p>
 <hr />
 <h2 id="contributing">Contributing</h2>
 <p>This book is open source and lives in <code>docs/book/</code> in the
@@ -818,14 +814,14 @@ the whole system and a working node (or API call) to prove it.</p>
 <hr />
 <h2 id="in-this-chapter">In This Chapter</h2>
 <ul>
-<li><a href="what-is-infernet.md">What Is Infernet Protocol?</a> — The
+<li><a href="#what-is-infernet">What Is Infernet Protocol?</a> — The
 problem with centralized AI and how a decentralized compute network
 solves it.</li>
-<li><a href="architecture.md">Architecture</a> — Control plane, node
+<li><a href="#architecture">Architecture</a> — Control plane, node
 daemon, inference engines, and the job flow from request to
 payment.</li>
-<li><a href="quick-start.md">Quick Start</a> — Install the CLI, run
-setup, and verify your node is online in under 5 minutes.</li>
+<li><a href="#quick-start">Quick Start</a> — Install the CLI, run setup,
+and verify your node is online in under 5 minutes.</li>
 </ul>
 <hr />
 <h2 id="the-core-idea-in-one-paragraph">The Core Idea in One
@@ -888,7 +884,7 @@ for commands. The primary job submission endpoint is
 payment accounting, and the command queue (model installs/removes).
 Supabase Realtime is used for live dashboard updates.</p>
 <p>The control plane is open source. You can self-host it — see <a
-href="../06-advanced/self-hosting.md">Chapter 6: Self-Hosting</a>.</p>
+href="#self-hosting">Chapter 6: Self-Hosting</a>.</p>
 <h2 id="node-daemon">Node Daemon</h2>
 <p>The node daemon is the process started by
 <code>infernet start</code>. It does several things:</p>
@@ -1111,14 +1107,13 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href=
 <h2 id="whats-next">What’s Next</h2>
 <ul>
 <li><strong>Node operators</strong>: Read <a
-href="../02-node-operators/index.md">Chapter 2</a> for firewall setup,
-model management, monitoring, and earnings.</li>
-<li><strong>Developers</strong>: Read <a
-href="../04-building-apps/index.md">Chapter 4</a> for the REST API, SSE
-streaming, and error handling.</li>
+href="#node-operators">Chapter 2</a> for firewall setup, model
+management, monitoring, and earnings.</li>
+<li><strong>Developers</strong>: Read <a href="#building-apps">Chapter
+4</a> for the REST API, SSE streaming, and error handling.</li>
 <li><strong>Want a different backend?</strong> Read <a
-href="../03-inference-backends/index.md">Chapter 3</a> to swap Ollama
-for vLLM, SGLang, or MAX.</li>
+href="#inference-backends">Chapter 3</a> to swap Ollama for vLLM,
+SGLang, or MAX.</li>
 </ul>
 <hr />
 <h1 id="what-is-infernet-protocol">What Is Infernet Protocol?</h1>
@@ -1193,8 +1188,7 @@ you want full independence.</p>
 model weights. Operators pull models onto their own machines and serve
 them from local storage.</p>
 <p>It’s not a training platform (yet — see <a
-href="../06-advanced/distributed-training.md">Chapter 6</a> for the
-roadmap).</p>
+href="#distributed-training">Chapter 6</a> for the roadmap).</p>
 <p>It’s not a cloud provider. There are no SLAs, no guaranteed uptime
 per node, and no managed infrastructure. The network’s reliability comes
 from having many nodes, not from any individual node being highly
@@ -1207,21 +1201,21 @@ daily operations.</p>
 <hr />
 <h2 id="in-this-chapter-1">In This Chapter</h2>
 <ul>
-<li><a href="requirements.md">Requirements</a> — GPU tiers, RAM,
+<li><a href="#requirements">Requirements</a> — GPU tiers, RAM,
 bandwidth, and OS requirements. What hardware you can use and what to
 expect from each tier.</li>
-<li><a href="installation.md">Installation</a> — Full install
-walkthrough: the curl installer, <code>infernet setup</code>, firewall
-rules, and running the daemon as a system service.</li>
-<li><a href="model-management.md">Model Management</a> — Installing and
+<li><a href="#installation">Installation</a> — Full install walkthrough:
+the curl installer, <code>infernet setup</code>, firewall rules, and
+running the daemon as a system service.</li>
+<li><a href="#model-management">Model Management</a> — Installing and
 removing models via the CLI and dashboard. How the daemon serves models
 and polls for updates.</li>
-<li><a href="monitoring.md">Monitoring</a> — <code>infernet logs</code>,
+<li><a href="#monitoring">Monitoring</a> — <code>infernet logs</code>,
 <code>infernet status</code>, <code>infernet doctor</code>, and what the
 dashboard shows you about your node’s health.</li>
-<li><a href="earnings.md">Earnings</a> — How payments work per job, how
-to check your balance, and how to run <code>infernet payout</code> to
-claim earnings.</li>
+<li><a href="#earnings">Earnings</a> — How payments work per job, how to
+check your balance, and how to run <code>infernet payout</code> to claim
+earnings.</li>
 </ul>
 <hr />
 <h2 id="the-operators-day-to-day">The Operator’s Day-to-Day</h2>
@@ -1473,8 +1467,8 @@ or exact CPU model leaves the node.</p>
 <p><strong>3. Install inference backend</strong></p>
 <p>If no backend is detected, Ollama is installed automatically. If you
 want a different backend (vLLM, SGLang, MAX), install it first (see <a
-href="../03-inference-backends/index.md">Chapter 3</a>), then run setup
-— it will detect and configure it.</p>
+href="#inference-backends">Chapter 3</a>), then run setup — it will
+detect and configure it.</p>
 <p><strong>4. Pull default model</strong></p>
 <p>The wizard suggests a model based on your VRAM tier:</p>
 <table>
@@ -2080,17 +2074,17 @@ pick the right tool for your hardware and workload.</p>
 <hr />
 <h2 id="in-this-chapter-2">In This Chapter</h2>
 <ul>
-<li><a href="ollama.md">Ollama</a> — The default. Easy setup, broad
+<li><a href="#ollama">Ollama</a> — The default. Easy setup, broad
 hardware support (NVIDIA, AMD, Apple Silicon, CPU).</li>
-<li><a href="vllm.md">vLLM</a> — High throughput on NVIDIA hardware.
-Best for nodes with heavy job volume.</li>
-<li><a href="sglang.md">SGLang</a> — KV-cache reuse and structured
-output. Best when clients use similar prompt prefixes.</li>
-<li><a href="max.md">Modular MAX</a> — High throughput with a different
+<li><a href="#vllm">vLLM</a> — High throughput on NVIDIA hardware. Best
+for nodes with heavy job volume.</li>
+<li><a href="#sglang">SGLang</a> — KV-cache reuse and structured output.
+Best when clients use similar prompt prefixes.</li>
+<li><a href="#max">Modular MAX</a> — High throughput with a different
 memory management approach. Competitive with vLLM.</li>
-<li><a href="llamacpp.md">llama.cpp</a> — No Python dependency. CPU and
+<li><a href="#llamacpp">llama.cpp</a> — No Python dependency. CPU and
 Apple Silicon native. GGUF model format.</li>
-<li><a href="choosing.md">Choosing a Backend</a> — Decision guide with a
+<li><a href="#choosing">Choosing a Backend</a> — Decision guide with a
 comparison table.</li>
 </ul>
 <hr />
@@ -3204,8 +3198,8 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb142-1"><a href
 <span id="cb142-3"><a href="#cb142-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--tensor-parallel-size</span> 4 <span class="dt">\</span></span>
 <span id="cb142-4"><a href="#cb142-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--host</span> 0.0.0.0 <span class="dt">\</span></span>
 <span id="cb142-5"><a href="#cb142-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--port</span> 8000</span></code></pre></div>
-<p>See <a href="../06-advanced/multi-gpu.md">Chapter 6: Multi-GPU</a>
-for more on multi-GPU configurations.</p>
+<p>See <a href="#multi-gpu">Chapter 6: Multi-GPU</a> for more on
+multi-GPU configurations.</p>
 <h2 id="key-environment-variables-4">Key Environment Variables</h2>
 <div class="sourceCode" id="cb143"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb143-1"><a href="#cb143-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Model server address</span></span>
@@ -3295,14 +3289,14 @@ network via a REST API and get inference results back.</p>
 <hr />
 <h2 id="in-this-chapter-3">In This Chapter</h2>
 <ul>
-<li><a href="api-overview.md">API Overview</a> — Base URL,
-authentication, and the core endpoints. Everything you need to make your
-first API call.</li>
-<li><a href="streaming-chat.md">Streaming Chat</a> — How to consume SSE
+<li><a href="#api-overview">API Overview</a> — Base URL, authentication,
+and the core endpoints. Everything you need to make your first API
+call.</li>
+<li><a href="#streaming-chat">Streaming Chat</a> — How to consume SSE
 token streams in JavaScript and Python. Handling done events and
 errors.</li>
-<li><a href="job-lifecycle.md">Job Lifecycle</a> — Job states, polling
-vs streaming, retry logic, and what to do when jobs fail.</li>
+<li><a href="#job-lifecycle">Job Lifecycle</a> — Job states, polling vs
+streaming, retry logic, and what to do when jobs fail.</li>
 </ul>
 <hr />
 <h2 id="the-developers-view">The Developer’s View</h2>
@@ -3442,7 +3436,7 @@ class="sourceCode json"><code class="sourceCode json"><span id="cb152-1"><a href
 <span id="cb152-5"><a href="#cb152-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;created_at&quot;</span><span class="fu">:</span> <span class="st">&quot;2026-04-30T14:23:41Z&quot;</span></span>
 <span id="cb152-6"><a href="#cb152-6" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
 <p>When <code>stream: true</code>, the response is an SSE stream
-directly. See <a href="streaming-chat.md">Streaming Chat</a>.</p>
+directly. See <a href="#streaming-chat">Streaming Chat</a>.</p>
 <p><strong>Example:</strong></p>
 <div class="sourceCode" id="cb153"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb153-1"><a href="#cb153-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> https://infernetprotocol.com/api/v1/jobs <span class="dt">\</span></span>
@@ -3496,7 +3490,7 @@ class="sourceCode json"><code class="sourceCode json"><span id="cb156-1"><a href
 <h3 id="get-apiv1jobsidstream">GET /api/v1/jobs/:id/stream</h3>
 <p>Open an SSE stream to receive tokens as they’re generated. This is
 the recommended way to deliver results in real-time applications.</p>
-<p>See <a href="streaming-chat.md">Streaming Chat</a> for full
+<p>See <a href="#streaming-chat">Streaming Chat</a> for full
 documentation.</p>
 <hr />
 <h3 id="get-apiv1models">GET /api/v1/models</h3>
@@ -4288,7 +4282,7 @@ stream will emit an error event and close:</p>
 <p>When this happens: 1. The partial response received so far is valid
 2. The job is re-queued automatically by the control plane 3. You can
 either display the partial response or retry the full job</p>
-<p>For a retry strategy, see <a href="job-lifecycle.md">Job
+<p>For a retry strategy, see <a href="#job-lifecycle">Job
 Lifecycle</a>.</p>
 <h2 id="done-event">Done Event</h2>
 <p>The <code>[DONE]</code> event signals successful completion. After
@@ -4306,15 +4300,15 @@ make Infernet Protocol work without central trust.</p>
 <hr />
 <h2 id="in-this-chapter-4">In This Chapter</h2>
 <ul>
-<li><a href="security.md">Security</a> — Nostr-style secp256k1 keypairs,
+<li><a href="#security">Security</a> — Nostr-style secp256k1 keypairs,
 the <code>X-Infernet-Auth</code> header, what gets signed and why, and
 what it means for nodes to not require API keys.</li>
-<li><a href="payments.md">Payments</a> — Compute Payment Receipts
-(CPRs), multi-chain wallet support, the payment flow from job completion
-to on-chain settlement.</li>
-<li><a href="nostr-keys.md">Nostr Keys</a> — The three-party key
-hierarchy (IPIP-0028): user keys, node keys, and per-model keys. How
-they’re generated, stored, and rotated.</li>
+<li><a href="#payments">Payments</a> — Compute Payment Receipts (CPRs),
+multi-chain wallet support, the payment flow from job completion to
+on-chain settlement.</li>
+<li><a href="#nostr-keys">Nostr Keys</a> — The three-party key hierarchy
+(IPIP-0028): user keys, node keys, and per-model keys. How they’re
+generated, stored, and rotated.</li>
 </ul>
 <hr />
 <h2 id="design-philosophy">Design Philosophy</h2>
@@ -4810,13 +4804,13 @@ standard single-node setup.</p>
 <hr />
 <h2 id="in-this-chapter-5">In This Chapter</h2>
 <ul>
-<li><a href="multi-gpu.md">Multi-GPU</a> — Running 70B+ models across
+<li><a href="#multi-gpu">Multi-GPU</a> — Running 70B+ models across
 multiple GPUs with vLLM and Ray. Tensor parallelism and pipeline
 parallelism.</li>
-<li><a href="self-hosting.md">Self-Hosting</a> — Running your own
-control plane (Next.js app + Supabase). Pointing the CLI at a custom
-control plane URL.</li>
-<li><a href="distributed-training.md">Distributed Training</a> — What’s
+<li><a href="#self-hosting">Self-Hosting</a> — Running your own control
+plane (Next.js app + Supabase). Pointing the CLI at a custom control
+plane URL.</li>
+<li><a href="#distributed-training">Distributed Training</a> — What’s
 coming: LoRA/QLoRA fine-tuning on the network.</li>
 </ul>
 <hr />

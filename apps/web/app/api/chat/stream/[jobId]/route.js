@@ -77,21 +77,17 @@ export async function GET(_request, { params }) {
       // Heartbeat keeps the connection alive through proxies in both paths.
       const hb = setInterval(() => safeEnqueue(encoder.encode(": ping\n\n")), 15_000);
 
-      // IPIP-0031: when the user checked "Distribute across all nodes",
-      // we'd route through a Petals client that fans out across the swarm.
-      // Until the Petals client subprocess is wired up, surface a real
-      // error so the UI doesn't silently fall back to single-node and
-      // mislead the user into thinking distributed is working.
+      // IPIP-0031: distributed inference. Pick any provider that's
+      // contributing to a Petals swarm for the requested model, proxy
+      // the request to its /v1/petals/inference endpoint, stream the
+      // SSE tokens back to the browser.
       if (job?.input_spec?.distributed) {
-        const errEvt = await insertJobEvent(supabase, job.id, "error", {
-          message:
-            "Distributed inference (Petals swarm) is in scaffolding — " +
-            "the per-token fan-out client isn't wired yet. " +
-            "Uncheck 'Distribute across all nodes' to use single-node routing instead. " +
-            "Track progress: github.com/infernetprotocol/infernet-protocol/issues"
-        }).catch(() => null);
-        safeEnqueue(sseFrame("error", errEvt?.data ?? { message: "distributed inference not yet wired" }));
-        await finalizeJob(supabase, job.id, { status: "failed", error: "distributed inference not yet wired" }).catch(() => {});
+        try {
+          await runPetalsProxy({ supabase, job, safeEnqueue, sseFrame });
+        } catch (e) {
+          safeEnqueue(sseFrame("error", { message: e?.message ?? String(e) }));
+          await finalizeJob(supabase, job.id, { status: "failed", error: e?.message ?? String(e) }).catch(() => {});
+        }
         clearInterval(hb);
         safeClose();
         return;
@@ -180,6 +176,116 @@ export async function GET(_request, { params }) {
  * client (so the UI sees them live) AND inserted into `job_events` so
  * the job's audit trail looks identical to a real P2P provider run.
  */
+/**
+ * IPIP-0031: stream tokens from a daemon hosting Petals. We pick any
+ * provider whose specs.petals_models includes the requested model,
+ * POST the chat to its /v1/petals/inference endpoint, and proxy the
+ * resulting SSE frames straight through to the browser.
+ *
+ * Per-token receipts to the layer-contributing operators (CPR /
+ * IPIP-0007) are a follow-up — the proxying is the load-bearing part.
+ */
+async function runPetalsProxy({ supabase, job, safeEnqueue, sseFrame }) {
+  const input = job.input_spec ?? {};
+  const messages = input.messages ?? [];
+  const model = input.petals_model ?? job.model_name;
+  if (!model) throw new Error("distributed inference: model name required");
+
+  // Find a provider serving this model via Petals.
+  const { data: candidates } = await supabase
+    .from("providers")
+    .select("id, public_key, name, address, port, specs, status")
+    .eq("status", "available")
+    .contains("specs", { petals_models: [model] })
+    .limit(5);
+  if (!candidates || candidates.length === 0) {
+    throw new Error(
+      `No Petals server for ${model} on the network. Operators serve a model via ` +
+      `\`infernet inference serve --backend petals --model ${model}\`.`
+    );
+  }
+  const provider = candidates[Math.floor(Math.random() * candidates.length)];
+  const url = providerEndpoint(provider) + "/v1/petals/inference";
+
+  const persistedMeta = await insertJobEvent(supabase, job.id, "meta", {
+    provider_node_id: provider.id,
+    provider_name: provider.name,
+    model,
+    backend: "petals",
+    distributed: true,
+    started_at: new Date().toISOString()
+  });
+  if (persistedMeta) safeEnqueue(sseFrame("meta", persistedMeta.data, persistedMeta.id));
+
+  const upstream = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages,
+      max_tokens: input.max_tokens ?? 512,
+      temperature: input.temperature ?? 0.7
+    })
+  });
+  if (!upstream.ok || !upstream.body) {
+    throw new Error(`upstream daemon ${url} returned HTTP ${upstream.status}`);
+  }
+
+  // Parse SSE from the daemon line-by-line and re-emit. Each daemon
+  // event looks like:  event: <name>\ndata: {...json...}\n\n
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullText = "";
+  let lastEventName = "data";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buffer.indexOf("\n\n")) >= 0) {
+      const block = buffer.slice(0, nl);
+      buffer = buffer.slice(nl + 2);
+      let evName = lastEventName;
+      let evData = null;
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event:")) evName = line.slice(6).trim();
+        else if (line.startsWith("data:")) {
+          try { evData = JSON.parse(line.slice(5).trim()); } catch { /* skip */ }
+        }
+      }
+      lastEventName = evName;
+      if (!evData) continue;
+      if (evName === "token") {
+        const t = evData.text ?? "";
+        fullText += t;
+        safeEnqueue(sseFrame("token", { text: t }));
+        insertJobEvent(supabase, job.id, "token", { text: t }).catch(() => {});
+      } else if (evName === "done") {
+        const data = { text: fullText, finished_at: new Date().toISOString() };
+        const persisted = await insertJobEvent(supabase, job.id, "done", data);
+        safeEnqueue(sseFrame("done", data, persisted?.id));
+        await finalizeJob(supabase, job.id, {
+          status: "completed",
+          result: { type: "chat", text: fullText, source: "petals", provider_id: provider.id }
+        });
+      } else if (evName === "error") {
+        const persisted = await insertJobEvent(supabase, job.id, "error", evData);
+        safeEnqueue(sseFrame("error", evData, persisted?.id));
+        await finalizeJob(supabase, job.id, { status: "failed", error: evData.message ?? "petals error" });
+        return;
+      }
+    }
+  }
+}
+
+function providerEndpoint(provider) {
+  if (!provider?.address) throw new Error("provider has no advertised address");
+  const port = provider.port ?? 8080;
+  return `http://${provider.address}:${port}`;
+}
+
 async function runNimFallback({ supabase, job, safeEnqueue, sseFrame }) {
   const input = job.input_spec ?? {};
   const messages = input.messages ?? [];

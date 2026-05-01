@@ -15,9 +15,30 @@ const MAX_SPECS_GPUS = 16;
 export function sanitizeSpecs(input) {
     if (!input || typeof input !== "object") return null;
     const gpus = Array.isArray(input.gpus) ? input.gpus.slice(0, MAX_SPECS_GPUS) : [];
+
+    // IPIP-0031: petals_models is a small array of HF model ids the
+    // node is currently contributing to the public Petals swarm. Cap
+    // count + per-string length to keep the field bounded.
+    const petalsModels = Array.isArray(input.petals_models)
+        ? input.petals_models
+            .filter((m) => typeof m === "string" && m.length > 0 && m.length <= 200)
+            .slice(0, 5)
+        : [];
+
+    // served_models — Ollama / vLLM model names the daemon advertises
+    // for single-node inference. Already widely consumed; mirror in
+    // case some daemons send it through register/heartbeat.
+    const servedModels = Array.isArray(input.served_models)
+        ? input.served_models
+            .filter((m) => typeof m === "string" && m.length > 0 && m.length <= 200)
+            .slice(0, 50)
+        : [];
+
     return {
         gpus: gpus.map(sanitizeGpu).filter(Boolean),
-        gpu_count: gpus.length
+        gpu_count: gpus.length,
+        served_models: servedModels,
+        petals_models: petalsModels
     };
 }
 

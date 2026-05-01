@@ -177,23 +177,42 @@ One-time install of the Python deps the runner shells out to:
 pip install unsloth datasets trl
 ```
 
-### 3b. Train across your fleet (federated LoRA — experimental)
+### 3b. Train on the open network (federated LoRA — experimental)
 
-Set `workload_class: C3` in the YAML, host the shards somewhere reachable
-by your daemons, then:
+Pay any opted-in operator on the network — not just nodes you own — to
+train shards. Your local `infernet` daemon hosts the dataset shards
+directly over its existing reachable port; no S3, no HuggingFace, no
+IPFS, no third-party storage anywhere.
 
 ```bash
-# Upload shards to a public bucket / HF dataset / ngrok'd dir
-aws s3 sync ./run/shards s3://your-bucket/runs/svelte5/
-
-export INFERNET_SHARD_BASE_URL=https://your-bucket.s3.amazonaws.com/runs/svelte5
-infernet train run --config ./run/infernet.train.yml
+infernet train run --open-market \
+    --config ./run/infernet.train.yml \
+    --budget 5.00 \
+    --max-nodes 8
 ```
 
-The CLI will discover all your online nodes that meet
-`resources.min_vram_gb`, queue a `train_shard` command per node, and
-FedAvg the resulting LoRA adapters when they finish. Local single-GPU
-mode is the well-trodden path; federated is MVP.
+What happens:
+
+1. The CLI splits your local JSONL into 8 shards under
+   `~/.infernet/training-runs/<run_id>/shards/` and mints a per-run upload token.
+2. Posts a job to `/api/v1/training/jobs` with `dataset_base_url` pointing
+   at your own daemon (`<your-endpoint>/v1/training/shards/<run_id>/shard-N.jsonl`).
+3. Operators with `INFERNET_ACCEPT_TRAINING=1` poll the market every 60s,
+   race-claim shards, fetch directly from your daemon, run the same Unsloth
+   runner used in 3a, then PUT the resulting LoRA adapter to your daemon
+   (auth via the upload token the control plane handed them).
+4. Adapters land in `~/.infernet/training-runs/<run_id>/adapters/`.
+5. You FedAvg the 8 adapters once all shards report.
+
+If your machine is behind strict NAT (rare for rented GPU boxes, common
+for residential), expose port 8080 via:
+
+```bash
+cloudflared tunnel --url http://localhost:8080
+export INFERNET_DAEMON_ENDPOINT=https://<the-cloudflared-url>
+```
+
+The control plane only ever sees URLs — never your dataset bytes.
 
 Output: `./run/checkpoint-final/` — a HuggingFace-shape directory ready
 for Track 4.

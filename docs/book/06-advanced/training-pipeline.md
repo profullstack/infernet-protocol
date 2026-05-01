@@ -140,6 +140,70 @@ ollama run infernet/svelte5-coder "How do runes work in Svelte 5?"
   generate the Modelfile + GGUF locally without pushing anywhere.
 - **HF only**: `--skip-ollama`. Or **Ollama only**: `--skip-hf`.
 
+## Open-market training (IPIP-0030)
+
+Beyond running on your own GPU, you can post a training job to the
+open network: any opted-in operator anywhere claims shards and trains
+for pay. Your own daemon hosts the dataset directly — no S3, no HF
+dataset, no IPFS, no third-party storage.
+
+```bash
+infernet train run --open-market \
+    --config ./run/infernet.train.yml \
+    --budget 5.00 \
+    --max-nodes 8
+```
+
+The wire shape:
+
+```
+submitter (you)                    control plane                operators (anywhere)
+~/.infernet/training-runs/<id>/         │                              │
+    shards/shard-0.jsonl  ◀──────  GET /v1/training/shards/<id>/shard-0.jsonl  ◀───
+    adapters/             ◀──────  PUT /v1/training/adapters/<id>/0?token=t   ◀───
+    manifest.json (upload_token)        │                              │
+                                        │                              │
+   POST /api/v1/training/jobs    ─────▶ │                              │
+   { dataset_base_url:                  │                              │
+       <your-daemon-url>/v1/...,        │                              │
+     upload_base_url:                   │                              │
+       <your-daemon-url>/...?token=t }  │                              │
+                                        │                              │
+                                        │  POST /shards/available  ◀───│
+                                        │  POST /shards/<id>/claim ◀───│
+                                        │  POST /shards/<id>/report ◀──│
+```
+
+Operators opt in by setting `INFERNET_ACCEPT_TRAINING=1` (or
+`engine.acceptTraining: true` in their config). Their daemon polls the
+market every 60 seconds; on a successful claim it runs the same Unsloth
+runner used by `--local`, then PUTs the LoRA adapter back to your
+daemon. Adapters land in `~/.infernet/training-runs/<run_id>/adapters/`.
+
+When all shards report, FedAvg the adapters:
+
+```bash
+python3 ./run/_fedavg.py --out ./run/checkpoint-final \
+    ~/.infernet/training-runs/<run_id>/adapters/*
+```
+
+Then publish (Track 4 above). End-to-end, you've trained a model using
+GPUs from operators across the world without spinning up any cloud
+infrastructure or paying for storage.
+
+### Behind NAT?
+
+If your daemon's port 8080 isn't reachable from the public internet,
+expose it via cloudflared:
+
+```bash
+cloudflared tunnel --url http://localhost:8080    # prints a public URL
+export INFERNET_DAEMON_ENDPOINT=https://<the-cloudflared-url>
+infernet train run --open-market ...
+```
+
+The control plane only sees URLs — never your dataset bytes.
+
 ## Prerequisites
 
 - `VALUESERP_API_KEY` for crawling (free tier covers experiments)

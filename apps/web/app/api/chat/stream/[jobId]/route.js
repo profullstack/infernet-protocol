@@ -77,6 +77,26 @@ export async function GET(_request, { params }) {
       // Heartbeat keeps the connection alive through proxies in both paths.
       const hb = setInterval(() => safeEnqueue(encoder.encode(": ping\n\n")), 15_000);
 
+      // IPIP-0031: when the user checked "Distribute across all nodes",
+      // we'd route through a Petals client that fans out across the swarm.
+      // Until the Petals client subprocess is wired up, surface a real
+      // error so the UI doesn't silently fall back to single-node and
+      // mislead the user into thinking distributed is working.
+      if (job?.input_spec?.distributed) {
+        const errEvt = await insertJobEvent(supabase, job.id, "error", {
+          message:
+            "Distributed inference (Petals swarm) is in scaffolding — " +
+            "the per-token fan-out client isn't wired yet. " +
+            "Uncheck 'Distribute across all nodes' to use single-node routing instead. " +
+            "Track progress: github.com/infernetprotocol/infernet-protocol/issues"
+        }).catch(() => null);
+        safeEnqueue(sseFrame("error", errEvt?.data ?? { message: "distributed inference not yet wired" }));
+        await finalizeJob(supabase, job.id, { status: "failed", error: "distributed inference not yet wired" }).catch(() => {});
+        clearInterval(hb);
+        safeClose();
+        return;
+      }
+
       const fallback = job?.input_spec?.fallback;
       if (fallback === "nvidia-nim") {
         try {

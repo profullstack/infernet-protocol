@@ -385,6 +385,54 @@ the Modelfile + GGUF locally without pushing anywhere.</li>
 <li><strong>HF only</strong>: <code>--skip-ollama</code>. Or
 <strong>Ollama only</strong>: <code>--skip-hf</code>.</li>
 </ul>
+<h2 id="open-market-training-ipip-0030">Open-market training
+(IPIP-0030)</h2>
+<p>Beyond running on your own GPU, you can post a training job to the
+open network: any opted-in operator anywhere claims shards and trains
+for pay. Your own daemon hosts the dataset directly — no S3, no HF
+dataset, no IPFS, no third-party storage.</p>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> train run <span class="at">--open-market</span> <span class="dt">\</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    <span class="at">--config</span> ./run/infernet.train.yml <span class="dt">\</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">--budget</span> 5.00 <span class="dt">\</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">--max-nodes</span> 8</span></code></pre></div>
+<p>The wire shape:</p>
+<pre><code>submitter (you)                    control plane                operators (anywhere)
+~/.infernet/training-runs/&lt;id&gt;/         │                              │
+    shards/shard-0.jsonl  ◀──────  GET /v1/training/shards/&lt;id&gt;/shard-0.jsonl  ◀───
+    adapters/             ◀──────  PUT /v1/training/adapters/&lt;id&gt;/0?token=t   ◀───
+    manifest.json (upload_token)        │                              │
+                                        │                              │
+   POST /api/v1/training/jobs    ─────▶ │                              │
+   { dataset_base_url:                  │                              │
+       &lt;your-daemon-url&gt;/v1/...,        │                              │
+     upload_base_url:                   │                              │
+       &lt;your-daemon-url&gt;/...?token=t }  │                              │
+                                        │                              │
+                                        │  POST /shards/available  ◀───│
+                                        │  POST /shards/&lt;id&gt;/claim ◀───│
+                                        │  POST /shards/&lt;id&gt;/report ◀──│</code></pre>
+<p>Operators opt in by setting <code>INFERNET_ACCEPT_TRAINING=1</code>
+(or <code>engine.acceptTraining: true</code> in their config). Their
+daemon polls the market every 60 seconds; on a successful claim it runs
+the same Unsloth runner used by <code>--local</code>, then PUTs the LoRA
+adapter back to your daemon. Adapters land in
+<code>~/.infernet/training-runs/&lt;run_id&gt;/adapters/</code>.</p>
+<p>When all shards report, FedAvg the adapters:</p>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> ./run/_fedavg.py <span class="at">--out</span> ./run/checkpoint-final <span class="dt">\</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    ~/.infernet/training-runs/<span class="op">&lt;</span>run_id<span class="op">&gt;</span>/adapters/<span class="pp">*</span></span></code></pre></div>
+<p>Then publish (Track 4 above). End-to-end, you’ve trained a model
+using GPUs from operators across the world without spinning up any cloud
+infrastructure or paying for storage.</p>
+<h3 id="behind-nat">Behind NAT?</h3>
+<p>If your daemon’s port 8080 isn’t reachable from the public internet,
+expose it via cloudflared:</p>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="ex">cloudflared</span> tunnel <span class="at">--url</span> http://localhost:8080    <span class="co"># prints a public URL</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">INFERNET_DAEMON_ENDPOINT</span><span class="op">=</span>https://<span class="op">&lt;</span>the-cloudflared-url<span class="op">&gt;</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> train run <span class="at">--open-market</span> ...</span></code></pre></div>
+<p>The control plane only sees URLs — never your dataset bytes.</p>
 <h2 id="prerequisites">Prerequisites</h2>
 <ul>
 <li><code>VALUESERP_API_KEY</code> for crawling (free tier covers

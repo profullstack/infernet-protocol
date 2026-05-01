@@ -253,23 +253,32 @@ resources:
                 </p>
                 <Code>{`pip install unsloth datasets trl`}</Code>
 
-                <h3 className="mt-6 text-base font-semibold text-white">3b. Train across your fleet (federated LoRA)</h3>
+                <h3 className="mt-6 text-base font-semibold text-white">3b. Train on the open network (federated LoRA)</h3>
                 <p>
-                    Set <code className="text-[var(--accent)]">workload_class: C3</code> in the YAML, host the
-                    shards somewhere reachable by your daemons, and run:
+                    Pay any opted-in operator on the network — not just your own
+                    nodes — to train shards. Your local <code className="text-[var(--accent)]">infernet</code>{" "}
+                    daemon hosts the shards directly over its existing reachable port; no S3, no
+                    HuggingFace dataset, no IPFS, no third-party storage anywhere.
                 </p>
-                <Code>{`# Upload shards to a public bucket / HF dataset / ngrok'd dir
-aws s3 sync ./run/shards s3://your-bucket/runs/svelte5/
-
-export INFERNET_SHARD_BASE_URL=https://your-bucket.s3.amazonaws.com/runs/svelte5
-infernet train run --config ./run/infernet.train.yml`}</Code>
+                <Code>{`infernet train run --open-market \\
+    --config ./run/infernet.train.yml \\
+    --budget 5.00 \\
+    --max-nodes 8`}</Code>
                 <p>
-                    The CLI will discover all your online nodes that meet{" "}
-                    <code className="text-[var(--accent)]">resources.min_vram_gb</code>, queue a{" "}
-                    <code className="text-[var(--accent)]">train_shard</code> command per node, and FedAvg
-                    the resulting LoRA adapters when they finish. Status:{" "}
-                    <span className="text-amber-200">experimental</span> — single-GPU local mode is the
-                    well-trodden path right now.
+                    What happens: the CLI splits the dataset into 8 shards under{" "}
+                    <code className="text-[var(--accent)]">~/.infernet/training-runs/&lt;run_id&gt;/shards/</code>{" "}
+                    and posts a job with your daemon's URL. Operators across the network with{" "}
+                    <code className="text-[var(--accent)]">INFERNET_ACCEPT_TRAINING=1</code>{" "}
+                    poll the market every 60s, race-claim shards, fetch directly from your daemon, run
+                    Unsloth, and PUT the resulting adapter back. You FedAvg the 8 adapters when all
+                    shards report.
+                </p>
+                <p className="text-xs">
+                    If your machine is behind NAT, run{" "}
+                    <code className="text-[var(--accent)]">cloudflared tunnel --url http://localhost:8080</code>{" "}
+                    and set <code className="text-[var(--accent)]">INFERNET_DAEMON_ENDPOINT</code> to the cloudflared URL.
+                    Status: <span className="text-amber-200">experimental</span> — single-GPU local mode
+                    is the well-trodden path right now.
                 </p>
 
                 <p className="mt-4">

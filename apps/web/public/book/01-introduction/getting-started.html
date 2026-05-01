@@ -432,21 +432,40 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb11-1"><a href=
 <p>One-time install of the Python deps the runner shells out to:</p>
 <div class="sourceCode" id="cb12"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install unsloth datasets trl</span></code></pre></div>
-<h3 id="b.-train-across-your-fleet-federated-lora-experimental">3b.
-Train across your fleet (federated LoRA — experimental)</h3>
-<p>Set <code>workload_class: C3</code> in the YAML, host the shards
-somewhere reachable by your daemons, then:</p>
+<h3 id="b.-train-on-the-open-network-federated-lora-experimental">3b.
+Train on the open network (federated LoRA — experimental)</h3>
+<p>Pay any opted-in operator on the network — not just nodes you own —
+to train shards. Your local <code>infernet</code> daemon hosts the
+dataset shards directly over its existing reachable port; no S3, no
+HuggingFace, no IPFS, no third-party storage anywhere.</p>
 <div class="sourceCode" id="cb13"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Upload shards to a public bucket / HF dataset / ngrok&#39;d dir</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="ex">aws</span> s3 sync ./run/shards s3://your-bucket/runs/svelte5/</span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">INFERNET_SHARD_BASE_URL</span><span class="op">=</span>https://your-bucket.s3.amazonaws.com/runs/svelte5</span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> train run <span class="at">--config</span> ./run/infernet.train.yml</span></code></pre></div>
-<p>The CLI will discover all your online nodes that meet
-<code>resources.min_vram_gb</code>, queue a <code>train_shard</code>
-command per node, and FedAvg the resulting LoRA adapters when they
-finish. Local single-GPU mode is the well-trodden path; federated is
-MVP.</p>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> train run <span class="at">--open-market</span> <span class="dt">\</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    <span class="at">--config</span> ./run/infernet.train.yml <span class="dt">\</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">--budget</span> 5.00 <span class="dt">\</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">--max-nodes</span> 8</span></code></pre></div>
+<p>What happens:</p>
+<ol type="1">
+<li>The CLI splits your local JSONL into 8 shards under
+<code>~/.infernet/training-runs/&lt;run_id&gt;/shards/</code> and mints
+a per-run upload token.</li>
+<li>Posts a job to <code>/api/v1/training/jobs</code> with
+<code>dataset_base_url</code> pointing at your own daemon
+(<code>&lt;your-endpoint&gt;/v1/training/shards/&lt;run_id&gt;/shard-N.jsonl</code>).</li>
+<li>Operators with <code>INFERNET_ACCEPT_TRAINING=1</code> poll the
+market every 60s, race-claim shards, fetch directly from your daemon,
+run the same Unsloth runner used in 3a, then PUT the resulting LoRA
+adapter to your daemon (auth via the upload token the control plane
+handed them).</li>
+<li>Adapters land in
+<code>~/.infernet/training-runs/&lt;run_id&gt;/adapters/</code>.</li>
+<li>You FedAvg the 8 adapters once all shards report.</li>
+</ol>
+<p>If your machine is behind strict NAT (rare for rented GPU boxes,
+common for residential), expose port 8080 via:</p>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="ex">cloudflared</span> tunnel <span class="at">--url</span> http://localhost:8080</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">INFERNET_DAEMON_ENDPOINT</span><span class="op">=</span>https://<span class="op">&lt;</span>the-cloudflared-url<span class="op">&gt;</span></span></code></pre></div>
+<p>The control plane only ever sees URLs — never your dataset bytes.</p>
 <p>Output: <code>./run/checkpoint-final/</code> — a HuggingFace-shape
 directory ready for Track 4.</p>
 <hr />
@@ -455,11 +474,11 @@ HuggingFace and Ollama</h2>
 <p>One command, two destinations. The fine-tune lands at
 <code>huggingface.co/&lt;org&gt;/&lt;name&gt;</code> AND
 <code>ollama.com/&lt;user&gt;/&lt;name&gt;</code>.</p>
-<div class="sourceCode" id="cb14"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> publish ./run/checkpoint-final <span class="dt">\</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    <span class="at">--hf</span> InfernetProtocol/svelte5-coder <span class="dt">\</span></span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">--ollama</span> infernet/svelte5-coder <span class="dt">\</span></span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">--quant</span> q4_k_m</span></code></pre></div>
+<div class="sourceCode" id="cb15"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> publish ./run/checkpoint-final <span class="dt">\</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    <span class="at">--hf</span> InfernetProtocol/svelte5-coder <span class="dt">\</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">--ollama</span> infernet/svelte5-coder <span class="dt">\</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">--quant</span> q4_k_m</span></code></pre></div>
 <p>What runs under the hood:</p>
 <ol type="1">
 <li><code>huggingface-cli upload</code> pushes safetensors to HF.</li>
@@ -473,20 +492,20 @@ written.</li>
 ollama.com.</li>
 </ol>
 <p>One-time prerequisites:</p>
-<div class="sourceCode" id="cb15"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># llama.cpp for the GGUF convert</span></span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://github.com/ggml-org/llama.cpp ~/llama.cpp</span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ~/llama.cpp <span class="kw">&amp;&amp;</span> <span class="fu">cmake</span> <span class="at">-B</span> build <span class="kw">&amp;&amp;</span> <span class="fu">cmake</span> <span class="at">--build</span> build <span class="at">-j</span></span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="co"># HF token with write scope on your target org</span></span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">HUGGINGFACE_TOKEN</span><span class="op">=</span>hf_...</span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Ollama signin (once)</span></span>
-<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> signin</span></code></pre></div>
-<p>After publish, anyone with Ollama can pull your model:</p>
 <div class="sourceCode" id="cb16"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> pull infernet/svelte5-coder</span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> run infernet/svelte5-coder <span class="st">&quot;How do runes work in Svelte 5?&quot;</span></span></code></pre></div>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># llama.cpp for the GGUF convert</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://github.com/ggml-org/llama.cpp ~/llama.cpp</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ~/llama.cpp <span class="kw">&amp;&amp;</span> <span class="fu">cmake</span> <span class="at">-B</span> build <span class="kw">&amp;&amp;</span> <span class="fu">cmake</span> <span class="at">--build</span> build <span class="at">-j</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="co"># HF token with write scope on your target org</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">HUGGINGFACE_TOKEN</span><span class="op">=</span>hf_...</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Ollama signin (once)</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> signin</span></code></pre></div>
+<p>After publish, anyone with Ollama can pull your model:</p>
+<div class="sourceCode" id="cb17"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> pull infernet/svelte5-coder</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> run infernet/svelte5-coder <span class="st">&quot;How do runes work in Svelte 5?&quot;</span></span></code></pre></div>
 <h3 id="variants">Variants</h3>
 <ul>
 <li><code>--skip-hf</code> — Ollama only</li>

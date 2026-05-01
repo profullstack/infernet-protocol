@@ -127,13 +127,36 @@ async function cmdServe(args) {
         prefix,
         num_blocks: numBlocks,
         pid: child.pid,
-        started_at: new Date().toISOString()
+        started_at: new Date().toISOString(),
+        peer_id: null
     });
 
-    // Pipe child output so the operator sees Petals' own startup logs
-    // (which blocks it grabbed, DHT peers, etc).
-    child.stdout?.pipe(process.stdout);
-    child.stderr?.pipe(process.stderr);
+    // Watch Petals' startup logs for the peer ID line — looks like
+    //   "This server's peer ID: 12D3KooW..." (libp2p Ed25519). We
+    //   capture it so `infernet register` can advertise it; the
+    //   control plane needs the mapping to attribute per-layer CPR
+    //   receipts to layer-contributing operators.
+    const tapForPeerId = (stream, sink) => {
+        let buf = "";
+        stream.on("data", async (chunk) => {
+            const txt = chunk.toString();
+            sink.write(txt);
+            buf += txt;
+            const m = buf.match(/peer ID[:\s]+([1-9A-HJ-NP-Za-km-z]{40,80})/i);
+            if (m) {
+                const state = (await readState()) ?? {};
+                if (!state.peer_id) {
+                    state.peer_id = m[1];
+                    await writeState(state);
+                    process.stdout.write(`[infernet] captured petals peer id: ${m[1]}\n`);
+                }
+                buf = "";
+            }
+            if (buf.length > 4096) buf = buf.slice(-2048);
+        });
+    };
+    if (child.stdout) tapForPeerId(child.stdout, process.stdout);
+    if (child.stderr) tapForPeerId(child.stderr, process.stderr);
 
     process.stdout.write(
         `\n✓ Petals server pid=${child.pid} started.\n` +

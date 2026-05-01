@@ -34,11 +34,23 @@ export function sanitizeSpecs(input) {
             .slice(0, 50)
         : [];
 
+    // libp2p peer IDs are alphanumeric (base58 multihash). When a
+    // daemon runs `infernet inference serve --backend petals`, it
+    // captures the peer ID from Petals' startup logs and re-registers
+    // — this field carries it. The control plane uses it to map
+    // chosen_servers entries from a client routing event back to
+    // provider rows for CPR receipt distribution.
+    const petalsPeerId = typeof input.petals_peer_id === "string"
+        && /^[1-9A-HJ-NP-Za-km-z]{40,128}$/.test(input.petals_peer_id)
+            ? input.petals_peer_id
+            : null;
+
     return {
         gpus: gpus.map(sanitizeGpu).filter(Boolean),
         gpu_count: gpus.length,
         served_models: servedModels,
-        petals_models: petalsModels
+        petals_models: petalsModels,
+        petals_peer_id: petalsPeerId
     };
 }
 

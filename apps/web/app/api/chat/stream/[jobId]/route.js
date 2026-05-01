@@ -238,6 +238,11 @@ async function runPetalsProxy({ supabase, job, safeEnqueue, sseFrame }) {
   let buffer = "";
   let fullText = "";
   let lastEventName = "data";
+  // IPIP-0031 per-layer attribution: filled in from the daemon's
+  // routing event. Each entry is { peer_id, start_block, end_block }.
+  // On done we'll resolve peer_id → providers and emit one CPR receipt
+  // per layer-contributing operator weighted by block share.
+  let chosenPeers = null;
 
   while (true) {
     const { value, done } = await reader.read();
@@ -262,6 +267,10 @@ async function runPetalsProxy({ supabase, job, safeEnqueue, sseFrame }) {
         fullText += t;
         safeEnqueue(sseFrame("token", { text: t }));
         insertJobEvent(supabase, job.id, "token", { text: t }).catch(() => {});
+      } else if (evName === "routing") {
+        chosenPeers = Array.isArray(evData.peers) ? evData.peers : null;
+        // mirror to job_events so the audit trail captures attribution
+        insertJobEvent(supabase, job.id, "routing", evData).catch(() => {});
       } else if (evName === "done") {
         const data = { text: fullText, finished_at: new Date().toISOString() };
         const persisted = await insertJobEvent(supabase, job.id, "done", data);
@@ -270,23 +279,7 @@ async function runPetalsProxy({ supabase, job, safeEnqueue, sseFrame }) {
           status: "completed",
           result: { type: "chat", text: fullText, source: "petals", provider_id: provider.id }
         });
-        // IPIP-0007 + IPIP-0031: emit a CPR receipt to the proxying
-        // operator. Layer-level attribution across the swarm is a
-        // future thing — for now the proxying provider gets credit
-        // for the whole inference.
-        try {
-          const { buildReceiptBody } = await import("@/lib/cpr/receipts");
-          const { enqueueAndFlush } = await import("@/lib/cpr/queue");
-          const receipt = buildReceiptBody({
-            job: { id: job.id, type: "inference", status: "completed", payment_offer: 0 },
-            provider: { public_key: provider.public_key, id: provider.id }
-          });
-          await enqueueAndFlush({ receipt, jobId: job.id }).catch((err) => {
-            console.warn(`CPR enqueueAndFlush (petals) failed: ${err?.message ?? err}`);
-          });
-        } catch (err) {
-          console.warn(`CPR receipt emission (petals) failed: ${err?.message ?? err}`);
-        }
+        await emitPetalsReceipts({ supabase, job, proxyProvider: provider, chosenPeers });
       } else if (evName === "error") {
         const persisted = await insertJobEvent(supabase, job.id, "error", evData);
         safeEnqueue(sseFrame("error", evData, persisted?.id));
@@ -301,6 +294,78 @@ function providerEndpoint(provider) {
   if (!provider?.address) throw new Error("provider has no advertised address");
   const port = provider.port ?? 8080;
   return `http://${provider.address}:${port}`;
+}
+
+/**
+ * IPIP-0007 + IPIP-0031 per-layer attribution: split a CPR receipt
+ * across the layer-contributing peers reported in the routing event,
+ * weighted by each peer's block share. Falls back to a single receipt
+ * to the proxying provider when chosen_servers is empty / unresolvable
+ * (small swarm, peer not registered with the control plane, etc).
+ */
+async function emitPetalsReceipts({ supabase, job, proxyProvider, chosenPeers }) {
+  try {
+    const { buildReceiptBody } = await import("@/lib/cpr/receipts");
+    const { enqueueAndFlush } = await import("@/lib/cpr/queue");
+
+    const baseJob = {
+      id: job.id, type: "inference", status: "completed",
+      payment_offer: job.payment_offer ?? 0
+    };
+
+    // Try to resolve peer_id → provider via specs.petals_peer_id.
+    const resolvable = (chosenPeers ?? [])
+      .filter((p) => typeof p?.peer_id === "string" && p.peer_id.length > 0)
+      .map((p) => ({
+        peer_id: p.peer_id,
+        blocks: Math.max(0, (p.end_block ?? 0) - (p.start_block ?? 0))
+      }));
+
+    if (resolvable.length === 0) {
+      // No routing data — credit the proxy as before.
+      const r = buildReceiptBody({ job: baseJob, provider: { public_key: proxyProvider.public_key, id: proxyProvider.id } });
+      await enqueueAndFlush({ receipt: r, jobId: job.id }).catch((err) =>
+        console.warn(`CPR enqueueAndFlush (petals proxy fallback): ${err?.message ?? err}`)
+      );
+      return;
+    }
+
+    const peerIds = resolvable.map((p) => p.peer_id);
+    const { data: peers } = await supabase
+      .from("providers")
+      .select("id, public_key, specs")
+      .in("specs->>petals_peer_id", peerIds)
+      .limit(64);
+    const peerMap = new Map();
+    for (const r of peers ?? []) {
+      const pid = r.specs?.petals_peer_id;
+      if (pid) peerMap.set(pid, r);
+    }
+
+    const totalBlocks = resolvable.reduce((a, p) => a + p.blocks, 0) || 1;
+    let attributed = 0;
+    for (const p of resolvable) {
+      const peer = peerMap.get(p.peer_id);
+      if (!peer) continue;             // peer not registered with us — skip
+      const share = p.blocks / totalBlocks;
+      const r = buildReceiptBody({
+        job: { ...baseJob, payment_offer: (baseJob.payment_offer ?? 0) * share },
+        provider: { public_key: peer.public_key, id: peer.id }
+      });
+      await enqueueAndFlush({ receipt: r, jobId: job.id }).catch((err) =>
+        console.warn(`CPR enqueueAndFlush (petals layer ${p.peer_id.slice(0, 12)}…): ${err?.message ?? err}`)
+      );
+      attributed += 1;
+    }
+
+    if (attributed === 0) {
+      // None of the chosen peers are registered with us — credit the proxy.
+      const r = buildReceiptBody({ job: baseJob, provider: { public_key: proxyProvider.public_key, id: proxyProvider.id } });
+      await enqueueAndFlush({ receipt: r, jobId: job.id }).catch(() => {});
+    }
+  } catch (err) {
+    console.warn(`CPR per-layer attribution failed: ${err?.message ?? err}`);
+  }
 }
 
 async function runNimFallback({ supabase, job, safeEnqueue, sseFrame }) {

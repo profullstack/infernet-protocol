@@ -72,6 +72,23 @@ def main():
         full_text += token_text
         emit({"event": "token", "text": token_text})
 
+        # IPIP-0031 per-layer attribution: after the first generate the
+        # session has resolved which DHT peers serve which transformer
+        # blocks. Emit that mapping so the control plane can split the
+        # CPR receipt across layer-contributing operators by block share.
+        try:
+            chosen = []
+            for s in getattr(session, "chosen_servers", []) or []:
+                chosen.append({
+                    "peer_id": str(getattr(s, "peer_id", "")),
+                    "start_block": int(getattr(s, "start", getattr(s, "start_block", 0))),
+                    "end_block":   int(getattr(s, "end",   getattr(s, "end_block",   0))),
+                })
+            if chosen:
+                emit({"event": "routing", "peers": chosen})
+        except Exception as e:
+            emit({"event": "log", "warn": f"chosen_servers extract failed: {e}"})
+
         for _ in range(max_tokens - 1):
             outputs = model_obj.generate(
                 outputs,

@@ -156,7 +156,7 @@ export default async function DashboardPage() {
                                             <td className="py-2 pr-3 text-[var(--muted)]">{relTime(p.last_seen)}</td>
                                             <td className="py-2 pr-3 text-[var(--muted)] text-xs">{p.specs?.cli_version ?? "—"}</td>
                                             <td className="relative py-2 pr-3">
-                                                {p.public_key ? <PushModelButton pubkey={p.public_key} servedModels={p.specs?.served_models ?? []} /> : <span className="text-xs text-[var(--muted)]">—</span>}
+                                                {p.public_key ? <PushModelButton pubkey={p.public_key} servedModels={p.specs?.served_models ?? []} specs={p.specs} /> : <span className="text-xs text-[var(--muted)]">—</span>}
                                             </td>
                                         </tr>
                                     ))}

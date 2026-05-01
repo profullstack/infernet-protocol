@@ -1,29 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { recommendModels, vramFromSpecs, USE_CASES } from "@/lib/model-catalog";
 
 /**
  * Per-node model management button on the dashboard.
  *
- * Shows two sections:
- *   Install — text input + presets → model_install command
- *   Installed — list of currently served models → model_remove command
+ * Shows three sections:
+ *   Recommendations — top picks for this node's VRAM, filtered by use case
+ *   Install         — free-text input → model_install command (power users)
+ *   Installed       — list of currently served models → model_remove
  *
  * Commands are queued via POST /api/v1/user/nodes/<pubkey>/commands and
  * picked up by the daemon's poll loop within ~30s.
  */
-const PRESETS = [
-    "qwen2.5:0.5b",
-    "qwen2.5:3b",
-    "qwen2.5:7b",
-    "qwen2.5:14b",
-    "qwen2.5:32b",
-    "llama3.1:8b",
-    "mistral:7b"
-];
-
-export default function PushModelButton({ pubkey, servedModels = [] }) {
+export default function PushModelButton({ pubkey, servedModels = [], specs }) {
     const router = useRouter();
     const [open, setOpen] = useState(false);
     const [model, setModel] = useState("qwen2.5:7b");
@@ -32,6 +24,16 @@ export default function PushModelButton({ pubkey, servedModels = [] }) {
     const [error, setError] = useState(null);
     const [commands, setCommands] = useState([]);
     const [loadingCommands, setLoadingCommands] = useState(false);
+    const [useCase, setUseCase] = useState(null);
+
+    // Compute hardware-aware recommendations from this node's reported specs.
+    // Privacy-sanitized telemetry only carries vram_tier strings, mapped to
+    // representative GB inside vramFromSpecs.
+    const vramGb = useMemo(() => vramFromSpecs(specs), [specs]);
+    const recommendations = useMemo(
+        () => recommendModels({ vramGb, useCase, limit: 6 }),
+        [vramGb, useCase]
+    );
 
     async function refresh() {
         if (!open) return;
@@ -123,32 +125,76 @@ export default function PushModelButton({ pubkey, servedModels = [] }) {
                 </button>
             </div>
 
+            {/* Recommendations — hardware-aware, filterable by use case */}
+            <div className="mt-3">
+                <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                        Recommended {vramGb > 0 ? `· ~${vramGb} GB VRAM` : "· no GPU detected"}
+                    </p>
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                    {USE_CASES.map((uc) => (
+                        <button
+                            key={uc.id ?? "any"}
+                            type="button"
+                            onClick={() => setUseCase(uc.id)}
+                            className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                                useCase === uc.id
+                                    ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent)]"
+                                    : "border-white/10 bg-[var(--panel-strong)] text-[var(--muted)] hover:text-white"
+                            }`}
+                        >
+                            {uc.label}
+                        </button>
+                    ))}
+                </div>
+                <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto pr-1">
+                    {recommendations.map((rec) => {
+                        const m = rec.model;
+                        const isSelected = model === m.pull;
+                        return (
+                            <li key={m.id}>
+                                <button
+                                    type="button"
+                                    onClick={() => setModel(m.pull)}
+                                    className={`flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition ${
+                                        isSelected
+                                            ? "border-[var(--accent)] bg-[var(--accent)]/10"
+                                            : rec.fits
+                                            ? "border-white/10 bg-[var(--panel-strong)] hover:border-white/25"
+                                            : "border-white/5 bg-[var(--panel-strong)]/40 opacity-60 hover:opacity-90"
+                                    }`}
+                                    title={m.pull}
+                                >
+                                    <div className="min-w-0">
+                                        <div className="truncate text-white">{m.name}</div>
+                                        <div className="truncate text-[10px] text-[var(--muted)]">
+                                            {m.paramsB}B · ≥{m.vramMin}GB VRAM · {m.backend}
+                                            {!rec.fits && " · ⚠ tight"}
+                                        </div>
+                                    </div>
+                                </button>
+                            </li>
+                        );
+                    })}
+                    {recommendations.length === 0 && (
+                        <li className="text-xs text-[var(--muted)]">
+                            No models match. Try a different use case.
+                        </li>
+                    )}
+                </ul>
+            </div>
+
             {/* Install section */}
-            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">Install</p>
+            <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">Install</p>
             <form onSubmit={submit} className="mt-1.5 space-y-3">
                 <input
                     type="text"
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
-                    placeholder="qwen2.5:7b"
+                    placeholder="qwen2.5:7b or hf:org/repo"
                     className="block w-full rounded-md border border-white/10 bg-[var(--panel-strong)] px-3 py-2 text-sm text-white outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/30"
                 />
-                <div className="flex flex-wrap gap-1.5">
-                    {PRESETS.map((p) => (
-                        <button
-                            key={p}
-                            type="button"
-                            onClick={() => setModel(p)}
-                            className={`rounded-full border px-2 py-0.5 text-xs ${
-                                model === p
-                                    ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent)]"
-                                    : "border-white/10 bg-[var(--panel-strong)] text-[var(--muted)] hover:text-white"
-                            }`}
-                        >
-                            {p}
-                        </button>
-                    ))}
-                </div>
                 <button
                     type="submit"
                     disabled={submitting || !model.trim()}

@@ -701,6 +701,24 @@ id="toc-payment-setup-for-self-hosted">Payment Setup for
 Self-Hosted</a></li>
 <li><a href="#upgrading" id="toc-upgrading">Upgrading</a></li>
 </ul></li>
+<li><a href="#end-to-end-training-pipeline"
+id="toc-end-to-end-training-pipeline">End-to-end training pipeline</a>
+<ul>
+<li><a href="#the-four-steps" id="toc-the-four-steps">The four
+steps</a></li>
+<li><a href="#crawl-training-data-from-a-search-query"
+id="toc-crawl-training-data-from-a-search-query">1. Crawl training data
+from a search query</a></li>
+<li><a href="#scaffold-a-training-config"
+id="toc-scaffold-a-training-config">2. Scaffold a training
+config</a></li>
+<li><a href="#run-the-fine-tune" id="toc-run-the-fine-tune">3. Run the
+fine-tune</a></li>
+<li><a href="#publish" id="toc-publish">4. Publish</a></li>
+<li><a href="#variants" id="toc-variants">Variants</a></li>
+<li><a href="#prerequisites-2"
+id="toc-prerequisites-2">Prerequisites</a></li>
+</ul></li>
 </ul>
 </nav>
 <h1 id="the-infernet-protocol-book">The Infernet Protocol Book</h1>
@@ -5441,6 +5459,143 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb233-1"><a href
 <span id="cb233-5"><a href="#cb233-5" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run build</span>
 <span id="cb233-6"><a href="#cb233-6" aria-hidden="true" tabindex="-1"></a><span class="ex">pm2</span> restart infernet-cp</span></code></pre></div>
 <p>Check the changelog for breaking migrations before upgrading.</p>
+<hr />
+<p><a id="training-pipeline"></a></p>
+<h1 id="end-to-end-training-pipeline">End-to-end training pipeline</h1>
+<p>Walk through training a custom model from a search query to a
+published artifact on both HuggingFace and Ollama. We’ll mirror the <a
+href="https://ollama.com/rockypod/svelte-coder">ollama.com/rockypod/svelte-coder</a>
+shape — fine-tune a coder on Svelte docs, ship as a one-line
+<code>ollama pull</code>.</p>
+<h2 id="the-four-steps">The four steps</h2>
+<pre><code>┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+│  infernet train  │ →  │  infernet train  │ →  │  infernet train  │ →  │  infernet publish│
+│  data            │    │  init            │    │  run             │    │                  │
+│  (crawl)         │    │  (config)        │    │  (fine-tune)     │    │  (HF + Ollama)   │
+└──────────────────┘    └──────────────────┘    └──────────────────┘    └──────────────────┘
+   web → JSONL          JSONL → train.yml          → trained model        → ollama.com URL</code></pre>
+<h2 id="crawl-training-data-from-a-search-query">1. Crawl training data
+from a search query</h2>
+<div class="sourceCode" id="cb235"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb235-1"><a href="#cb235-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> train data <span class="dt">\</span></span>
+<span id="cb235-2"><a href="#cb235-2" aria-hidden="true" tabindex="-1"></a>    <span class="at">--query</span> <span class="st">&quot;svelte 5 framework documentation&quot;</span> <span class="dt">\</span></span>
+<span id="cb235-3"><a href="#cb235-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">--domains</span> svelte.dev,kit.svelte.dev,github.com <span class="dt">\</span></span>
+<span id="cb235-4"><a href="#cb235-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">--num</span> 30 <span class="dt">\</span></span>
+<span id="cb235-5"><a href="#cb235-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">--out</span> ./data/svelte5.jsonl</span></code></pre></div>
+<p>This hits <a href="https://valueserp.com">ValueSerp</a> for the top
+30 Google results, optionally filtered to a domain whitelist, then
+fetches each URL, extracts the readable text, and chunks it into
+ChatML-format JSONL:</p>
+<div class="sourceCode" id="cb236"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb236-1"><a href="#cb236-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;messages&quot;</span><span class="fu">:</span><span class="ot">[</span><span class="fu">{</span><span class="dt">&quot;role&quot;</span><span class="fu">:</span><span class="st">&quot;system&quot;</span><span class="fu">,</span><span class="dt">&quot;content&quot;</span><span class="fu">:</span><span class="st">&quot;You are an expert...&quot;</span><span class="fu">}</span><span class="ot">,</span></span>
+<span id="cb236-2"><a href="#cb236-2" aria-hidden="true" tabindex="-1"></a>             <span class="fu">{</span><span class="dt">&quot;role&quot;</span><span class="fu">:</span><span class="st">&quot;user&quot;</span><span class="fu">,</span><span class="dt">&quot;content&quot;</span><span class="fu">:</span><span class="st">&quot;svelte 5 framework documentation — section 1&quot;</span><span class="fu">}</span><span class="ot">,</span></span>
+<span id="cb236-3"><a href="#cb236-3" aria-hidden="true" tabindex="-1"></a>             <span class="fu">{</span><span class="dt">&quot;role&quot;</span><span class="fu">:</span><span class="st">&quot;assistant&quot;</span><span class="fu">,</span><span class="dt">&quot;content&quot;</span><span class="fu">:</span><span class="st">&quot;Svelte 5 introduces runes — the primary...&quot;</span><span class="fu">}</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb236-4"><a href="#cb236-4" aria-hidden="true" tabindex="-1"></a> <span class="dt">&quot;meta&quot;</span><span class="fu">:{</span><span class="dt">&quot;source_url&quot;</span><span class="fu">:</span><span class="st">&quot;https://svelte.dev/docs/svelte/runes&quot;</span><span class="fu">,</span><span class="dt">&quot;paragraph_index&quot;</span><span class="fu">:</span><span class="dv">0</span><span class="fu">}}</span></span></code></pre></div>
+<p>Set <code>VALUESERP_API_KEY</code> in your env (or under
+<code>integrations.valueserp.api_key</code> in
+<code>~/.config/infernet/config.json</code>).</p>
+<p>The crawler will skip paragraphs shorter than
+<code>--min-chars</code> (default 200) and truncate paragraphs longer
+than <code>--max-chars</code> (default 4000) so each training sample
+fits comfortably in a 4K context.</p>
+<h2 id="scaffold-a-training-config">2. Scaffold a training config</h2>
+<div class="sourceCode" id="cb237"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb237-1"><a href="#cb237-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> train init <span class="at">--output</span> ./run</span></code></pre></div>
+<p>Edit the generated <code>run/infernet.train.yml</code>:</p>
+<div class="sourceCode" id="cb238"><pre
+class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb238-1"><a href="#cb238-1" aria-hidden="true" tabindex="-1"></a><span class="fu">name</span><span class="kw">:</span><span class="at"> svelte5-coder</span></span>
+<span id="cb238-2"><a href="#cb238-2" aria-hidden="true" tabindex="-1"></a><span class="fu">base_model</span><span class="kw">:</span><span class="at"> qwen2.5-coder:7b</span><span class="co">     # 7B coder is plenty for a domain-specific tune</span></span>
+<span id="cb238-3"><a href="#cb238-3" aria-hidden="true" tabindex="-1"></a><span class="fu">method</span><span class="kw">:</span><span class="at"> qlora</span><span class="co">                    # 4-bit LoRA; trains on a single 24GB GPU</span></span>
+<span id="cb238-4"><a href="#cb238-4" aria-hidden="true" tabindex="-1"></a><span class="fu">runtime</span><span class="kw">:</span><span class="at"> unsloth</span><span class="co">                 # fastest on consumer hardware</span></span>
+<span id="cb238-5"><a href="#cb238-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb238-6"><a href="#cb238-6" aria-hidden="true" tabindex="-1"></a><span class="fu">input</span><span class="kw">:</span></span>
+<span id="cb238-7"><a href="#cb238-7" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">dataset</span><span class="kw">:</span><span class="at"> ./data/svelte5.jsonl</span><span class="co">  # what we just generated</span></span>
+<span id="cb238-8"><a href="#cb238-8" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">format</span><span class="kw">:</span><span class="at"> chatml</span></span>
+<span id="cb238-9"><a href="#cb238-9" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">validation_split</span><span class="kw">:</span><span class="at"> </span><span class="fl">0.1</span></span>
+<span id="cb238-10"><a href="#cb238-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb238-11"><a href="#cb238-11" aria-hidden="true" tabindex="-1"></a><span class="fu">training</span><span class="kw">:</span></span>
+<span id="cb238-12"><a href="#cb238-12" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">epochs</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
+<span id="cb238-13"><a href="#cb238-13" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">learning_rate</span><span class="kw">:</span><span class="at"> </span><span class="fl">2.0e-4</span></span>
+<span id="cb238-14"><a href="#cb238-14" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">batch_size</span><span class="kw">:</span><span class="at"> </span><span class="dv">4</span></span>
+<span id="cb238-15"><a href="#cb238-15" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">gradient_accumulation_steps</span><span class="kw">:</span><span class="at"> </span><span class="dv">4</span></span>
+<span id="cb238-16"><a href="#cb238-16" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">max_seq_len</span><span class="kw">:</span><span class="at"> </span><span class="dv">4096</span></span>
+<span id="cb238-17"><a href="#cb238-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb238-18"><a href="#cb238-18" aria-hidden="true" tabindex="-1"></a><span class="fu">lora</span><span class="kw">:</span></span>
+<span id="cb238-19"><a href="#cb238-19" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">rank</span><span class="kw">:</span><span class="at"> </span><span class="dv">16</span></span>
+<span id="cb238-20"><a href="#cb238-20" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">alpha</span><span class="kw">:</span><span class="at"> </span><span class="dv">32</span></span>
+<span id="cb238-21"><a href="#cb238-21" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">target_modules</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">q_proj</span><span class="kw">,</span><span class="at"> v_proj</span><span class="kw">,</span><span class="at"> k_proj</span><span class="kw">,</span><span class="at"> o_proj</span><span class="kw">]</span></span>
+<span id="cb238-22"><a href="#cb238-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb238-23"><a href="#cb238-23" aria-hidden="true" tabindex="-1"></a><span class="fu">resources</span><span class="kw">:</span></span>
+<span id="cb238-24"><a href="#cb238-24" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">min_vram_gb</span><span class="kw">:</span><span class="at"> </span><span class="dv">24</span></span>
+<span id="cb238-25"><a href="#cb238-25" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">max_runtime_hours</span><span class="kw">:</span><span class="at"> </span><span class="dv">4</span></span></code></pre></div>
+<h2 id="run-the-fine-tune">3. Run the fine-tune</h2>
+<div class="sourceCode" id="cb239"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb239-1"><a href="#cb239-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Local training on this box (single GPU)</span></span>
+<span id="cb239-2"><a href="#cb239-2" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> train run <span class="at">--local</span> <span class="at">--config</span> ./run/infernet.train.yml</span>
+<span id="cb239-3"><a href="#cb239-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb239-4"><a href="#cb239-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Or submit to the P2P network (when workload_class: C1+ is set)</span></span>
+<span id="cb239-5"><a href="#cb239-5" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> train run <span class="at">--config</span> ./run/infernet.train.yml</span></code></pre></div>
+<p>Local mode shells out to the <code>runtime:</code> you specified
+(Unsloth, TRL, Axolotl, or the bundled microgpt for tiny demos) and
+writes:</p>
+<pre><code>run/
+├── infernet.train.yml      (frozen copy of the config used)
+├── metrics.jsonl           (one line per logging step)
+├── README.md               (auto-generated — what was trained, when)
+└── checkpoint-final/       (HF-shape directory: config.json + safetensors)</code></pre>
+<h2 id="publish">4. Publish</h2>
+<div class="sourceCode" id="cb241"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb241-1"><a href="#cb241-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> publish ./run/checkpoint-final <span class="dt">\</span></span>
+<span id="cb241-2"><a href="#cb241-2" aria-hidden="true" tabindex="-1"></a>    <span class="at">--hf</span> InfernetProtocol/svelte5-coder <span class="dt">\</span></span>
+<span id="cb241-3"><a href="#cb241-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">--ollama</span> infernet/svelte5-coder <span class="dt">\</span></span>
+<span id="cb241-4"><a href="#cb241-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">--quant</span> q4_k_m</span></code></pre></div>
+<p>What this does:</p>
+<ol type="1">
+<li><strong>HuggingFace push</strong> — uploads the safetensors
+directory to <code>huggingface.co/InfernetProtocol/svelte5-coder</code>.
+Needs <code>HUGGINGFACE_TOKEN</code> with write scope on the org.</li>
+<li><strong>GGUF convert</strong> — runs
+<code>convert_hf_to_gguf.py</code> from your local
+<code>llama.cpp</code> checkout (<code>~/llama.cpp</code> by default;
+override with <code>--llama-cpp-path</code>). Emits
+<code>model.f16.gguf</code> then quantizes to
+<code>model.q4_k_m.gguf</code>.</li>
+<li><strong>Modelfile generation</strong> — writes a
+<code>Modelfile</code> with the ChatML template and sane defaults
+(<code>temperature=0.7</code>, <code>top_p=0.9</code>).</li>
+<li><strong>Ollama push</strong> — <code>ollama create</code> +
+<code>ollama push</code> so it lands at <a
+href="https://ollama.com/infernet/svelte5-coder">ollama.com/infernet/svelte5-coder</a>.
+Run <code>ollama signin</code> once before the first publish.</li>
+</ol>
+<p>After this, anyone with Ollama can pull your model:</p>
+<div class="sourceCode" id="cb242"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb242-1"><a href="#cb242-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> pull infernet/svelte5-coder</span>
+<span id="cb242-2"><a href="#cb242-2" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> run infernet/svelte5-coder <span class="st">&quot;How do runes work in Svelte 5?&quot;</span></span></code></pre></div>
+<h2 id="variants">Variants</h2>
+<ul>
+<li><strong>Just the data</strong>:
+<code>infernet train data --query …</code> and stop. The JSONL is
+portable to any HF/Unsloth/Axolotl/TRL pipeline.</li>
+<li><strong>Just the publish</strong>:
+<code>infernet publish &lt;dir&gt; --modelfile-only</code> to generate
+the Modelfile + GGUF locally without pushing anywhere.</li>
+<li><strong>HF only</strong>: <code>--skip-ollama</code>. Or
+<strong>Ollama only</strong>: <code>--skip-hf</code>.</li>
+</ul>
+<h2 id="prerequisites-2">Prerequisites</h2>
+<ul>
+<li><code>VALUESERP_API_KEY</code> for crawling (free tier covers
+experiments)</li>
+<li><code>HUGGINGFACE_TOKEN</code> with write scope on your target
+org</li>
+<li><code>ollama signin</code> already done</li>
+<li><code>llama.cpp</code> cloned + built at
+<code>$HOME/llama.cpp</code> for the GGUF convert</li>
+<li>A GPU with enough VRAM for the chosen base model — see
+<code>infernet model info hf:Qwen/Qwen2.5-Coder-7B-Instruct</code> for
+fit estimates</li>
+</ul>
 <hr />
 </body>
 </html>

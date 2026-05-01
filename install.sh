@@ -966,6 +966,28 @@ link_npm_binary_to_wrapper() {
         warn "PATH wiring may fail — try: npm prefix -g; ls \$(npm prefix -g)/bin"
         return 1
     fi
+
+    # Self-symlink check #1: paths are literally identical (same string).
+    # Happens when npm's global prefix is the same dir as $INFERNET_BIN —
+    # e.g. operators on ephemeral disks who set INFERNET_BIN to a path
+    # mise/npm also use. Without this guard `ln -sf X X` creates a loop
+    # ("Too many levels of symbolic links").
+    if [ "$NPM_INFERNET" = "$WRAPPER" ]; then
+        ok "infernet binary already at $WRAPPER (npm installed it directly)"
+        return 0
+    fi
+    # Self-symlink check #2: paths differ but resolve to the same real
+    # file (one is already a symlink to the other from a prior run).
+    NPM_REAL="$(readlink -f "$NPM_INFERNET" 2>/dev/null || echo "$NPM_INFERNET")"
+    WRAP_REAL="$(readlink -f "$WRAPPER" 2>/dev/null || echo "$WRAPPER")"
+    if [ -n "$NPM_REAL" ] && [ "$NPM_REAL" = "$WRAP_REAL" ]; then
+        ok "infernet binary already linked to npm install at $WRAPPER"
+        return 0
+    fi
+
+    # Remove any existing $WRAPPER first so a stale (possibly broken)
+    # symlink from a prior install can't shadow the new target.
+    rm -f "$WRAPPER"
     mkdir -p "$INFERNET_BIN"
     if ln -sf "$NPM_INFERNET" "$WRAPPER" 2>/dev/null; then
         ok "linked $WRAPPER → $NPM_INFERNET"

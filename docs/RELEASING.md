@@ -35,11 +35,11 @@ Watch the run under **Actions → Release**. On success:
 
 ## Post-release: Homebrew tap
 
-The Homebrew tap repo (`profullstack/homebrew-infernet`) is a separate repository. Copy the formula from the release and push:
+The Homebrew tap repo (`infernetprotocol/homebrew-infernet`) is a separate repository. Copy the formula from the release and push:
 
 ```bash
 gh release download "v$VERSION" --pattern infernet.rb
-git clone git@github.com:profullstack/homebrew-infernet.git
+git clone git@github.com:infernetprotocol/homebrew-infernet.git
 cp infernet.rb homebrew-infernet/Formula/
 cd homebrew-infernet
 git add Formula/infernet.rb

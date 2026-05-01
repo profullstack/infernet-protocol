@@ -41,10 +41,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/profullstack/infernet-protocol.git",
+    "url": "git+https://github.com/infernetprotocol/infernet-protocol.git",
     "directory": "apps/cli"
   },
-  "homepage": "https://github.com/profullstack/infernet-protocol#readme",
+  "homepage": "https://github.com/infernetprotocol/infernet-protocol#readme",
   "keywords": [
     "infernet",
     "gpu",

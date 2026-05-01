@@ -140,7 +140,7 @@ const SECTIONS = [
                     <>
                         Defined in{" "}
                         <a
-                            href="https://github.com/profullstack/infernet-protocol/blob/master/ipips/ipip-0010.md"
+                            href="https://github.com/infernetprotocol/infernet-protocol/blob/master/ipips/ipip-0010.md"
                             target="_blank"
                             rel="noreferrer"
                             className="text-[var(--accent)] hover:underline"
@@ -199,7 +199,7 @@ const SECTIONS = [
                         emits synthetic step events for end-to-end testing; the real
                         Python integrations land incrementally. See{" "}
                         <a
-                            href="https://github.com/profullstack/infernet-protocol/blob/master/ipips/ipip-0011.md"
+                            href="https://github.com/infernetprotocol/infernet-protocol/blob/master/ipips/ipip-0011.md"
                             target="_blank"
                             rel="noreferrer"
                             className="text-[var(--accent)] hover:underline"
@@ -216,7 +216,7 @@ const SECTIONS = [
                     <>
                         Spec lands as{" "}
                         <a
-                            href="https://github.com/profullstack/infernet-protocol/blob/master/ipips/ipip-0013.md"
+                            href="https://github.com/infernetprotocol/infernet-protocol/blob/master/ipips/ipip-0013.md"
                             target="_blank"
                             rel="noreferrer"
                             className="text-[var(--accent)] hover:underline"
@@ -395,7 +395,7 @@ export default function FaqPage() {
                     </Link>{" "}
                     or the{" "}
                     <a
-                        href="https://github.com/profullstack/infernet-protocol/tree/master/ipips"
+                        href="https://github.com/infernetprotocol/infernet-protocol/tree/master/ipips"
                         target="_blank"
                         rel="noreferrer"
                         className="text-[var(--accent)] hover:underline"
@@ -459,7 +459,7 @@ export default function FaqPage() {
                 </a>{" "}
                 or open an issue on{" "}
                 <a
-                    href="https://github.com/profullstack/infernet-protocol/issues"
+                    href="https://github.com/infernetprotocol/infernet-protocol/issues"
                     target="_blank"
                     rel="noreferrer"
                     className="text-[var(--accent)] hover:underline"

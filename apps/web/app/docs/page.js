@@ -43,7 +43,7 @@ export default function DocsPage() {
                     Everything an operator or client needs to use the network. If you're
                     looking for protocol-level design decisions, see the{" "}
                     <Link
-                        href="https://github.com/profullstack/infernet-protocol/tree/master/ipips"
+                        href="https://github.com/infernetprotocol/infernet-protocol/tree/master/ipips"
                         className="text-[var(--accent)] hover:underline"
                         target="_blank"
                         rel="noreferrer"
@@ -458,7 +458,7 @@ curl -sS -X POST https://infernetprotocol.com/api/auth/login \\
                     Branded transactional emails ship from the Supabase SMTP setup with the
                     HTML templates in{" "}
                     <Link
-                        href="https://github.com/profullstack/infernet-protocol/blob/master/docs/AUTH_EMAIL_TEMPLATES.md"
+                        href="https://github.com/infernetprotocol/infernet-protocol/blob/master/docs/AUTH_EMAIL_TEMPLATES.md"
                         className="text-[var(--accent)] hover:underline"
                         target="_blank"
                         rel="noreferrer"
@@ -655,7 +655,7 @@ infernet gpu --json | jq .interconnects # raw detected shape`}
                     Full normative spec, including the client-side
                     <code> requires.interconnects</code> matchmaking shape, lives in{" "}
                     <Link
-                        href="https://github.com/profullstack/infernet-protocol/blob/master/ipips/ipip-0008.md"
+                        href="https://github.com/infernetprotocol/infernet-protocol/blob/master/ipips/ipip-0008.md"
                         className="text-[var(--accent)] hover:underline"
                         target="_blank"
                         rel="noreferrer"
@@ -749,7 +749,7 @@ infernet gpu --json | jq .interconnects # raw detected shape`}
 
                 <h3 className="mt-6 text-lg font-semibold text-white">1. Clone, configure, build</h3>
                 <CodeBlock>
-{`git clone https://github.com/profullstack/infernet-protocol.git
+{`git clone https://github.com/infernetprotocol/infernet-protocol.git
 cd infernet-protocol
 cp sample.env .env
 node tooling/generate-secrets.mjs >> .env       # CLI session, cron, DID keys
@@ -888,7 +888,7 @@ infernet start                                  # daemon takes paying jobs`}
                 <p>
                     Read the{" "}
                     <Link
-                        href="https://github.com/profullstack/infernet-protocol/tree/master/ipips"
+                        href="https://github.com/infernetprotocol/infernet-protocol/tree/master/ipips"
                         className="text-[var(--accent)] hover:underline"
                         target="_blank"
                         rel="noreferrer"

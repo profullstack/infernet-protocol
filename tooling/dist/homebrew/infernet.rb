@@ -12,7 +12,7 @@
 #   brew install infernet
 class Infernet < Formula
   desc "GPU node control plane for the Infernet Protocol"
-  homepage "https://github.com/profullstack/infernet-protocol"
+  homepage "https://github.com/infernetprotocol/infernet-protocol"
   url "https://registry.npmjs.org/@infernetprotocol/cli/-/cli-0.0.0.tgz"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   version "0.0.0"

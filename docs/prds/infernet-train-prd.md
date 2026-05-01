@@ -1,7 +1,7 @@
 # PRD: `infernet train` — Distributed Training + Custom Model Pipeline
 
 **Project:** Infernet Protocol  
-**Repo:** `profullstack/infernet-protocol`  
+**Repo:** `infernetprotocol/infernet-protocol`  
 **Feature Area:** CLI, provider daemon, job scheduler, training workloads, model artifacts  
 **Status:** Draft v0.2  
 **Primary Goal:** Add a production-grade `infernet train ...` command family that lets users run practical training today, while designing Infernet as a mega-model-capable distributed AI execution network for large-model inference, adapter training, federated training, distillation, synthetic data generation, evals, and experimental decentralized pretraining.

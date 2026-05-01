@@ -19,7 +19,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/profullstack/infernet-protocol.git",
+    "url": "git+https://github.com/infernetprotocol/infernet-protocol.git",
     "directory": "packages/api-schema"
   }
 }

@@ -113,7 +113,7 @@ author: Anthony Ettinger <anthony@profullstack.com>
 status: Draft
 type: Process
 created: 2026-04-26
-discussion: https://github.com/profullstack/infernet-protocol/issues/...
+discussion: https://github.com/infernetprotocol/infernet-protocol/issues/...
 requires: []
 replaces: []
 ---

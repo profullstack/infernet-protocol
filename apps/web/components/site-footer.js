@@ -16,7 +16,7 @@ const COMPANY = [
     { href: "/terms", label: "Terms" },
     { href: "/privacy", label: "Privacy" },
     {
-        href: "https://github.com/profullstack/infernet-protocol",
+        href: "https://github.com/infernetprotocol/infernet-protocol",
         label: "GitHub",
         external: true
     }

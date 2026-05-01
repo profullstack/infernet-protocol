@@ -10,7 +10,7 @@ export const CURRENT_VERSION = JSON.parse(
 export async function fetchLatestVersion() {
     try {
         const res = await fetch(
-            'https://api.github.com/repos/profullstack/infernet-protocol/releases/latest',
+            'https://api.github.com/repos/infernetprotocol/infernet-protocol/releases/latest',
             { headers: { accept: 'application/vnd.github+json', 'user-agent': 'infernet-daemon' }, signal: AbortSignal.timeout(10_000) }
         );
         if (!res.ok) return null;

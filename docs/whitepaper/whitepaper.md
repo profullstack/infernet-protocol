@@ -405,7 +405,7 @@ APIs, the protocol slots into existing workflows while laying the foundation
 for a fully decentralized compute layer.
 
 The source code is MIT-licensed at
-[github.com/profullstack/infernet-protocol](https://github.com/profullstack/infernet-protocol).
+[github.com/infernetprotocol/infernet-protocol](https://github.com/infernetprotocol/infernet-protocol).
 Operators, consumers, and contributors are welcome.
 
 ---

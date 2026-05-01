@@ -222,7 +222,7 @@ You can deploy custom AI models to your nodes:
 
 ## Resources
 
-- [Infernet Protocol GitHub](https://github.com/profullstack/infernet-protocol)
+- [Infernet Protocol GitHub](https://github.com/infernetprotocol/infernet-protocol)
 - [Documentation](https://docs.infernetprotocol.com)
 - [Community Forum](https://community.infernetprotocol.com)
 

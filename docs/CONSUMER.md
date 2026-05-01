@@ -292,9 +292,9 @@ For specialized or proprietary models:
 
 ## Resources
 
-- [Infernet Protocol GitHub](https://github.com/profullstack/infernet-protocol)
+- [Infernet Protocol GitHub](https://github.com/infernetprotocol/infernet-protocol)
 - [API Documentation](https://docs.infernetprotocol.com/api)
-- [Example Notebooks](https://github.com/profullstack/infernet-protocol/tree/master/examples)
+- [Example Notebooks](https://github.com/infernetprotocol/infernet-protocol/tree/master/examples)
 - [Community Forum](https://community.infernetprotocol.com)
 
 ---

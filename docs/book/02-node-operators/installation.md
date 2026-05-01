@@ -26,7 +26,7 @@ infernet --version
 
 ```bash
 INFERNET_VERSION=$(curl -s https://infernetprotocol.com/version)
-curl -sSL "https://github.com/profullstack/infernet-protocol/releases/download/${INFERNET_VERSION}/infernet-linux-x86_64" \
+curl -sSL "https://github.com/infernetprotocol/infernet-protocol/releases/download/${INFERNET_VERSION}/infernet-linux-x86_64" \
   -o /usr/local/bin/infernet
 chmod +x /usr/local/bin/infernet
 ```

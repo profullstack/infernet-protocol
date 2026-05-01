@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 async function fetchLatestCliVersion() {
   try {
     const res = await fetch(
-      "https://api.github.com/repos/profullstack/infernet-protocol/releases/latest",
+      "https://api.github.com/repos/infernetprotocol/infernet-protocol/releases/latest",
       { headers: { accept: "application/vnd.github+json", "user-agent": "infernet-web" }, next: { revalidate: 300 } }
     );
     if (!res.ok) return null;

@@ -8,22 +8,22 @@ const canonicalLinks = [
   },
   {
     label: "Open-source repository",
-    href: "https://github.com/profullstack/infernet-protocol",
+    href: "https://github.com/infernetprotocol/infernet-protocol",
     description: "Monorepo for the web dashboard, CLI, daemon, SDK packages, protocol docs, IPIPs, and Docker provider image."
   },
   {
     label: "Protocol specification",
-    href: "https://github.com/profullstack/infernet-protocol/blob/master/INFERNET-PROTOCOL.md",
+    href: "https://github.com/infernetprotocol/infernet-protocol/blob/master/INFERNET-PROTOCOL.md",
     description: "Primary technical reference for the Infernet Protocol."
   },
   {
     label: "Architecture document",
-    href: "https://github.com/profullstack/infernet-protocol/blob/master/INFERNET-ARCHITECTURE.md",
+    href: "https://github.com/infernetprotocol/infernet-protocol/blob/master/INFERNET-ARCHITECTURE.md",
     description: "Control-plane, node, identity, signed-request, payment, and deployment architecture."
   },
   {
     label: "Infernet Protocol Improvement Proposals",
-    href: "https://github.com/profullstack/infernet-protocol/tree/master/ipips",
+    href: "https://github.com/infernetprotocol/infernet-protocol/tree/master/ipips",
     description: "IPIPs for protocol changes, network behavior, identity, chat, and governance."
   },
   {
@@ -33,12 +33,12 @@ const canonicalLinks = [
   },
   {
     label: "GitHub releases",
-    href: "https://github.com/profullstack/infernet-protocol/releases",
+    href: "https://github.com/infernetprotocol/infernet-protocol/releases",
     description: "Tagged source releases for operators, contributors, and downstream packagers."
   },
   {
     label: "Container image",
-    href: "https://github.com/profullstack/infernet-protocol/pkgs/container/infernet-provider",
+    href: "https://github.com/infernetprotocol/infernet-protocol/pkgs/container/infernet-provider",
     description: "GHCR provider image for booting an Infernet GPU node."
   }
 ];
@@ -53,9 +53,9 @@ const facts = [
 ];
 
 const installCommands = [
-  "curl -fsSL https://raw.githubusercontent.com/profullstack/infernet-protocol/master/install.sh | sh",
+  "curl -fsSL https://raw.githubusercontent.com/infernetprotocol/infernet-protocol/master/install.sh | sh",
   "docker run --rm -it --gpus all ghcr.io/profullstack/infernet-provider:latest",
-  "git clone https://github.com/profullstack/infernet-protocol.git"
+  "git clone https://github.com/infernetprotocol/infernet-protocol.git"
 ];
 
 export const metadata = {
@@ -99,7 +99,7 @@ export default function ProtocolPage() {
                   Visit infernetprotocol.com
                 </a>
                 <a
-                  href="https://github.com/profullstack/infernet-protocol"
+                  href="https://github.com/infernetprotocol/infernet-protocol"
                   className="rounded-full border border-[var(--line)] px-5 py-3 text-sm font-semibold text-white transition hover:border-[var(--accent)] hover:bg-white/5"
                 >
                   GitHub repository

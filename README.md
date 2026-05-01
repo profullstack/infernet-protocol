@@ -12,13 +12,13 @@ A decentralized GPU compute marketplace for **inference and distributed training
 
 **What we are, what we aren't.** Infernet is the economic substrate for inference jobs that don't need NVLink — single-GPU inference (7B–70B), embarrassingly parallel batch (embeddings, image grids, sweeps), LoRA fine-tunes, and async / federated distributed training (DiLoCo-style). We don't try to match hyperscalers on tight-sync 100B+ training from scratch — that workload's interconnect moat is real and conceding it costs us nothing. The dominant inference market is request-level parallel, where per-job latency is dominated by GPU compute, not network hops. As inference ASICs (Apple Neural Engine, Qualcomm Hexagon, Tenstorrent, Groq, Cerebras, AWS Trainium) commoditize the silicon, the protocol layer is what stays valuable. Bitcoin's real lesson: the protocol survived three hardware generations because it didn't depend on any of them.
 
-[![Docker image](https://img.shields.io/badge/ghcr.io-infernet--provider-blue?logo=docker)](https://github.com/profullstack/infernet-protocol/pkgs/container/infernet-provider)
-[![Release](https://img.shields.io/github/v/release/profullstack/infernet-protocol)](https://github.com/profullstack/infernet-protocol/releases)
+[![Docker image](https://img.shields.io/badge/ghcr.io-infernet--provider-blue?logo=docker)](https://github.com/infernetprotocol/infernet-protocol/pkgs/container/infernet-provider)
+[![Release](https://img.shields.io/github/v/release/infernetprotocol/infernet-protocol)](https://github.com/infernetprotocol/infernet-protocol/releases)
 
 Canonical links:
 - Site: https://infernetprotocol.com
 - Protocol landing page: https://infernetprotocol.com/protocol
-- GitHub: https://github.com/profullstack/infernet-protocol
+- GitHub: https://github.com/infernetprotocol/infernet-protocol
 - Media/reference kit: [docs/MEDIA_KIT.md](./docs/MEDIA_KIT.md)
 - Book: https://infernetprotocol.com/book
 - Protocol spec: [INFERNET-PROTOCOL.md](./INFERNET-PROTOCOL.md)
@@ -37,7 +37,7 @@ curl -fsSL https://infernetprotocol.com/install.sh | sh
 ```
 
 (GitHub mirror, always pinned to master:
-`https://raw.githubusercontent.com/profullstack/infernet-protocol/master/install.sh`)
+`https://raw.githubusercontent.com/infernetprotocol/infernet-protocol/master/install.sh`)
 
 This installs the `infernet` CLI to `~/.infernet/source` and drops a
 shim at `~/.local/bin/infernet`. Re-run anytime to update. Node 20 is
@@ -430,7 +430,7 @@ Web/mobile routes are server-only — the Supabase service-role client is never 
 
 - **Docker** (LIVE) — `ghcr.io/profullstack/infernet-provider:0.1.0` and `:latest`, multi-arch `linux/amd64` + `linux/arm64`. One command boots a provider; see the Quick start above.
 - **npm** (scaffolded, unblock pending) — 11 publishable `@infernetprotocol/*` packages (`cli`, `sdk`, `api-schema`, `deploy-providers`, `nim-adapter`, `auth`, `config`, `db`, `gpu`, `inference`, `logger`, `payments`). Release workflow + dry-run publish are ready; waiting on an npm Automation token.
-- **Homebrew** (scaffolded) — formula + updater script at [`tooling/dist/homebrew`](./tooling/dist/homebrew). Tap repo at [`profullstack/homebrew-infernet`](https://github.com/profullstack/homebrew-infernet). Activates as soon as npm ships.
+- **Homebrew** (scaffolded) — formula + updater script at [`tooling/dist/homebrew`](./tooling/dist/homebrew). Tap repo at [`infernetprotocol/homebrew-infernet`](https://github.com/infernetprotocol/homebrew-infernet). Activates as soon as npm ships.
 
 Tag a `v*.*.*` and [`.github/workflows/release.yml`](./.github/workflows/release.yml) builds the Docker image and creates a GitHub Release. See [`docs/RELEASING.md`](./docs/RELEASING.md) for the full flow.
 

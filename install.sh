@@ -5,7 +5,7 @@
 #   curl -fsSL https://infernetprotocol.com/install.sh | sh
 #
 # Mirror (always pinned to master):
-#   curl -fsSL https://raw.githubusercontent.com/profullstack/infernet-protocol/master/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/infernetprotocol/infernet-protocol/master/install.sh | sh
 #
 # What it does:
 #   1. Detects platform (Linux or macOS — Windows not supported yet).
@@ -74,8 +74,8 @@
 
 set -eu
 
-REPO_URL="https://github.com/profullstack/infernet-protocol.git"
-REPO_RAW_BASE="https://raw.githubusercontent.com/profullstack/infernet-protocol"
+REPO_URL="https://github.com/infernetprotocol/infernet-protocol.git"
+REPO_RAW_BASE="https://raw.githubusercontent.com/infernetprotocol/infernet-protocol"
 DEFAULT_REF="master"
 NPM_PACKAGE="@infernetprotocol/cli"
 

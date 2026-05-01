@@ -6,12 +6,12 @@ Infernet Protocol is an open-source decentralized GPU inference marketplace. GPU
 
 - Official site: https://infernetprotocol.com
 - Protocol landing page: https://infernetprotocol.com/protocol
-- GitHub repository: https://github.com/profullstack/infernet-protocol
-- Releases: https://github.com/profullstack/infernet-protocol/releases
-- Docker provider image: https://github.com/profullstack/infernet-protocol/pkgs/container/infernet-provider
-- Protocol spec: https://github.com/profullstack/infernet-protocol/blob/master/INFERNET-PROTOCOL.md
-- Architecture: https://github.com/profullstack/infernet-protocol/blob/master/INFERNET-ARCHITECTURE.md
-- IPIPs: https://github.com/profullstack/infernet-protocol/tree/master/ipips
+- GitHub repository: https://github.com/infernetprotocol/infernet-protocol
+- Releases: https://github.com/infernetprotocol/infernet-protocol/releases
+- Docker provider image: https://github.com/infernetprotocol/infernet-protocol/pkgs/container/infernet-provider
+- Protocol spec: https://github.com/infernetprotocol/infernet-protocol/blob/master/INFERNET-PROTOCOL.md
+- Architecture: https://github.com/infernetprotocol/infernet-protocol/blob/master/INFERNET-ARCHITECTURE.md
+- IPIPs: https://github.com/infernetprotocol/infernet-protocol/tree/master/ipips
 - Contact: protocol@infernetprotocol.com
 
 ## Short description
@@ -20,7 +20,7 @@ Infernet Protocol is an open-source decentralized GPU inference marketplace for 
 
 ## Longer description
 
-Infernet Protocol connects GPU providers, model operators, and inference consumers through a self-hostable control plane, signed node APIs, crypto-native payments, and a provider runtime that can run on cloud GPUs, home labs, and edge machines. The hosted control plane is available at https://infernetprotocol.com, while the codebase is published at https://github.com/profullstack/infernet-protocol.
+Infernet Protocol connects GPU providers, model operators, and inference consumers through a self-hostable control plane, signed node APIs, crypto-native payments, and a provider runtime that can run on cloud GPUs, home labs, and edge machines. The hosted control plane is available at https://infernetprotocol.com, while the codebase is published at https://github.com/infernetprotocol/infernet-protocol.
 
 ## Technical facts
 
@@ -35,7 +35,7 @@ Infernet Protocol connects GPU providers, model operators, and inference consume
 ## Install snippets
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/profullstack/infernet-protocol/master/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/infernetprotocol/infernet-protocol/master/install.sh | sh
 ```
 
 ```bash
@@ -43,7 +43,7 @@ docker run --rm -it --gpus all ghcr.io/profullstack/infernet-provider:latest
 ```
 
 ```bash
-git clone https://github.com/profullstack/infernet-protocol.git
+git clone https://github.com/infernetprotocol/infernet-protocol.git
 ```
 
 ## Book, Discord, and third-party coverage

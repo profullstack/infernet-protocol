@@ -12,8 +12,8 @@
   "engines": { "node": ">=18" },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/profullstack/infernet-protocol.git",
+    "url": "git+https://github.com/infernetprotocol/infernet-protocol.git",
     "directory": "packages/nim-adapter"
   },
-  "homepage": "https://github.com/profullstack/infernet-protocol#readme"
+  "homepage": "https://github.com/infernetprotocol/infernet-protocol#readme"
 }

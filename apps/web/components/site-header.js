@@ -39,7 +39,7 @@ export default async function SiteHeader() {
                         </Link>
                     ))}
                     <Link
-                        href="https://github.com/profullstack/infernet-protocol"
+                        href="https://github.com/infernetprotocol/infernet-protocol"
                         target="_blank"
                         rel="noreferrer"
                         className="hover:text-white"

@@ -119,7 +119,7 @@ Infernet offers a decentralized solution to the growing demand for inference com
 
 ## Open-Source Repository
 ```markdown
-GitHub Repository: https://github.com/profullstack/infernet-protocol
+GitHub Repository: https://github.com/infernetprotocol/infernet-protocol
 ```
 
 ## Domain

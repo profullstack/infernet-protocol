@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Getting started · The Infernet Book</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {  background-color: #f8f8f8; }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ef2929; } /* Alert */
+    code span.an { color: #8f5902; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #204a87; } /* Attribute */
+    code span.bn { color: #0000cf; } /* BaseN */
+    code span.cf { color: #204a87; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4e9a06; } /* Char */
+    code span.cn { color: #8f5902; } /* Constant */
+    code span.co { color: #8f5902; font-style: italic; } /* Comment */
+    code span.cv { color: #8f5902; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #8f5902; font-weight: bold; font-style: italic; } /* Documentation */
+    code span.dt { color: #204a87; } /* DataType */
+    code span.dv { color: #0000cf; } /* DecVal */
+    code span.er { color: #a40000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #0000cf; } /* Float */
+    code span.fu { color: #204a87; font-weight: bold; } /* Function */
+    code span.im { } /* Import */
+    code span.in { color: #8f5902; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #204a87; font-weight: bold; } /* Keyword */
+    code span.op { color: #ce5c00; font-weight: bold; } /* Operator */
+    code span.ot { color: #8f5902; } /* Other */
+    code span.pp { color: #8f5902; font-style: italic; } /* Preprocessor */
+    code span.sc { color: #ce5c00; font-weight: bold; } /* SpecialChar */
+    code span.ss { color: #4e9a06; } /* SpecialString */
+    code span.st { color: #4e9a06; } /* String */
+    code span.va { color: #000000; } /* Variable */
+    code span.vs { color: #4e9a06; } /* VerbatimString */
+    code span.wa { color: #8f5902; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+           max-width: 760px; margin: 0 auto; padding: 1.5rem;
+           line-height: 1.65; color: #1a1a1a; background: #fff; }
+    h1, h2, h3, h4 { line-height: 1.25; margin-top: 1.5em; }
+    h1 { font-size: 1.8rem; }
+    h2 { font-size: 1.4rem; border-bottom: 1px solid #eee; padding-bottom: 0.3rem; }
+    h3 { font-size: 1.15rem; }
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    pre { background: #f5f5f5; padding: 0.85rem; border-radius: 4px;
+          overflow-x: auto; font-size: 0.85rem; line-height: 1.5; }
+    code { background: #f5f5f5; padding: 0.1rem 0.35rem;
+           border-radius: 3px; font-size: 0.88em;
+           font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+    pre code { background: none; padding: 0; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.9rem; }
+    th, td { border: 1px solid #ddd; padding: 0.45rem 0.7rem; text-align: left; }
+    th { background: #f8f8f8; }
+    blockquote { border-left: 3px solid #2563eb; margin-left: 0;
+                 padding: 0.2rem 1rem; color: #555; background: #f9f9fb; }
+    hr { border: none; border-top: 1px solid #eee; margin: 2rem 0; }
+    .book-nav { display: flex; align-items: center; gap: 1rem;
+                padding: 0.75rem 0; font-size: 0.9rem; }
+    .book-nav-top    { border-bottom: 1px solid #eee; margin-bottom: 1.75rem; }
+    .book-nav-bottom { border-top: 1px solid #eee; margin-top: 2.5rem; }
+    .book-nav-home { font-weight: 600; }
+    .book-nav-prev, .book-nav-next { color: #2563eb; }
+    .book-nav-prev[hidden], .book-nav-next[hidden] { visibility: hidden; }
+    .book-nav-spacer { flex: 1; }
+  </style>
+</head>
+<body>
+<nav class="book-nav book-nav-top"><a href="/book/01-introduction/architecture.html" class="book-nav-prev">← Architecture</a><span class="book-nav-spacer"></span><a href="/book" class="book-nav-home">📖 The Infernet Book</a><span class="book-nav-spacer"></span><a href="/book/01-introduction/quick-start.html" class="book-nav-next">Quick Start →</a></nav>
+<header id="title-block-header">
+<h1 class="title">Getting started · The Infernet Book</h1>
+</header>
+<h1 id="getting-started">Getting started</h1>
+<p>Four ways to use Infernet Protocol. Each section is a copy-paste
+sequence that finishes in about five minutes. Pick the path that matches
+what you want to do today.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Track</th>
+<th>Who it’s for</th>
+<th>Outcome</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>1. Use the network</strong></td>
+<td>Developers, end users</td>
+<td>Working chat completion call against the public endpoint</td>
+</tr>
+<tr class="even">
+<td><strong>2. Run a node</strong></td>
+<td>Operators with a GPU</td>
+<td>Daemon registered, accepting jobs, earning crypto</td>
+</tr>
+<tr class="odd">
+<td><strong>3. Train a custom model</strong></td>
+<td>Builders, researchers</td>
+<td>Fine-tuned LoRA from a search query → ready-to-publish model</td>
+</tr>
+<tr class="even">
+<td><strong>4. Publish a model</strong></td>
+<td>Whoever just trained one</td>
+<td>Model live on huggingface.co AND ollama.com</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="track-1-use-the-network-for-inference">Track 1 — Use the network
+for inference</h2>
+<p>The public endpoint is OpenAI-compatible. If you’ve ever called
+OpenAI’s API, the only thing that changes is the
+<code>base_url</code>.</p>
+<h3 id="curl">curl</h3>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> https://infernetprotocol.com/v1/chat/completions <span class="dt">\</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="at">-H</span> <span class="st">&quot;Content-Type: application/json&quot;</span> <span class="dt">\</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">-d</span> <span class="st">&#39;{</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="st">        &quot;model&quot;: &quot;qwen2.5:7b&quot;,</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="st">        &quot;messages&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;What is Bitcoin?&quot;}],</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="st">        &quot;stream&quot;: false</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="st">    }&#39;</span></span></code></pre></div>
+<h3 id="python">Python</h3>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> openai <span class="im">import</span> OpenAI</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>client <span class="op">=</span> OpenAI(</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    base_url<span class="op">=</span><span class="st">&quot;https://infernetprotocol.com/v1&quot;</span>,</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    api_key<span class="op">=</span><span class="st">&quot;no-key-needed-for-playground&quot;</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>stream <span class="op">=</span> client.chat.completions.create(</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    model<span class="op">=</span><span class="st">&quot;qwen2.5:7b&quot;</span>,</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    messages<span class="op">=</span>[{<span class="st">&quot;role&quot;</span>: <span class="st">&quot;user&quot;</span>, <span class="st">&quot;content&quot;</span>: <span class="st">&quot;Who built Linux?&quot;</span>}],</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    stream<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> chunk <span class="kw">in</span> stream:</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(chunk.choices[<span class="dv">0</span>].delta.content <span class="kw">or</span> <span class="st">&quot;&quot;</span>, end<span class="op">=</span><span class="st">&quot;&quot;</span>, flush<span class="op">=</span><span class="va">True</span>)</span></code></pre></div>
+<h3 id="javascript-node">JavaScript / Node</h3>
+<div class="sourceCode" id="cb3"><pre class="sourceCode js"><code class="sourceCode javascript"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> OpenAI <span class="im">from</span> <span class="st">&quot;openai&quot;</span><span class="op">;</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> client <span class="op">=</span> <span class="kw">new</span> <span class="fu">OpenAI</span>({</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">baseURL</span><span class="op">:</span> <span class="st">&quot;https://infernetprotocol.com/v1&quot;</span><span class="op">,</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">apiKey</span><span class="op">:</span> <span class="bu">process</span><span class="op">.</span><span class="at">env</span><span class="op">.</span><span class="at">INFERNET_API_KEY</span> <span class="op">??</span> <span class="st">&quot;no-key-needed-for-playground&quot;</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>})<span class="op">;</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> res <span class="op">=</span> <span class="cf">await</span> client<span class="op">.</span><span class="at">chat</span><span class="op">.</span><span class="at">completions</span><span class="op">.</span><span class="fu">create</span>({</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    <span class="dt">model</span><span class="op">:</span> <span class="st">&quot;qwen2.5:7b&quot;</span><span class="op">,</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="dt">messages</span><span class="op">:</span> [{ <span class="dt">role</span><span class="op">:</span> <span class="st">&quot;user&quot;</span><span class="op">,</span> <span class="dt">content</span><span class="op">:</span> <span class="st">&quot;Explain Schnorr signatures in 3 lines.&quot;</span> }]</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>})<span class="op">;</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="bu">console</span><span class="op">.</span><span class="fu">log</span>(res<span class="op">.</span><span class="at">choices</span>[<span class="dv">0</span>]<span class="op">.</span><span class="at">message</span><span class="op">.</span><span class="at">content</span>)<span class="op">;</span></span></code></pre></div>
+<p>The browser-friendly playground is at <a
+href="https://infernetprotocol.com/chat"
+class="uri">https://infernetprotocol.com/chat</a>.</p>
+<hr />
+<h2 id="track-2-run-a-node-and-earn">Track 2 — Run a node and earn</h2>
+<p>One curl command bootstraps everything: installs the CLI, sets up
+Ollama, opens the firewall port, drops a systemd unit, and registers
+your node with the control plane.</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-fsSL</span> https://infernetprotocol.com/install.sh <span class="kw">|</span> <span class="fu">sh</span></span></code></pre></div>
+<p>Then:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> init             <span class="co"># generates a Nostr keypair, picks defaults</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> setup            <span class="co"># installs Ollama + a starter model + opens the firewall port</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> register         <span class="co"># signs and announces your node to the network</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> start            <span class="co"># starts the daemon (or use `infernet service enable`)</span></span></code></pre></div>
+<p>Your node is now live. Configure where to send earnings:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> payout set <span class="at">--coin</span> BTC <span class="at">--address</span> bc1q...</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> payout set <span class="at">--coin</span> USDC <span class="at">--address</span> 0x... <span class="at">--network</span> arbitrum</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> payout list</span></code></pre></div>
+<p>Quality-of-life commands you’ll use daily:</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> status                          <span class="co"># daemon health + last-seen</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> model recommend <span class="at">--install-all</span>   <span class="co"># auto-install best models for your VRAM</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> uncensored                      <span class="co"># one-shot install of Hermes 3 / Dolphin</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> logs <span class="at">-f</span>                         <span class="co"># tail the daemon log</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> upgrade                         <span class="co"># pull the latest CLI</span></span></code></pre></div>
+<p>The full operator guide is <a
+href="../02-node-operators/index.html">Chapter 2</a>.</p>
+<hr />
+<h2 id="track-3-train-a-custom-model">Track 3 — Train a custom
+model</h2>
+<p>Same shape as <a
+href="https://ollama.com/rockypod/svelte-coder"><code>rockypod/svelte-coder</code></a>:
+pick a topic, crawl the web for content, fine-tune a base model on the
+result. Run it on your one GPU or fan out across all the nodes you
+own.</p>
+<h3 id="crawl-a-search-query-into-a-dataset">1. Crawl a search query
+into a dataset</h3>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> train data <span class="dt">\</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    <span class="at">--query</span> <span class="st">&quot;svelte 5 framework documentation&quot;</span> <span class="dt">\</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">--domains</span> svelte.dev,kit.svelte.dev,github.com <span class="dt">\</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">--num</span> 30 <span class="dt">\</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">--out</span> ./data/svelte5.jsonl</span></code></pre></div>
+<p>Needs <code>VALUESERP_API_KEY</code> in env or under
+<code>integrations.valueserp.api_key</code> in
+<code>~/.config/infernet/config.json</code>. Output: a ChatML-format
+JSONL with ~hundreds of training examples extracted from the top web
+results.</p>
+<h3 id="scaffold-a-config">2. Scaffold a config</h3>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> train init <span class="at">--output</span> ./run</span></code></pre></div>
+<p>Edit <code>run/infernet.train.yml</code>:</p>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">name</span><span class="kw">:</span><span class="at"> svelte5-coder</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="fu">base_model</span><span class="kw">:</span><span class="at"> unsloth/Qwen2.5-Coder-7B-Instruct</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="fu">method</span><span class="kw">:</span><span class="at"> qlora</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="fu">runtime</span><span class="kw">:</span><span class="at"> unsloth</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="fu">workload_class</span><span class="kw">:</span><span class="at"> C1</span><span class="co">            # C1 local · C2 sweep · C3 federated</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="fu">input</span><span class="kw">:</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">dataset</span><span class="kw">:</span><span class="at"> ./data/svelte5.jsonl</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">format</span><span class="kw">:</span><span class="at"> chatml</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="fu">training</span><span class="kw">:</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">epochs</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">learning_rate</span><span class="kw">:</span><span class="at"> </span><span class="fl">2.0e-4</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">batch_size</span><span class="kw">:</span><span class="at"> </span><span class="dv">4</span></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">max_seq_len</span><span class="kw">:</span><span class="at"> </span><span class="dv">4096</span></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a><span class="fu">lora</span><span class="kw">:</span></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">rank</span><span class="kw">:</span><span class="at"> </span><span class="dv">16</span></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">alpha</span><span class="kw">:</span><span class="at"> </span><span class="dv">32</span></span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">target_modules</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">q_proj</span><span class="kw">,</span><span class="at"> k_proj</span><span class="kw">,</span><span class="at"> v_proj</span><span class="kw">,</span><span class="at"> o_proj</span><span class="kw">]</span></span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a><span class="fu">resources</span><span class="kw">:</span></span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">min_vram_gb</span><span class="kw">:</span><span class="at"> </span><span class="dv">24</span></span></code></pre></div>
+<h3 id="a.-train-locally-single-gpu">3a. Train locally (single GPU)</h3>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> train run <span class="at">--local</span> <span class="at">--config</span> ./run/infernet.train.yml</span></code></pre></div>
+<p>One-time install of the Python deps the runner shells out to:</p>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install unsloth datasets trl</span></code></pre></div>
+<h3 id="b.-train-across-your-fleet-federated-lora-experimental">3b.
+Train across your fleet (federated LoRA — experimental)</h3>
+<p>Set <code>workload_class: C3</code> in the YAML, host the shards
+somewhere reachable by your daemons, then:</p>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Upload shards to a public bucket / HF dataset / ngrok&#39;d dir</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="ex">aws</span> s3 sync ./run/shards s3://your-bucket/runs/svelte5/</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">INFERNET_SHARD_BASE_URL</span><span class="op">=</span>https://your-bucket.s3.amazonaws.com/runs/svelte5</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> train run <span class="at">--config</span> ./run/infernet.train.yml</span></code></pre></div>
+<p>The CLI will discover all your online nodes that meet
+<code>resources.min_vram_gb</code>, queue a <code>train_shard</code>
+command per node, and FedAvg the resulting LoRA adapters when they
+finish. Local single-GPU mode is the well-trodden path; federated is
+MVP.</p>
+<p>Output: <code>./run/checkpoint-final/</code> — a HuggingFace-shape
+directory ready for Track 4.</p>
+<hr />
+<h2 id="track-4-publish-to-huggingface-and-ollama">Track 4 — Publish to
+HuggingFace and Ollama</h2>
+<p>One command, two destinations. The fine-tune lands at
+<code>huggingface.co/&lt;org&gt;/&lt;name&gt;</code> AND
+<code>ollama.com/&lt;user&gt;/&lt;name&gt;</code>.</p>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> publish ./run/checkpoint-final <span class="dt">\</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    <span class="at">--hf</span> InfernetProtocol/svelte5-coder <span class="dt">\</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">--ollama</span> infernet/svelte5-coder <span class="dt">\</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">--quant</span> q4_k_m</span></code></pre></div>
+<p>What runs under the hood:</p>
+<ol type="1">
+<li><code>huggingface-cli upload</code> pushes safetensors to HF.</li>
+<li><code>convert_hf_to_gguf.py</code> from your local
+<code>llama.cpp</code> checkout converts to f16 GGUF.</li>
+<li><code>llama-quantize</code> quantizes to Q4_K_M (or your
+<code>--quant</code>).</li>
+<li>An auto-generated <code>Modelfile</code> with the ChatML template is
+written.</li>
+<li><code>ollama create</code> then <code>ollama push</code> ships it to
+ollama.com.</li>
+</ol>
+<p>One-time prerequisites:</p>
+<div class="sourceCode" id="cb15"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># llama.cpp for the GGUF convert</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://github.com/ggml-org/llama.cpp ~/llama.cpp</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ~/llama.cpp <span class="kw">&amp;&amp;</span> <span class="fu">cmake</span> <span class="at">-B</span> build <span class="kw">&amp;&amp;</span> <span class="fu">cmake</span> <span class="at">--build</span> build <span class="at">-j</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="co"># HF token with write scope on your target org</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">HUGGINGFACE_TOKEN</span><span class="op">=</span>hf_...</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Ollama signin (once)</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> signin</span></code></pre></div>
+<p>After publish, anyone with Ollama can pull your model:</p>
+<div class="sourceCode" id="cb16"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> pull infernet/svelte5-coder</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> run infernet/svelte5-coder <span class="st">&quot;How do runes work in Svelte 5?&quot;</span></span></code></pre></div>
+<h3 id="variants">Variants</h3>
+<ul>
+<li><code>--skip-hf</code> — Ollama only</li>
+<li><code>--skip-ollama</code> — HuggingFace only</li>
+<li><code>--modelfile-only</code> — generate the Modelfile + GGUF
+locally, don’t push anywhere</li>
+</ul>
+<hr />
+<h2 id="stuck">Stuck?</h2>
+<ul>
+<li><a href="../02-node-operators/monitoring.html">Troubleshooting</a>
+for common failure modes</li>
+<li><a href="https://discord.gg/w5nHdzpQ29">Discord</a> for real-time
+help</li>
+<li><a
+href="https://github.com/infernetprotocol/infernet-protocol/issues">GitHub
+issues</a> for bugs</li>
+<li><a
+href="mailto:hello@infernetprotocol.com"><code>hello@infernetprotocol.com</code></a>
+for everything else</li>
+</ul>
+<nav class="book-nav book-nav-bottom"><a href="/book/01-introduction/architecture.html" class="book-nav-prev">← Architecture</a><span class="book-nav-spacer"></span><a href="/book/01-introduction/quick-start.html" class="book-nav-next">Quick Start →</a></nav>
+</body>
+</html>

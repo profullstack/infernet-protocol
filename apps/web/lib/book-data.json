@@ -11,6 +11,11 @@
           "title": "Architecture"
         },
         {
+          "slug": "getting-started",
+          "href": "/book/01-introduction/getting-started.html",
+          "title": "Getting started"
+        },
+        {
           "slug": "quick-start",
           "href": "/book/01-introduction/quick-start.html",
           "title": "Quick Start"
@@ -154,6 +159,11 @@
           "slug": "self-hosting",
           "href": "/book/06-advanced/self-hosting.html",
           "title": "Self-Hosting the Control Plane"
+        },
+        {
+          "slug": "training-pipeline",
+          "href": "/book/06-advanced/training-pipeline.html",
+          "title": "End-to-end training pipeline"
         }
       ]
     }

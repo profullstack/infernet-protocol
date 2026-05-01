@@ -26,7 +26,7 @@ export async function GET(_request, { params }) {
     }
 
     const supabase = getSupabaseServerClient();
-    const [{ data: job, error: jobErr }, { data: events, error: evErr }] = await Promise.all([
+    const [{ data: job, error: jobErr }, { data: events }, { count: tokenCount }] = await Promise.all([
         supabase
             .from("jobs")
             .select("id, status, error, model_name, provider_id, created_at, completed_at, updated_at")
@@ -37,7 +37,12 @@ export async function GET(_request, { params }) {
             .select("event_type, data, created_at")
             .eq("job_id", jobId)
             .order("id", { ascending: false })
-            .limit(5)
+            .limit(20),
+        supabase
+            .from("job_events")
+            .select("id", { count: "exact", head: true })
+            .eq("job_id", jobId)
+            .eq("event_type", "token")
     ]);
 
     if (jobErr) {
@@ -47,7 +52,40 @@ export async function GET(_request, { params }) {
         return NextResponse.json({ error: "job not found" }, { status: 404 });
     }
 
-    const errEvent = (events ?? []).find((e) => e.event_type === "error");
+    const eventsList = events ?? [];
+    const errEvent = eventsList.find((e) => e.event_type === "error");
+    const lastEvent = eventsList[0] ?? null;
+    const lastEventAgeMs = lastEvent?.created_at
+        ? Date.now() - new Date(lastEvent.created_at).getTime()
+        : null;
+
+    // Synthesize a useful error string when no explicit error event exists.
+    // The frontend's "Stream error" fallback hits when the daemon crashed
+    // mid-stream without writing { event_type:"error" }; this gives the
+    // user something actionable instead of nothing.
+    const explicit = errEvent?.data?.message ?? job.error ?? null;
+    const synthesized = (() => {
+        if (explicit) return explicit;
+        if (job.status !== "failed" && job.status !== "running") return null;
+
+        const nodePart = job.provider_id ? `node ${String(job.provider_id).slice(0, 8)}` : "the provider";
+        const modelPart = job.model_name ? ` (${job.model_name})` : "";
+        const tokensPart = tokenCount ? ` after ${tokenCount} token${tokenCount === 1 ? "" : "s"}` : "";
+
+        if (eventsList.length === 0) {
+            return `Job dispatched but ${nodePart}${modelPart} never reported back. ` +
+                   `The daemon may be offline or the model isn't pulled.`;
+        }
+        if (lastEventAgeMs != null && lastEventAgeMs > 60_000) {
+            const secs = Math.round(lastEventAgeMs / 1000);
+            return `Stream stalled${tokensPart} — ${nodePart}${modelPart} hasn't sent anything for ${secs}s.`;
+        }
+        if (job.status === "failed") {
+            return `Job marked failed${tokensPart} but ${nodePart}${modelPart} didn't write an error message. ` +
+                   `Likely an unhandled crash on the daemon side.`;
+        }
+        return null;
+    })();
 
     return NextResponse.json({
         id: job.id,
@@ -55,8 +93,10 @@ export async function GET(_request, { params }) {
         model_name: job.model_name,
         provider_id: job.provider_id,
         error: job.error ?? null,
-        latest_error_message:
-            errEvent?.data?.message ?? job.error ?? null,
+        latest_error_message: explicit ?? synthesized,
+        token_count: tokenCount ?? 0,
+        last_event_type: lastEvent?.event_type ?? null,
+        last_event_age_ms: lastEventAgeMs,
         completed_at: job.completed_at ?? null,
         updated_at: job.updated_at ?? null
     }, {

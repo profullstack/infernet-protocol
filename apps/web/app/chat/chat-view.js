@@ -217,7 +217,15 @@ export default function ChatView({ initialModels = [] }) {
         }
         const real = body?.latest_error_message ?? body?.error ?? null;
         if (real) {
-          failPending(real);
+          // Append diagnostic context so the user sees WHICH node/model + how
+          // far the stream got, instead of just a one-liner. Folded into the
+          // error display so it's also copy-pasteable into a bug report.
+          const ctx = [];
+          if (body.provider_id) ctx.push(`node ${String(body.provider_id).slice(0, 8)}`);
+          if (body.model_name) ctx.push(body.model_name);
+          if (body.token_count) ctx.push(`${body.token_count} tokens streamed`);
+          ctx.push(`job ${String(jobId).slice(0, 8)}`);
+          failPending(`${real}\n(${ctx.join(" · ")})`);
           return;
         }
       }

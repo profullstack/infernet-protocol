@@ -948,6 +948,33 @@ check_npm_path() {
 EOF
 }
 
+# After a successful `npm install -g`, the binary lives at the npm
+# global prefix (often /usr/local/lib/node_modules/.bin or
+# ~/.npm-global/bin depending on the operator's npm config). The rest
+# of the installer assumes $WRAPPER (= $INFERNET_BIN/infernet) exists,
+# so symlink the npm-installed binary to $WRAPPER. Then check_path
+# wires the same dirs as the git path.
+link_npm_binary_to_wrapper() {
+    NPM_BIN="$(npm bin -g 2>/dev/null || npm prefix -g 2>/dev/null | sed 's|$|/bin|')"
+    NPM_INFERNET="$NPM_BIN/infernet"
+    if [ ! -x "$NPM_INFERNET" ] && [ ! -L "$NPM_INFERNET" ]; then
+        # Fallback: command -v in case npm bin -g returned the wrong dir.
+        NPM_INFERNET="$(command -v infernet 2>/dev/null || true)"
+    fi
+    if [ -z "$NPM_INFERNET" ] || { [ ! -x "$NPM_INFERNET" ] && [ ! -L "$NPM_INFERNET" ]; }; then
+        warn "couldn't locate the npm-installed infernet binary (looked in $NPM_BIN)"
+        warn "PATH wiring may fail — try: npm prefix -g; ls \$(npm prefix -g)/bin"
+        return 1
+    fi
+    mkdir -p "$INFERNET_BIN"
+    if ln -sf "$NPM_INFERNET" "$WRAPPER" 2>/dev/null; then
+        ok "linked $WRAPPER → $NPM_INFERNET"
+    else
+        warn "could not link $WRAPPER → $NPM_INFERNET"
+        return 1
+    fi
+}
+
 check_path() {
     # ALWAYS wire all three layers — early-returning when PATH appears
     # to contain $INFERNET_BIN was a real bug: install.sh adds
@@ -1108,7 +1135,12 @@ main() {
     check_node
 
     if [ -z "$INFERNET_FORCE_GIT" ] && try_npm_install; then
-        check_npm_path
+        # npm dropped the binary at $(npm prefix -g)/bin/infernet. Symlink
+        # it to $WRAPPER so the path our messaging promises actually
+        # exists, then run the same PATH-wiring as the git path so
+        # /usr/local/bin/infernet + ~/.bashrc + /etc/profile.d are all set.
+        link_npm_binary_to_wrapper
+        check_path
         used_npm=1
     else
         check_git

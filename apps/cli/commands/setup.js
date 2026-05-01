@@ -16,6 +16,7 @@
  */
 
 import { execFile, spawn } from "node:child_process";
+import fsSync from "node:fs";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -164,15 +165,46 @@ async function confirmRun({ label, command, yes }) {
 async function startOllama({ yes }) {
     // Linux: usually has the ollama systemd unit from the installer.
     // macOS: usually opens the Ollama.app. Fall back to `ollama serve &`.
+    // Non-systemd Linux (containers, WSL, distros without systemd as
+    // PID 1): skip the systemctl noise entirely — it would just print
+    // "System has not been booted with systemd as init system" — and go
+    // straight to backgrounded `ollama serve`. Detect via the canonical
+    // /run/systemd/system probe.
     const isMac = process.platform === "darwin";
-    const cmd = isMac
-        ? "open -a Ollama || (ollama serve > /tmp/ollama.log 2>&1 &)"
-        : "sudo systemctl start ollama || (ollama serve > /tmp/ollama.log 2>&1 &)";
+    const hasSystemd = !isMac && fsSync.existsSync("/run/systemd/system");
+    let cmd;
+    if (isMac) {
+        cmd = "open -a Ollama || (nohup ollama serve > /tmp/ollama.log 2>&1 < /dev/null &)";
+    } else if (hasSystemd) {
+        cmd = "sudo systemctl start ollama || (nohup ollama serve > /tmp/ollama.log 2>&1 < /dev/null &)";
+    } else {
+        cmd = "nohup ollama serve > /tmp/ollama.log 2>&1 < /dev/null &";
+    }
     return confirmRun({
         label: "Start Ollama now",
         command: cmd,
         yes
     });
+}
+
+/**
+ * Poll an Ollama endpoint until it answers /api/tags or we time out.
+ * Used after starting Ollama in the background — the spawn returns
+ * immediately, but the daemon needs a few seconds to bind.
+ */
+async function waitForOllama(host, { timeoutMs = 30_000, intervalMs = 1_000 } = {}) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        try {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 2_000);
+            const res = await fetch(new URL("/api/tags", host), { signal: ctrl.signal });
+            clearTimeout(t);
+            if (res.ok) return true;
+        } catch { /* not yet listening */ }
+        await new Promise((r) => setTimeout(r, intervalMs));
+    }
+    return false;
 }
 
 async function installOllama({ yes }) {
@@ -582,13 +614,18 @@ export default async function setup(args) {
             );
             const started = await startOllama({ yes });
             if (started) {
-                // Give the daemon a beat to bind, then re-probe.
-                await new Promise((r) => setTimeout(r, 1500));
-                ollamaState = await detectOllama(host, { quiet: true });
+                // Background `ollama serve &` returns instantly; the
+                // daemon needs a few seconds to bind on cold start.
+                // Poll for up to 30s before giving up.
+                process.stdout.write(`  Waiting for Ollama to bind on ${host}...\n`);
+                const up = await waitForOllama(host, { timeoutMs: 30_000 });
+                if (up) ollamaState = await detectOllama(host, { quiet: true });
             }
             if (!ollamaState.running) {
                 process.stdout.write(
-                    "\n  Could not bring Ollama up. Start it manually, then re-run `infernet setup`.\n"
+                    "\n  Could not bring Ollama up. Check the log:\n" +
+                    "    tail -50 /tmp/ollama.log\n" +
+                    "  Then start it manually and re-run `infernet setup`.\n"
                 );
                 return 1;
             }

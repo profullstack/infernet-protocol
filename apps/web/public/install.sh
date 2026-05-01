@@ -1053,10 +1053,20 @@ check_path() {
 
     # 3. Append to common shell rc files (don't trust $SHELL — often
     #    unset during a curl | sh install). Skip files that already
-    #    contain $INFERNET_BIN.
+    #    contain $INFERNET_BIN, AND skip files we can't write (e.g.
+    #    ~/.bashrc may have been created root-owned by a prior sudo
+    #    install). Pre-check writability so we don't spew shell-level
+    #    "Permission denied" errors that 2>/dev/null can't suppress.
     for _rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
         if [ -e "$_rc" ] && grep -qF "$INFERNET_BIN" "$_rc" 2>/dev/null; then
             continue
+        fi
+        # If file exists, must be writable. If file doesn't exist, parent
+        # dir must be writable (so we can create it).
+        if [ -e "$_rc" ]; then
+            [ -w "$_rc" ] || { info "  $_rc: not writable (try: sudo chown \$USER:\$USER $_rc) — skipping"; continue; }
+        else
+            [ -w "$(dirname "$_rc")" ] || continue
         fi
         if printf '\n# Added by Infernet Protocol installer\nexport PATH="%s:$PATH"\n' \
             "$INFERNET_BIN" >> "$_rc" 2>/dev/null; then

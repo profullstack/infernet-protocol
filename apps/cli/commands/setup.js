@@ -172,13 +172,25 @@ async function startOllama({ yes }) {
     // /run/systemd/system probe.
     const isMac = process.platform === "darwin";
     const hasSystemd = !isMac && fsSync.existsSync("/run/systemd/system");
+    // user-systemd is available when /run/user/<uid> exists — every modern
+    // login session sets this up, including non-root logins on systemd
+    // hosts. Try it between sudo (system unit) and the nohup fallback,
+    // because operators on shared boxes may have ollama enabled as a
+    // --user service or simply lack passwordless sudo.
+    const uid = process.getuid?.() ?? null;
+    const userBus = uid != null && fsSync.existsSync(`/run/user/${uid}/bus`);
+    const NOHUP = "(nohup ollama serve > /tmp/ollama.log 2>&1 < /dev/null &)";
     let cmd;
     if (isMac) {
-        cmd = "open -a Ollama || (nohup ollama serve > /tmp/ollama.log 2>&1 < /dev/null &)";
+        cmd = `open -a Ollama || ${NOHUP}`;
+    } else if (hasSystemd && userBus) {
+        cmd = `sudo systemctl start ollama 2>/dev/null`
+            + ` || systemctl --user start ollama 2>/dev/null`
+            + ` || ${NOHUP}`;
     } else if (hasSystemd) {
-        cmd = "sudo systemctl start ollama || (nohup ollama serve > /tmp/ollama.log 2>&1 < /dev/null &)";
+        cmd = `sudo systemctl start ollama 2>/dev/null || ${NOHUP}`;
     } else {
-        cmd = "nohup ollama serve > /tmp/ollama.log 2>&1 < /dev/null &";
+        cmd = NOHUP;
     }
     return confirmRun({
         label: "Start Ollama now",

@@ -520,6 +520,8 @@ async function runDaemon(args, ctx) {
                 result = await ollamaPullWithProgress(modelName, id);
             } else if (command === 'model_remove') {
                 result = await ollamaSpawn(['rm', String(args?.model)]);
+            } else if (command === 'train_shard') {
+                result = await runTrainShard(args, id);
             } else {
                 throw new Error(`unknown command verb: ${command}`);
             }
@@ -635,6 +637,76 @@ async function runDaemon(args, ctx) {
             await postProgress({ status: 'success', total: 1, completed: 1 });
         }
         return { stdout: 'pulled via /api/pull', code: 0 };
+    }
+
+    /**
+     * Daemon-side handler for the `train_shard` command verb (federated
+     * LoRA). Pulls a JSONL shard from a public URL, runs the same Unsloth
+     * script the operator's local mode uses, and returns a path to the
+     * resulting adapter so the coordinator can FedAvg it.
+     *
+     * EXPERIMENTAL: assumes Python + Unsloth + datasets + trl are
+     * installed on the node. Future: bundle a thin Python venv at setup
+     * time so this works out of the box. Adapter upload is currently
+     * "report local path" — for cross-machine training the operator needs
+     * to provide an args.upload_url that we POST the safetensors to.
+     */
+    async function runTrainShard(args, _commandId) {
+        const fs = await import('node:fs/promises');
+        const path = await import('node:path');
+        const { buildUnslothScript } = await import('../lib/training/unsloth-script.js');
+
+        if (!args?.shard_url) throw new Error('train_shard: args.shard_url required');
+        if (!args?.base_model) throw new Error('train_shard: args.base_model required');
+
+        const runId = args.run_id ?? `shard-${Date.now()}`;
+        const workDir = path.join(process.env.HOME ?? '/tmp', '.infernet', 'training', runId);
+        await fs.mkdir(workDir, { recursive: true });
+
+        // Download the shard
+        const shardPath = path.join(workDir, 'shard.jsonl');
+        const res = await fetch(args.shard_url);
+        if (!res.ok) throw new Error(`fetch shard: HTTP ${res.status}`);
+        const text = await res.text();
+        await fs.writeFile(shardPath, text);
+
+        // Build + run the Unsloth script
+        const trainConfig = {
+            base_model: args.base_model,
+            training: args.training ?? {},
+            lora: args.lora ?? {},
+            input: { dataset: shardPath }
+        };
+        const scriptPath = path.join(workDir, 'unsloth_runner.py');
+        await fs.writeFile(scriptPath, buildUnslothScript({ trainConfig }));
+
+        await new Promise((resolve, reject) => {
+            const child = spawn('python3', [scriptPath, '--data', shardPath, '--output', workDir], {
+                stdio: 'inherit'
+            });
+            child.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`unsloth_runner exited ${code}`)));
+            child.on('error', reject);
+        });
+
+        const adapterDir = path.join(workDir, 'checkpoint-final');
+
+        // Optional: upload adapter back to the operator-provided URL
+        if (args.upload_url) {
+            const adapterFile = path.join(adapterDir, 'adapter_model.safetensors');
+            const buf = await fs.readFile(adapterFile);
+            const up = await fetch(args.upload_url, {
+                method: 'PUT',
+                body: buf,
+                headers: { 'Content-Type': 'application/octet-stream' }
+            });
+            if (!up.ok) throw new Error(`upload adapter: HTTP ${up.status}`);
+        }
+
+        return {
+            adapter_path: adapterDir,
+            uploaded: !!args.upload_url,
+            shard_url: args.shard_url
+        };
     }
 
     function snapshot() {

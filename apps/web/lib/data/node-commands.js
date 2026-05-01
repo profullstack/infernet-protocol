@@ -7,7 +7,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
  * before touching the table.
  */
 
-const KNOWN_COMMANDS = new Set(["model_install", "model_remove"]);
+const KNOWN_COMMANDS = new Set(["model_install", "model_remove", "train_shard"]);
 const MAX_POLL_LIMIT = 10;
 
 export function isValidCommand(verb) {

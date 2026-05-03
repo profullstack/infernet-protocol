@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSupabaseAuthClient } from "@/lib/supabase/auth-server";
 import { parseAuthBody, wantsRedirect } from "@/lib/auth/parse-body";
 import { appUrl } from "@/lib/auth/app-url";
@@ -37,6 +38,9 @@ export async function POST(request) {
                 )
                 : NextResponse.json({ error: error.message }, { status: 401 });
         }
+        // Bust the layout's Router Cache so SiteHeader picks up the new
+        // session cookie without a hard reload — same trap as logout.
+        revalidatePath("/", "layout");
         return wantHtml
             ? NextResponse.redirect(new URL("/dashboard", appUrl()), { status: 303 })
             : NextResponse.json({ ok: true });

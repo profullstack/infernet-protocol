@@ -73,6 +73,13 @@ class DiscoveryNode extends EventEmitter {
         this._advertise = advertise;
         this._address = address;
         this._joined = new Map(); // hex(topic) -> { kind, value, key }
+        // Verified peer registry — populated by the handshake. The
+        // value is the most recent verified payload from that pubkey
+        // plus connection bookkeeping. peersOnTopic() reads from here.
+        // pubkey (lowercase hex) -> {
+        //   pubkey, topics, address, firstSeen, lastSeen, connected
+        // }
+        this._verifiedPeers = new Map();
         this._reannounceTimer = null;
         this._destroyed = false;
 
@@ -87,6 +94,25 @@ class DiscoveryNode extends EventEmitter {
     get pubkey() { return this._publicKey; }
     get isAdvertising() { return this._advertise; }
     get topics() { return [...this._joined.values()].map((t) => `${t.kind}:${t.value}`); }
+
+    /**
+     * Snapshot of every currently-connected verified peer. Each entry
+     * matches what the peer sent in its handshake, plus our local
+     * bookkeeping (firstSeen, lastSeen, connected).
+     */
+    verifiedPeers() {
+        return [...this._verifiedPeers.values()].filter((p) => p.connected);
+    }
+
+    /**
+     * Subset of verifiedPeers() that advertise the given (kind, value)
+     * topic. Used by the daemon's /v1/rpc/census endpoint and the CLI
+     * diagnostic to answer "who else is on this topic right now?"
+     */
+    peersOnTopic(kind, value) {
+        const wanted = `${kind}:${value}`;
+        return this.verifiedPeers().filter((p) => Array.isArray(p.topics) && p.topics.includes(wanted));
+    }
 
     /** Join a topic. Idempotent. */
     join(kind, value) {
@@ -144,9 +170,10 @@ class DiscoveryNode extends EventEmitter {
     }
 
     /**
-     * Send our handshake first, wait for theirs, verify, emit a
-     * 'peer' event with the verified payload + the underlying stream.
-     * Drop the connection on any error.
+     * Send our handshake first, wait for theirs, verify, register the
+     * peer in the verified-peer index, and emit a 'peer' event with
+     * the verified payload + the underlying stream. Drop the
+     * connection on any error.
      */
     async _onConnection(stream, info) {
         try {
@@ -161,11 +188,42 @@ class DiscoveryNode extends EventEmitter {
             const remoteFrame = await readHandshakeFrame(stream, HANDSHAKE_TIMEOUT_MS);
             const verified = verifyHandshake(remoteFrame);
 
+            this._registerVerifiedPeer(verified);
+            const cleanup = () => this._unregisterVerifiedPeer(verified.pubkey);
+            stream.once?.('close', cleanup);
+            stream.once?.('end', cleanup);
+            stream.once?.('error', cleanup);
+
             this.emit('peer', { stream, info, peer: verified });
         } catch (err) {
             try { stream.destroy(); } catch { /* ignore */ }
             this.emit('handshake-failed', { error: err, info });
         }
+    }
+
+    _registerVerifiedPeer(verified) {
+        const now = Date.now();
+        const key = verified.pubkey?.toLowerCase();
+        if (!key) return;
+        const prev = this._verifiedPeers.get(key);
+        this._verifiedPeers.set(key, {
+            pubkey: key,
+            topics: Array.isArray(verified.topics) ? verified.topics.slice() : [],
+            address: verified.address ?? null,
+            firstSeen: prev?.firstSeen ?? now,
+            lastSeen: now,
+            connected: true
+        });
+    }
+
+    _unregisterVerifiedPeer(pubkey) {
+        const key = (pubkey ?? '').toLowerCase();
+        const cur = this._verifiedPeers.get(key);
+        if (!cur) return;
+        // Mark disconnected but retain the record briefly so a flapping
+        // peer that reconnects within seconds doesn't lose its
+        // firstSeen timestamp.
+        this._verifiedPeers.set(key, { ...cur, connected: false, lastSeen: Date.now() });
     }
 
     _reannounce() {

@@ -154,6 +154,79 @@ describe('createDiscoveryNode — IPIP-0032 §5-6', () => {
         await node.destroy();
     });
 
+    it('records verified peers in peersOnTopic() after a successful handshake', async () => {
+        const localKeys = generateKeyPair();
+        const remoteA = generateKeyPair();
+        const remoteB = generateKeyPair();
+        const swarm = new FakeSwarm();
+        const node = await createDiscoveryNode({
+            privateKey: localKeys.privateKey,
+            publicKey: localKeys.publicKey,
+            address: '203.0.113.7:46337',
+            topics: [{ kind: 'rpc', value: 'qwen2.5:72b' }],
+            swarmFactory: () => swarm
+        });
+
+        // Two remote peers — A is on rpc:qwen2.5:72b; B is on a different topic.
+        async function dialPeer(remoteKeys, topics) {
+            const seenPeer = new Promise((resolve) => node.once('peer', resolve));
+            const [localStream, remoteStream] = pair();
+            swarm.emit('connection', localStream, { client: false });
+            const { frame } = buildHandshake({
+                privateKey: remoteKeys.privateKey,
+                publicKey: remoteKeys.publicKey,
+                topics
+            });
+            remoteStream.write(frame);
+            await seenPeer;
+            return { localStream, remoteStream };
+        }
+
+        await dialPeer(remoteA, ['rpc:qwen2.5:72b', 'class:B5']);
+        await dialPeer(remoteB, ['model:llama3:8b']);
+
+        const onTopic = node.peersOnTopic('rpc', 'qwen2.5:72b');
+        expect(onTopic.map((p) => p.pubkey).sort()).toEqual([remoteA.publicKey.toLowerCase()].sort());
+        expect(node.verifiedPeers().map((p) => p.pubkey).sort())
+            .toEqual([remoteA.publicKey.toLowerCase(), remoteB.publicKey.toLowerCase()].sort());
+
+        await node.destroy();
+    });
+
+    it('drops a peer from peersOnTopic when its stream closes', async () => {
+        const localKeys = generateKeyPair();
+        const remoteKeys = generateKeyPair();
+        const swarm = new FakeSwarm();
+        const node = await createDiscoveryNode({
+            privateKey: localKeys.privateKey,
+            publicKey: localKeys.publicKey,
+            address: '203.0.113.7:46337',
+            topics: [{ kind: 'rpc', value: 'qwen2.5:72b' }],
+            swarmFactory: () => swarm
+        });
+
+        const seenPeer = new Promise((resolve) => node.once('peer', resolve));
+        const [localStream, remoteStream] = pair();
+        swarm.emit('connection', localStream, { client: false });
+        const { frame } = buildHandshake({
+            privateKey: remoteKeys.privateKey,
+            publicKey: remoteKeys.publicKey,
+            topics: ['rpc:qwen2.5:72b']
+        });
+        remoteStream.write(frame);
+        await seenPeer;
+
+        expect(node.peersOnTopic('rpc', 'qwen2.5:72b')).toHaveLength(1);
+
+        // Simulate stream close — peer should drop out of the live set.
+        localStream.emit('close');
+        expect(node.peersOnTopic('rpc', 'qwen2.5:72b')).toHaveLength(0);
+        // ...but verifiedPeers() also filters on connected, so it's empty too.
+        expect(node.verifiedPeers()).toHaveLength(0);
+
+        await node.destroy();
+    });
+
     it('emits handshake-failed on bad signature', async () => {
         const localKeys = generateKeyPair();
         const remoteKeys = generateKeyPair();

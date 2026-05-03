@@ -984,6 +984,63 @@ async function runDaemon(args, ctx) {
     }
 
     /**
+     * IPIP-0032 + IPIP-0033 — daemon-side census. Returns the set of
+     * peers THIS daemon currently sees on the requested topic via
+     * its Hyperswarm DHT view (verified handshakes, currently
+     * connected). Useful as a second opinion when the control
+     * plane's heartbeat-based census looks stale, and as a smoke
+     * test for "is the DHT actually finding anyone."
+     *
+     *   GET /v1/rpc/census?model=<id>[&kind=rpc|model|class]
+     *   response: { kind, value, count, peers: [{ pubkey, address }], dht: bool }
+     *
+     * Public + cheap. The handler doesn't take any locks; verifiedPeers()
+     * reads from an in-memory map populated by the handshake path.
+     */
+    async function handleRpcCensus(req, res) {
+        if (req.method !== 'GET') return false;
+        const url = new URL(req.url, 'http://localhost');
+        if (url.pathname !== '/v1/rpc/census') return false;
+
+        const model = url.searchParams.get('model');
+        const kind = url.searchParams.get('kind') ?? 'rpc';
+        if (!model) {
+            res.writeHead(400, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: 'model query param is required' }));
+            return true;
+        }
+
+        const empty = {
+            kind, value: model, count: 0, peers: [],
+            dht: Boolean(dhtBridge),
+            note: dhtBridge ? null : 'this daemon has DHT discovery disabled (--no-dht or INFERNET_DISABLE_DHT=1)'
+        };
+        if (!dhtBridge?.node?.peersOnTopic) {
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify(empty));
+            return true;
+        }
+
+        const peers = dhtBridge.node.peersOnTopic(kind, model);
+        const body = {
+            kind,
+            value: model,
+            count: peers.length,
+            peers: peers.map((p) => ({
+                pubkey: p.pubkey,
+                address: p.address ?? null,
+                first_seen: new Date(p.firstSeen).toISOString(),
+                last_seen: new Date(p.lastSeen).toISOString()
+            })),
+            dht: true,
+            self: { pubkey: dhtBridge.node.pubkey, topics: dhtBridge.node.topics }
+        };
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(body));
+        return true;
+    }
+
+    /**
      * IPIP-0031 (Replaced): legacy Petals proxy. Kept until daemons
      * fully migrate to IPIP-0033's /v1/rpc/inference. Accepts a chat
      * request, spawns the Python Petals client subprocess, streams
@@ -1376,6 +1433,15 @@ async function runDaemon(args, ctx) {
             } catch (err) {
                 res.writeHead(500, { 'content-type': 'text/plain' });
                 res.end(`training http error: ${err?.message ?? err}\n`);
+                return;
+            }
+
+            try {
+                const censusHandled = await handleRpcCensus(req, res);
+                if (censusHandled) return;
+            } catch (err) {
+                res.writeHead(500, { 'content-type': 'text/plain' });
+                res.end(`rpc census error: ${err?.message ?? err}\n`);
                 return;
             }
 

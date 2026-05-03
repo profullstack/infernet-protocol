@@ -269,8 +269,18 @@ async function runPetalsProxy({ supabase, job, safeEnqueue, sseFrame }) {
         insertJobEvent(supabase, job.id, "token", { text: t }).catch(() => {});
       } else if (evName === "routing") {
         chosenPeers = Array.isArray(evData.peers) ? evData.peers : null;
-        // mirror to job_events so the audit trail captures attribution
+        // Mirror to job_events so the audit trail captures attribution.
         insertJobEvent(supabase, job.id, "routing", evData).catch(() => {});
+        // Resolve peer_id → provider name/pubkey so the chat UI can
+        // show *which* nodes are participating, not opaque libp2p IDs.
+        // Best-effort: any peer_id we can't resolve still gets shown
+        // as a short prefix.
+        try {
+          const enriched = await resolveRoutingPeers({ supabase, peers: chosenPeers });
+          safeEnqueue(sseFrame("routing", { peers: enriched, model, proxy: { id: provider.id, name: provider.name, pubkey: provider.public_key } }));
+        } catch {
+          safeEnqueue(sseFrame("routing", { peers: chosenPeers ?? [], model, proxy: { id: provider.id, name: provider.name, pubkey: provider.public_key } }));
+        }
       } else if (evName === "done") {
         const data = { text: fullText, finished_at: new Date().toISOString() };
         const persisted = await insertJobEvent(supabase, job.id, "done", data);
@@ -288,6 +298,56 @@ async function runPetalsProxy({ supabase, job, safeEnqueue, sseFrame }) {
       }
     }
   }
+}
+
+/**
+ * Map raw `chosen_servers` entries from a Petals daemon to friendly
+ * `{ peer_id, blocks, name, pubkey }` rows the chat UI can render.
+ *
+ * Resolves peer_id → providers via specs.petals_peer_id. Peers we
+ * don't have a row for are still returned (with name/pubkey null) so
+ * the user sees their swarm contribution — not just our registry view.
+ */
+async function resolveRoutingPeers({ supabase, peers }) {
+  if (!Array.isArray(peers) || peers.length === 0) return [];
+  const peerIds = peers
+    .map((p) => p?.peer_id)
+    .filter((id) => typeof id === "string" && id.length > 0);
+  if (peerIds.length === 0) {
+    return peers.map((p) => ({
+      peer_id: p?.peer_id ?? null,
+      blocks: blockSpan(p),
+      name: null,
+      pubkey: null
+    }));
+  }
+  const { data: rows } = await supabase
+    .from("providers")
+    .select("id, name, public_key, specs")
+    .in("specs->>petals_peer_id", peerIds)
+    .limit(64);
+  const byId = new Map();
+  for (const r of rows ?? []) {
+    const pid = r?.specs?.petals_peer_id;
+    if (pid) byId.set(pid, r);
+  }
+  return peers.map((p) => {
+    const row = byId.get(p?.peer_id);
+    return {
+      peer_id: p?.peer_id ?? null,
+      blocks: blockSpan(p),
+      start_block: p?.start_block ?? null,
+      end_block: p?.end_block ?? null,
+      name: row?.name ?? null,
+      pubkey: row?.public_key ?? null,
+      provider_id: row?.id ?? null
+    };
+  });
+}
+
+function blockSpan(p) {
+  const span = (p?.end_block ?? 0) - (p?.start_block ?? 0);
+  return Number.isFinite(span) && span > 0 ? span : 0;
 }
 
 function providerEndpoint(provider) {

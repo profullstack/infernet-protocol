@@ -34,6 +34,11 @@ export default function ChatView({ initialModels = [] }) {
   // /api/chat/provider before we even POST the job. Drives the warning
   // banner on legacy providers that can't decrypt NIP-44.
   const [providerE2eCapable, setProviderE2eCapable] = useState(true);
+  // IPIP-0031: when distributed mode is on, the daemon publishes a
+  // `routing` SSE event listing the Petals peers that contributed
+  // layers. Persist so the footer can show "Used these N nodes".
+  const [routingPeers, setRoutingPeers] = useState(null);
+  const [routingProxy, setRoutingProxy] = useState(null);
   // IPIP-0031: Petals swarm map. Populates "distributed across N nodes"
   // badge in the model picker + the checkbox helper text.
   const [swarmByModel, setSwarmByModel] = useState({});
@@ -89,6 +94,8 @@ export default function ChatView({ initialModels = [] }) {
 
     setError(null);
     setInput("");
+    setRoutingPeers(null);
+    setRoutingProxy(null);
     const nextUser = { role: "user", content: text };
     // Assistant placeholder we'll append tokens into.
     const pendingAssistant = { role: "assistant", content: "", provider: null, pending: true };
@@ -171,6 +178,14 @@ export default function ChatView({ initialModels = [] }) {
             model: data.model
           }
         })));
+      } catch { /* ignore */ }
+    });
+
+    es.addEventListener("routing", (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (Array.isArray(data?.peers)) setRoutingPeers(data.peers);
+        if (data?.proxy) setRoutingProxy(data.proxy);
       } catch { /* ignore */ }
     });
 
@@ -283,6 +298,8 @@ export default function ChatView({ initialModels = [] }) {
     setProvider(null);
     setE2eActive(false);
     setProviderE2eCapable(true);
+    setRoutingPeers(null);
+    setRoutingProxy(null);
     ephemeralRef.current = null; // fresh keypair for next session
     convKeysRef.current.clear();
   }
@@ -362,6 +379,7 @@ export default function ChatView({ initialModels = [] }) {
         ) : null}
 
         <E2eIndicator active={e2eActive} provider={provider} capable={providerE2eCapable} streaming={streaming} />
+        <DistributedRouting active={distributed} peers={routingPeers} proxy={routingProxy} streaming={streaming} />
 
         <footer className="rounded-[2rem] border border-white/10 bg-[var(--panel)] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.25)]">
           <textarea
@@ -437,6 +455,59 @@ function E2eIndicator({ active, provider, capable, streaming }) {
     );
   }
   return null;
+}
+
+/**
+ * IPIP-0031 — show which Petals nodes are contributing layers when
+ * "Distribute across all nodes" is checked. Lets the user verify the
+ * job is actually fanning out across operators rather than running on
+ * a single proxy. Three states:
+ *   1. distributed off → don't render
+ *   2. distributed on, no routing yet → "Awaiting peer assignments…"
+ *   3. distributed on, peers received → table of peer_id · blocks · operator
+ */
+function DistributedRouting({ active, peers, proxy, streaming }) {
+  if (!active) return null;
+  const hasPeers = Array.isArray(peers) && peers.length > 0;
+  if (!hasPeers && !streaming && !proxy) return null;
+
+  return (
+    <div className="rounded-2xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 px-4 py-3 text-xs text-[var(--muted)]">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
+          Distributed across {hasPeers ? `${peers.length} node${peers.length === 1 ? "" : "s"}` : "the swarm"}
+        </span>
+        {proxy ? (
+          <span>
+            entry: <span className="font-mono text-white">{proxy.name ?? shortPubkey(proxy.pubkey) ?? "node"}</span>
+          </span>
+        ) : null}
+      </div>
+      {!hasPeers ? (
+        <p className="mt-2">Awaiting peer assignments from the entry node…</p>
+      ) : (
+        <ul className="mt-2 grid gap-1 sm:grid-cols-2">
+          {peers.map((p, i) => (
+            <li key={(p.peer_id ?? "") + i} className="flex items-baseline justify-between gap-3">
+              <span className="text-white">
+                {p.name ? p.name : p.pubkey ? shortPubkey(p.pubkey) : (p.peer_id ? p.peer_id.slice(0, 12) + "…" : "(unknown peer)")}
+              </span>
+              <span>
+                {p.blocks ? `${p.blocks} layer${p.blocks === 1 ? "" : "s"}` : "—"}
+                {p.peer_id ? <span className="ml-2 font-mono text-[10px] opacity-60">{p.peer_id.slice(0, 8)}…</span> : null}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function shortPubkey(k) {
+  if (!k || typeof k !== "string") return null;
+  if (k.length <= 14) return k;
+  return `${k.slice(0, 8)}…${k.slice(-4)}`;
 }
 
 function updateLastAssistant(list, mutator) {

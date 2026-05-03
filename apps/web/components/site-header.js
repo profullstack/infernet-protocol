@@ -12,10 +12,7 @@ const PUBLIC_NAV = [
 
 const SIGNED_IN_NAV = [
     { href: "/dashboard", label: "Dashboard" },
-    { href: "/getting-started", label: "Get started" },
-    { href: "/protocol", label: "Protocol" },
     { href: "/deploy", label: "Deploy" },
-    { href: "/docs", label: "Docs" },
     { href: "/chat", label: "Chat" },
     { href: "/status", label: "Status" },
     { href: "/settings", label: "Settings" }
@@ -37,14 +34,16 @@ export default async function SiteHeader() {
                             {item.label}
                         </Link>
                     ))}
-                    <Link
-                        href="https://github.com/infernetprotocol/infernet-protocol"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="hover:text-white"
-                    >
-                        GitHub
-                    </Link>
+                    {!user && (
+                        <Link
+                            href="https://github.com/infernetprotocol/infernet-protocol"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="hover:text-white"
+                        >
+                            GitHub
+                        </Link>
+                    )}
                 </nav>
                 <div className="flex items-center gap-2">
                     {user ? (

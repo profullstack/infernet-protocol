@@ -22,7 +22,10 @@
   "devDependencies": {
     "@infernetprotocol/auth": "workspace:*",
     "@infernetprotocol/cli": "workspace:*",
+    "@infernetprotocol/discovery": "workspace:*",
     "@infernetprotocol/engine": "workspace:^",
+    "hyperdht": "^6.31.0",
+    "hyperswarm": "^4.17.0",
     "vitest": "^3.0.8"
   },
   "pnpm": {

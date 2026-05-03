@@ -26,9 +26,18 @@ importers:
       '@infernetprotocol/cli':
         specifier: workspace:*
         version: link:apps/cli
+      '@infernetprotocol/discovery':
+        specifier: workspace:*
+        version: link:packages/discovery
       '@infernetprotocol/engine':
         specifier: workspace:^
         version: link:packages/engine
+      hyperdht:
+        specifier: ^6.31.0
+        version: 6.31.0(bare-url@2.4.2)
+      hyperswarm:
+        specifier: ^4.17.0
+        version: 4.17.0(bare-url@2.4.2)
       vitest:
         specifier: ^3.0.8
         version: 3.2.4(@types/debug@4.1.13)(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(yaml@2.8.3)

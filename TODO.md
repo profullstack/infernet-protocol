@@ -16,10 +16,6 @@ All application data flows through **Supabase** — operators pick self-hosted (
 - [ ] Tighten error + loading states across the React app
   - Description: Audit server components and client fetchers for missing skeletons / error boundaries; the dashboard auto-refresh path is the most visible offender today.
 
-## Release pipeline (still blocked)
-
-- [ ] Regen npm `NPM_TOKEN` (issued under 2FA → invalid for CI). Revoke + create fresh Automation token at npmjs.com/settings/~/tokens, then `gh secret set NPM_TOKEN`. Homebrew unblocks when npm does.
-
 
 ---
 
@@ -38,3 +34,4 @@ The following items were on TODO.md but are live in master:
 - Dead post-Phase-1 code deleted: `packages/inference/` (superseded by Petals / IPIP-0031), `apps/cli/lib/runtime-config.js` (legacy `supabase: {}` block + 12 other unused sections), `apps/cli/examples/app.js` (used the removed CLI Supabase client) — shipped 2026-05-03.
 - Migration flow documented in `docs/MIGRATIONS.md` — covers `supabase db reset` (self-hosted), `supabase db push` (cloud), adding new migrations, and conventions — shipped 2026-05-03.
 - Dependabot triage — 0 open alerts (78 fixed, 1 dismissed of 79 historical). Hardened `ip` to 2.0.1 via `pnpm.overrides`; documented the residual `pnpm audit` warning + RN-tooling reachability rationale in `docs/SECURITY.md` — shipped 2026-05-03.
+- v0.1.41 cut and published 2026-05-03: every public `@infernetprotocol/*` package live on npm at `0.1.41`, `ghcr.io/infernetprotocol/infernet-provider:0.1.41` + `:latest` pushed (multi-arch), GitHub Release at `v0.1.41` with Homebrew formula attached. npm pipeline is unblocked.

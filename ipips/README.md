@@ -151,7 +151,7 @@ to the canonical conversation thread.
 | 0013  | [Batch Inference Job Decomposition](./ipip-0013.md) | Standards Track | Final  |
 | 0014  | [Distributed-Systems Primitives](./ipip-0014.md) | Standards Track | Final  |
 | 0015  | [Causal Ordering Across Providers](./ipip-0015.md) | Standards Track | Draft  |
-| 0016  | [DHT-Based Decentralized Discovery](./ipip-0016.md) | Standards Track | Draft  |
+| 0016  | [DHT-Based Decentralized Discovery](./ipip-0016.md) | Standards Track | Replaced |
 | 0017  | [Replicated State Convergence (CRDTs)](./ipip-0017.md) | Standards Track | Draft  |
 | 0018  | [Causal Broadcast for Cross-Provider Events](./ipip-0018.md) | Standards Track | Draft  |
 | 0019  | [Pricing-Aware GPU Provider Deployments](./ipip-0019.md) | Standards Track | Final  |
@@ -166,6 +166,7 @@ to the canonical conversation thread.
 | 0028  | [Multi-Party Encryption — Model / Node / Consumer Keys](./ipip-0028.md) | Standards Track | Active |
 | 0030  | [Open-Market Distributed Training](./ipip-0030.md) | Standards Track | Final  |
 | 0031  | [Federated Inference via Petals](./ipip-0031.md) | Standards Track | Final  |
+| 0032  | [Hyperswarm DHT — Topic-Keyed Peer Discovery](./ipip-0032.md) | Standards Track | Draft  |
 
 ## Editors
 

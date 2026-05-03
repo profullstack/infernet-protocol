@@ -1,0 +1,32 @@
+{
+  "name": "@infernetprotocol/discovery",
+  "version": "0.0.1",
+  "description": "Hyperswarm DHT discovery + signed peer handshake (IPIP-0032).",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./topic": "./src/topic.js",
+    "./handshake": "./src/handshake.js",
+    "./node": "./src/node.js"
+  },
+  "files": [
+    "src/**/*.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/InfernetProtocol/infernet-protocol.git",
+    "directory": "packages/discovery"
+  },
+  "homepage": "https://github.com/InfernetProtocol/infernet-protocol#readme",
+  "dependencies": {
+    "@infernetprotocol/auth": "workspace:^",
+    "@noble/hashes": "^2.2.0",
+    "hyperswarm": "^4.11.7"
+  }
+}

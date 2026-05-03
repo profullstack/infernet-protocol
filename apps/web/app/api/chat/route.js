@@ -33,6 +33,14 @@ export async function POST(request) {
 
   const { messages, encryptedMessages, clientPubkey, modelPubkey, providerId, modelName, maxTokens, temperature, distributed } = payload ?? {};
 
+  // IPIP-0026 §2.2 — accept either camelCase or snake_case from clients.
+  const minTrustTierRaw = payload?.minTrustTier ?? payload?.min_trust_tier;
+  const ALLOWED_TIERS = new Set(["public", "verified", "trusted"]);
+  if (minTrustTierRaw !== undefined && !ALLOWED_TIERS.has(minTrustTierRaw)) {
+    return err(400, "min_trust_tier must be one of: public, verified, trusted");
+  }
+  const minTrustTier = ALLOWED_TIERS.has(minTrustTierRaw) ? minTrustTierRaw : undefined;
+
   // Accept either plaintext messages[] or an encrypted NIP-44 payload.
   const hasPlain = Array.isArray(messages) && messages.length > 0;
   const hasEncrypted = typeof encryptedMessages === "string" && encryptedMessages.length > 0;
@@ -61,7 +69,8 @@ export async function POST(request) {
       // Petals client that fans out across the volunteer swarm instead
       // of dispatching to a single provider. Persisted on the job so
       // the SSE handler picks the correct streaming path.
-      distributed: distributed === true
+      distributed: distributed === true,
+      minTrustTier
     });
     if (source === "none") {
       return err(503, "The Infernet network has no live providers and the NVIDIA NIM fallback is not configured.", {

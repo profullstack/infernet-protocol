@@ -102,8 +102,17 @@ export async function runQuery(builder, emptyValue = []) {
   return data ?? emptyValue;
 }
 
-export async function getNodes({ limit, status } = {}) {
+export async function getNodes({ limit, status, pubkey } = {}) {
   const supabase = getSupabaseServerClient();
+
+  // The legacy `nodes` table has no pubkey column. When the caller is
+  // authenticated, pivot to the live role tables (providers /
+  // aggregators / clients) — those carry `public_key` and represent the
+  // operator's actual fleet.
+  if (pubkey) {
+    return getNodesByPubkey({ pubkey, status, limit });
+  }
+
   let query = supabase
     .from("nodes")
     .select("id,name,role,status,location,region,capacity,compute_capacity,created_at")
@@ -117,7 +126,38 @@ export async function getNodes({ limit, status } = {}) {
   return rows.map(mapNode);
 }
 
-export async function getProviders({ limit, status } = {}) {
+async function getNodesByPubkey({ pubkey, status, limit }) {
+  const supabase = getSupabaseServerClient();
+  const tables = [
+    { name: "providers", role: "provider" },
+    { name: "aggregators", role: "aggregator" },
+    { name: "clients", role: "client" }
+  ];
+
+  const results = await Promise.all(
+    tables.map(async ({ name, role }) => {
+      let q = supabase
+        .from(name)
+        .select("id,name,status,created_at")
+        .eq("public_key", pubkey)
+        .order("created_at", { ascending: false });
+      if (status) q = q.eq("status", status);
+      const rows = await runQuery(withLimit(q, limit));
+      return rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        role,
+        status: row.status,
+        location: "—",
+        capacity: "—"
+      }));
+    })
+  );
+
+  return results.flat();
+}
+
+export async function getProviders({ limit, status, pubkey } = {}) {
   const supabase = getSupabaseServerClient();
   let query = supabase
     .from("providers")
@@ -127,20 +167,38 @@ export async function getProviders({ limit, status } = {}) {
   if (status) {
     query = query.eq("status", status);
   }
+  if (pubkey) {
+    query = query.eq("public_key", pubkey);
+  }
 
   const rows = await runQuery(withLimit(query, limit));
   return rows.map(mapProvider);
 }
 
-export async function getJobs({ limit, status } = {}) {
+export async function getJobs({ limit, status, pubkey } = {}) {
   const supabase = getSupabaseServerClient();
   let query = supabase
     .from("jobs")
-    .select("id,title,status,payment_offer,model_name,client_name,created_at")
+    .select("id,title,status,payment_offer,model_name,client_name,client_pubkey,provider_id,created_at")
     .order("created_at", { ascending: false });
 
   if (status) {
     query = query.eq("status", status);
+  }
+  if (pubkey) {
+    // A pubkey may identify either the consumer (jobs.client_pubkey) or
+    // a provider (jobs.provider_id → providers.public_key). Resolve the
+    // provider id first so we can filter with a single OR.
+    const { data: providerRows } = await supabase
+      .from("providers")
+      .select("id")
+      .eq("public_key", pubkey);
+    const providerIds = (providerRows ?? []).map((r) => r.id);
+    const orParts = [`client_pubkey.eq.${pubkey}`];
+    if (providerIds.length > 0) {
+      orParts.push(`provider_id.in.(${providerIds.join(",")})`);
+    }
+    query = query.or(orParts.join(","));
   }
 
   const rows = await runQuery(withLimit(query, limit));
@@ -192,16 +250,18 @@ export async function getAggregators({ limit } = {}) {
   );
 }
 
-export async function getDashboardOverview() {
+export async function getDashboardOverview({ pubkey } = {}) {
   const supabase = getSupabaseServerClient();
   const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 
   // Provider rows include the specs jsonb so we can count distinct
   // served_models across the network — that's what the public /chat
   // playground actually needs to know is online.
+  let providersQuery = supabase.from("providers").select("status, last_seen, specs");
+  if (pubkey) providersQuery = providersQuery.eq("public_key", pubkey);
   const [{ data: providersAll, error: pErr }, jobs] = await Promise.all([
-    supabase.from("providers").select("status, last_seen, specs"),
-    getJobs({ limit: 100 })
+    providersQuery,
+    getJobs({ limit: 100, pubkey })
   ]);
   if (pErr) throw new Error(pErr.message);
   const providers = providersAll ?? [];

@@ -78,13 +78,24 @@ export async function POST(request) {
         }
     }
 
+    // IPIP-0026 §2.2 — accept min_trust_tier per request (snake_case to
+    // match the OpenAI request style; some clients pass it via extra
+    // `metadata` so we look there too).
+    const ALLOWED_TIERS = new Set(["public", "verified", "trusted"]);
+    const minTrustTierRaw = body?.min_trust_tier ?? body?.metadata?.min_trust_tier;
+    if (minTrustTierRaw !== undefined && !ALLOWED_TIERS.has(minTrustTierRaw)) {
+        return err(400, "min_trust_tier must be one of: public, verified, trusted");
+    }
+    const minTrustTier = ALLOWED_TIERS.has(minTrustTierRaw) ? minTrustTierRaw : undefined;
+
     let jobBundle;
     try {
         jobBundle = await createChatJob({
             messages,
             modelName: typeof model === "string" ? model : undefined,
             maxTokens: Number.isFinite(max_tokens) ? max_tokens : undefined,
-            temperature: Number.isFinite(temperature) ? temperature : undefined
+            temperature: Number.isFinite(temperature) ? temperature : undefined,
+            minTrustTier
         });
     } catch (e) {
         return err(500, e?.message ?? "failed to create chat job");

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import AutoRefresh from "@/components/auto-refresh";
+import RealtimeRefresh from "@/components/realtime-refresh";
 import PushModelButton from "@/components/push-model-button";
 import RevealTitle from "@/components/reveal-title";
 import { getCurrentUser } from "@/lib/supabase/auth-server";
@@ -60,7 +60,7 @@ export default async function DashboardPage() {
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <AutoRefresh intervalMs={10000} />
+                        <RealtimeRefresh tables={["providers", "jobs"]} />
                         <CopyableUserId id={user.id} />
                         <form action="/api/auth/logout" method="post">
                             <button

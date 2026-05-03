@@ -45,12 +45,25 @@ export function sanitizeSpecs(input) {
             ? input.petals_peer_id
             : null;
 
+    // IPIP-0027 §7: providers advertise E2E (NIP-44) capability so the
+    // control plane can expose it via /api/chat/provider and the UI
+    // can show a lock indicator. Both fields are public booleans /
+    // version strings — no privacy concern.
+    const e2eCapable = input.e2e_capable === true;
+    const e2eVersion = typeof input.e2e_version === "string"
+        && input.e2e_version.length > 0
+        && input.e2e_version.length <= 32
+            ? input.e2e_version
+            : null;
+
     return {
         gpus: gpus.map(sanitizeGpu).filter(Boolean),
         gpu_count: gpus.length,
         served_models: servedModels,
         petals_models: petalsModels,
-        petals_peer_id: petalsPeerId
+        petals_peer_id: petalsPeerId,
+        e2e_capable: e2eCapable,
+        e2e_version: e2eVersion
     };
 }
 

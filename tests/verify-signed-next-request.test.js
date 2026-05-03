@@ -8,7 +8,10 @@ import { describe, expect, it } from "vitest";
 import { generateKeyPair, signRequest, AUTH_HEADER } from "@infernetprotocol/auth";
 
 // Avoid pulling in `server-only` by not using the "@" alias here.
-import { verifySignedNextRequest } from "../apps/web/lib/auth/verify-signed-request.js";
+import {
+    verifySignedNextRequest,
+    maybeVerifySignedNextRequest
+} from "../apps/web/lib/auth/verify-signed-request.js";
 
 function makeRequest({ method = "POST", path, body, header }) {
     const url = `http://127.0.0.1${path}`;
@@ -47,6 +50,25 @@ describe("verifySignedNextRequest", () => {
         const { header } = signRequest({ method, path, body, ...keys });
         const req = makeRequest({ method, path, body: body.replace("provider", "client"), header });
         await expect(verifySignedNextRequest(req)).rejects.toMatchObject({ status: 401 });
+    });
+
+    it("maybeVerifySignedNextRequest returns null when no header is present", async () => {
+        const req = makeRequest({ method, path, body });
+        const result = await maybeVerifySignedNextRequest(req);
+        expect(result).toBeNull();
+    });
+
+    it("maybeVerifySignedNextRequest verifies a present, valid header", async () => {
+        const keys = generateKeyPair();
+        const { header } = signRequest({ method, path, body, ...keys });
+        const req = makeRequest({ method, path, body, header });
+        const result = await maybeVerifySignedNextRequest(req);
+        expect(result.pubkey).toBe(keys.publicKey.toLowerCase());
+    });
+
+    it("maybeVerifySignedNextRequest rejects a present-but-bad header with 401", async () => {
+        const req = makeRequest({ method, path, body, header: "v1.bogus.signature" });
+        await expect(maybeVerifySignedNextRequest(req)).rejects.toMatchObject({ status: 401 });
     });
 
     it("rejects reused nonce with 401", async () => {

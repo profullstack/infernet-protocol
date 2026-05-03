@@ -30,6 +30,10 @@ export default function ChatView({ initialModels = [] }) {
   const [error, setError] = useState(null);
   const [provider, setProvider] = useState(null);
   const [e2eActive, setE2eActive] = useState(false);
+  // IPIP-0027 §7: provider's advertised E2E capability, learned from
+  // /api/chat/provider before we even POST the job. Drives the warning
+  // banner on legacy providers that can't decrypt NIP-44.
+  const [providerE2eCapable, setProviderE2eCapable] = useState(true);
   // IPIP-0031: Petals swarm map. Populates "distributed across N nodes"
   // badge in the model picker + the checkbox helper text.
   const [swarmByModel, setSwarmByModel] = useState({});
@@ -100,6 +104,7 @@ export default function ChatView({ initialModels = [] }) {
       const provRes = await fetch(`/api/chat/provider${modelName ? `?modelName=${encodeURIComponent(modelName)}` : ""}`);
       if (provRes.ok) {
         const provData = await provRes.json();
+        setProviderE2eCapable(provData.e2eCapable !== false);
         // IPIP-0028: prefer model key over node key when available.
         const pubkeyToUse = provData.modelPubkey ?? provData.providerPubkey ?? null;
         if (pubkeyToUse) {
@@ -277,6 +282,7 @@ export default function ChatView({ initialModels = [] }) {
     setError(null);
     setProvider(null);
     setE2eActive(false);
+    setProviderE2eCapable(true);
     ephemeralRef.current = null; // fresh keypair for next session
     convKeysRef.current.clear();
   }
@@ -355,6 +361,8 @@ export default function ChatView({ initialModels = [] }) {
           </div>
         ) : null}
 
+        <E2eIndicator active={e2eActive} provider={provider} capable={providerE2eCapable} streaming={streaming} />
+
         <footer className="rounded-[2rem] border border-white/10 bg-[var(--panel)] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.25)]">
           <textarea
             ref={composerRef}
@@ -400,6 +408,35 @@ export default function ChatView({ initialModels = [] }) {
       </div>
     </main>
   );
+}
+
+/**
+ * IPIP-0027 §8 — E2E status indicator. Three states:
+ *   1. active   → green "🔒 End-to-end encrypted · Provider: <name>"
+ *   2. capable  → silent (no banner needed; the lock will appear on send)
+ *   3. !capable → amber warning explaining the prompt is server-readable
+ */
+function E2eIndicator({ active, provider, capable, streaming }) {
+  if (active && provider) {
+    const name = provider.name ?? provider.nodeId ?? "node";
+    return (
+      <div className="flex items-center gap-2 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-xs text-emerald-200">
+        <span aria-hidden="true">&#128274;</span>
+        <span>
+          End-to-end encrypted · Provider: <span className="font-semibold text-white">{name}</span>
+        </span>
+      </div>
+    );
+  }
+  if (!capable && (streaming || provider)) {
+    return (
+      <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-xs text-amber-100">
+        <span className="mr-1" aria-hidden="true">&#9888;</span>
+        This provider does not support E2E encryption. Your prompt is readable by Infernet's control plane.
+      </div>
+    );
+  }
+  return null;
 }
 
 function updateLastAssistant(list, mutator) {

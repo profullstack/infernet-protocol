@@ -3,7 +3,7 @@ import { filterFittingModels } from "../apps/cli/commands/register.js";
 
 // Don't import server-only modules in vitest's node env. Re-export
 // reputationWeightedPick from the same file.
-import { reputationWeightedPick, headroomScore, notSaturated } from "../apps/web/lib/data/chat.js";
+import { reputationWeightedPick, headroomScore, notSaturated, meetsTrustTier } from "../apps/web/lib/data/chat.js";
 
 const GB = 1024 ** 3;
 
@@ -240,5 +240,26 @@ describe("reputationWeightedPick", () => {
         }
         expect(firstWins / N).toBeGreaterThan(0.4);
         expect(firstWins / N).toBeLessThan(0.6);
+    });
+});
+
+describe("meetsTrustTier", () => {
+    it("treats absent or 'public' minTier as always satisfied", () => {
+        expect(meetsTrustTier({ trust_tier: "public" })).toBe(true);
+        expect(meetsTrustTier({ trust_tier: "verified" }, "public")).toBe(true);
+        expect(meetsTrustTier({}, undefined)).toBe(true);
+    });
+
+    it("respects the rank ladder public < verified < trusted < private", () => {
+        expect(meetsTrustTier({ trust_tier: "public" }, "verified")).toBe(false);
+        expect(meetsTrustTier({ trust_tier: "verified" }, "verified")).toBe(true);
+        expect(meetsTrustTier({ trust_tier: "trusted" }, "verified")).toBe(true);
+        expect(meetsTrustTier({ trust_tier: "verified" }, "trusted")).toBe(false);
+        expect(meetsTrustTier({ trust_tier: "trusted" }, "trusted")).toBe(true);
+    });
+
+    it("defaults missing trust_tier to 'public'", () => {
+        expect(meetsTrustTier({}, "verified")).toBe(false);
+        expect(meetsTrustTier({}, "public")).toBe(true);
     });
 });

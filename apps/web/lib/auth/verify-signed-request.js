@@ -33,6 +33,23 @@ export async function verifySignedNextRequest(request) {
         throw err;
     }
 
+    return verifyHeaderAndBody(request, header);
+}
+
+/**
+ * Optional variant: returns `null` when the request is unsigned, the
+ * verified `{ pubkey, body }` when it is signed, and throws (401) when
+ * the header is present but invalid. Read routes use this to scope
+ * views to an identity without breaking unauthenticated callers.
+ */
+export async function maybeVerifySignedNextRequest(request) {
+    const header = request.headers.get(AUTH_HEADER);
+    if (!header) return null;
+    return verifyHeaderAndBody(request, header);
+}
+
+async function verifyHeaderAndBody(request, header) {
+
     // We must read the raw body text so its SHA-256 matches what the client
     // signed. `request.text()` consumes the stream.
     const bodyText = await request.text();

@@ -22,25 +22,61 @@ import { encryptJSON, decryptJSON } from "@/lib/encrypt";
  * Returns null if no provider qualifies. Callers decide whether to use
  * the NIM fallback (see createChatJob).
  */
-export async function pickChatProvider({ modelName } = {}) {
+// IPIP-0026 §2.1 — trust tier ladder. Higher index = more trusted.
+// `private` providers are excluded from open-market routing and only
+// accept jobs addressed by provider_id with the right allowlist.
+const TRUST_TIER_RANK = { public: 0, verified: 1, trusted: 2, private: 3 };
+
+export function meetsTrustTier(provider, minTier) {
+  if (!minTier || minTier === "public") return true;
+  const have = TRUST_TIER_RANK[provider?.trust_tier ?? "public"] ?? 0;
+  const need = TRUST_TIER_RANK[minTier] ?? 0;
+  return have >= need;
+}
+
+export async function pickChatProvider({ modelName, minTrustTier } = {}) {
   const supabase = getSupabaseServerClient();
   const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
   const { data, error } = await supabase
     .from("providers")
-    .select("id, node_id, name, reputation, price, gpu_model, specs, public_key")
+    .select("id, node_id, name, reputation, price, gpu_model, specs, public_key, trust_tier")
     .eq("status", "available")
     .gte("last_seen", twoMinAgo);
 
-  if (error) throw error;
+  if (error) {
+    // Schema may not yet have trust_tier (older deployments). Retry without it.
+    if (/trust_tier/.test(error.message ?? "")) {
+      const fallback = await supabase
+        .from("providers")
+        .select("id, node_id, name, reputation, price, gpu_model, specs, public_key")
+        .eq("status", "available")
+        .gte("last_seen", twoMinAgo);
+      if (fallback.error) throw fallback.error;
+      return finishPick(fallback.data ?? [], { modelName, minTrustTier });
+    }
+    throw error;
+  }
 
-  let candidates = data ?? [];
+  return finishPick(data ?? [], { modelName, minTrustTier });
+}
+
+function finishPick(rows, { modelName, minTrustTier }) {
+  let candidates = rows;
 
   if (typeof modelName === "string" && modelName) {
     candidates = candidates.filter((p) => {
       const served = Array.isArray(p?.specs?.served_models) ? p.specs.served_models : [];
       return served.includes(modelName);
     });
+  }
+
+  // IPIP-0026 §2.2 — clients can require a minimum trust tier. Default
+  // routing also drops `private` providers, which only accept jobs sent
+  // by provider_id with an explicit allowlist.
+  candidates = candidates.filter((p) => (p.trust_tier ?? "public") !== "private");
+  if (minTrustTier) {
+    candidates = candidates.filter((p) => meetsTrustTier(p, minTrustTier));
   }
 
   // Hard filter: drop saturated nodes. A node with active_jobs at or
@@ -176,7 +212,8 @@ export async function createChatJob({
   modelName,
   maxTokens = 512,
   temperature = 0.7,
-  distributed = false
+  distributed = false,
+  minTrustTier
 }) {
   const supabase = getSupabaseServerClient();
   const now = new Date().toISOString();
@@ -185,18 +222,24 @@ export async function createChatJob({
 
   let p2pProvider = null;
   if (providerId) {
-    // Client pre-selected a provider for E2E encryption — look it up directly.
+    // Client pre-selected a provider (E2E encryption / IPIP-0026 §2.3).
     const { data } = await supabase
       .from("providers")
-      .select("id, node_id, name, reputation, price, gpu_model, specs, public_key")
+      .select("id, node_id, name, reputation, price, gpu_model, specs, public_key, trust_tier")
       .eq("id", providerId)
       .eq("status", "available")
       .maybeSingle();
-    p2pProvider = data ?? null;
+    if (data && minTrustTier && !meetsTrustTier(data, minTrustTier)) {
+      // Client demanded a higher tier than the addressed provider has —
+      // refuse to route there.
+      p2pProvider = null;
+    } else {
+      p2pProvider = data ?? null;
+    }
   }
 
   if (!p2pProvider) {
-    p2pProvider = await pickChatProvider({ modelName });
+    p2pProvider = await pickChatProvider({ modelName, minTrustTier });
   }
 
   const nimAvailable = !p2pProvider && isNimConfigured();

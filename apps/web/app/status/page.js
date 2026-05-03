@@ -1,7 +1,7 @@
 import DashboardShell from "@/components/dashboard-shell";
 import OverviewGrid from "@/components/overview-grid";
 import ResourceTable from "@/components/resource-table";
-import AutoRefresh from "@/components/auto-refresh";
+import RealtimeRefresh from "@/components/realtime-refresh";
 import {
   getAggregators,
   getClients,
@@ -51,7 +51,7 @@ export default async function HomePage() {
             Latest CLI: <span className="font-mono text-white">{latestCli}</span>
           </span>
         )}
-        <AutoRefresh intervalMs={10000} />
+        <RealtimeRefresh tables={["providers", "jobs"]} />
       </div>
       <OverviewGrid cards={overview.cards} />
       <div className="grid gap-6 xl:grid-cols-2">

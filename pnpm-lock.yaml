@@ -50,6 +50,9 @@ importers:
       '@infernetprotocol/gpu':
         specifier: workspace:*
         version: link:../../packages/gpu
+      '@infernetprotocol/rpc-adapter':
+        specifier: workspace:*
+        version: link:../../packages/rpc-adapter
       '@noble/ciphers':
         specifier: ^2.2.0
         version: 2.2.0
@@ -170,6 +173,9 @@ importers:
       '@infernetprotocol/payments':
         specifier: workspace:*
         version: link:../../packages/payments
+      '@infernetprotocol/rpc-adapter':
+        specifier: workspace:*
+        version: link:../../packages/rpc-adapter
       '@noble/ciphers':
         specifier: ^2.2.0
         version: 2.2.0

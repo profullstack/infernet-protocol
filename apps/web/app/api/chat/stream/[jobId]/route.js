@@ -1,7 +1,13 @@
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getJobWithEvents } from "@/lib/data/chat";
 import { streamChatCompletion } from "@infernetprotocol/nim-adapter";
+import { MIN_RPC_PEERS, MAX_RPC_PEERS, ENGINE_ID as RPC_ENGINE_ID } from "@infernetprotocol/rpc-adapter/constants";
 import { encryptJSON, decryptJSON } from "@/lib/encrypt";
+import {
+  selectRpcSlices,
+  mergeRpcRouting,
+  splitRpcReceiptShares
+} from "@/lib/data/rpc-routing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,13 +83,18 @@ export async function GET(_request, { params }) {
       // Heartbeat keeps the connection alive through proxies in both paths.
       const hb = setInterval(() => safeEnqueue(encoder.encode(": ping\n\n")), 15_000);
 
-      // IPIP-0031: distributed inference. Pick any provider that's
-      // contributing to a Petals swarm for the requested model, proxy
-      // the request to its /v1/petals/inference endpoint, stream the
-      // SSE tokens back to the browser.
+      // IPIP-0033: distributed inference via llama.cpp RPC over
+      // Hyperswarm-discovered peers. Replaces the Petals path
+      // (IPIP-0031, Replaced) for all new `distributed: true` jobs.
+      // Legacy Petals jobs that explicitly set `backend: 'petals'`
+      // still route to the old proxy until the daemons fully migrate.
       if (job?.input_spec?.distributed) {
+        const usePetalsLegacy =
+          job.input_spec?.backend === "petals" ||
+          job.input_spec?.fallback === "petals";
+        const proxyFn = usePetalsLegacy ? runPetalsProxy : runRpcProxy;
         try {
-          await runPetalsProxy({ supabase, job, safeEnqueue, sseFrame });
+          await proxyFn({ supabase, job, safeEnqueue, sseFrame });
         } catch (e) {
           safeEnqueue(sseFrame("error", { message: e?.message ?? String(e) }));
           await finalizeJob(supabase, job.id, { status: "failed", error: e?.message ?? String(e) }).catch(() => {});
@@ -185,6 +196,253 @@ export async function GET(_request, { params }) {
  * Per-token receipts to the layer-contributing operators (CPR /
  * IPIP-0007) are a follow-up — the proxying is the load-bearing part.
  */
+/**
+ * IPIP-0033 — federated inference via llama.cpp RPC. The control
+ * plane:
+ *
+ *   1. picks a *primary* (a node whose specs.rpc_primary.models
+ *      includes the requested model and whose llama-server can run
+ *      it locally)
+ *   2. picks up to MAX_RPC_PEERS *slices* (specs.rpc.models contains
+ *      the model). Fails closed when fewer than MIN_RPC_PEERS are
+ *      available — silent fallback was the credibility hole that made
+ *      IPIP-0031 misleading
+ *   3. POSTs to the primary's /v1/rpc/inference with the peer list
+ *   4. proxies the resulting SSE stream back to the consumer in the
+ *      same shape the Petals path used (meta → routing → token... →
+ *      done) so chat-view's existing listeners just work
+ */
+async function runRpcProxy({ supabase, job, safeEnqueue, sseFrame }) {
+  const ENGINE_ID = RPC_ENGINE_ID;
+  const input = job.input_spec ?? {};
+  const messages = input.messages ?? [];
+  const model = job.model_name;
+  if (!model) throw new Error("rpc inference: model name required");
+
+  // Two-minute liveness window — same as pickChatProvider for the
+  // single-node path. A primary that hasn't beaten in 2 min isn't
+  // trusted to dispatch a multi-peer job.
+  const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+  // Primary candidates — must advertise specs.rpc_primary.models and
+  // be currently available + fresh.
+  const { data: primaryRows, error: primaryErr } = await supabase
+    .from("providers")
+    .select("id, public_key, name, address, port, specs, status, trust_tier, reputation")
+    .eq("status", "available")
+    .gte("last_seen", twoMinAgo)
+    .contains("specs", { rpc_primary: { models: [model] } })
+    .limit(8);
+  if (primaryErr) throw primaryErr;
+  let primaries = (primaryRows ?? []).filter((p) => (p.trust_tier ?? "public") !== "private");
+  if (input.min_trust_tier) {
+    primaries = primaries.filter((p) => meetsRpcTier(p.trust_tier, input.min_trust_tier));
+  }
+  if (primaries.length === 0) {
+    throw new Error(
+      `No RPC primary available for ${model}. Operators host one via ` +
+      `\`infernet inference primary --model ${model}\` (IPIP-0033).`
+    );
+  }
+  const primary = primaries[Math.floor(Math.random() * primaries.length)];
+
+  // Slice candidates — same filters, different specs sub-key.
+  const { data: sliceRows, error: sliceErr } = await supabase
+    .from("providers")
+    .select("id, public_key, name, address, port, specs, status, trust_tier")
+    .eq("status", "available")
+    .gte("last_seen", twoMinAgo)
+    .contains("specs", { rpc: { models: [model] } })
+    .limit(MAX_RPC_PEERS * 2);
+  if (sliceErr) throw sliceErr;
+  const sliceCandidates = selectRpcSlices(sliceRows ?? [], {
+    minTrustTier: input.min_trust_tier,
+    excludeProviderId: primary.id
+  });
+
+  // Fail closed (IPIP-0033 §3). Silent fallback to single-node was
+  // the bug that made IPIP-0031 a credibility hole — don't repeat it.
+  if (sliceCandidates.length < MIN_RPC_PEERS) {
+    safeEnqueue(sseFrame("routing", {
+      engine: ENGINE_ID,
+      primary: { id: primary.id, name: primary.name, pubkey: primary.public_key },
+      peers: [],
+      pending: false,
+      shortfall: { available: sliceCandidates.length, required: MIN_RPC_PEERS },
+      note: `Distributed mode requires at least ${MIN_RPC_PEERS} RPC slices for ${model}; only ${sliceCandidates.length} are live.`
+    }));
+    throw new Error(
+      `Distributed inference requires at least ${MIN_RPC_PEERS} RPC slices for ${model}; ` +
+      `only ${sliceCandidates.length} are currently available. Operators host a slice via ` +
+      `\`infernet inference serve --backend rpc --model ${model}\` (IPIP-0033).`
+    );
+  }
+
+  const chosen = sliceCandidates.slice(0, MAX_RPC_PEERS);
+  const chosenSlices = chosen.map((c) => c.provider);
+  const rpcPeers = chosen.map(({ host, port, pubkey }) => ({ host, port, pubkey }));
+
+  // Persisted meta — same audit-trail shape every other path uses.
+  const persistedMeta = await insertJobEvent(supabase, job.id, "meta", {
+    provider_node_id: primary.id,
+    provider_name: primary.name,
+    model,
+    backend: "rpc",
+    distributed: true,
+    started_at: new Date().toISOString(),
+    rpc_peers: rpcPeers.map((p) => ({ host: p.host, port: p.port, pubkey: p.pubkey }))
+  });
+  if (persistedMeta) safeEnqueue(sseFrame("meta", persistedMeta.data, persistedMeta.id));
+
+  // Initial routing frame — like the petals path, show the entry node
+  // immediately so the UI doesn't sit on a placeholder.
+  safeEnqueue(sseFrame("routing", {
+    engine: ENGINE_ID,
+    primary: { id: primary.id, name: primary.name, pubkey: primary.public_key },
+    peers: rpcPeers.map((p) => ({
+      host: p.host,
+      port: p.port,
+      pubkey: p.pubkey,
+      name: chosenSlices.find((s) => s.public_key === p.pubkey)?.name ?? null,
+      layers: null,
+      status: "pending"
+    })),
+    pending: true,
+    model
+  }));
+
+  const url = providerEndpoint(primary) + "/v1/rpc/inference";
+  const upstream = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages,
+      max_tokens: input.max_tokens ?? 512,
+      temperature: input.temperature ?? 0.7,
+      rpc_peers: rpcPeers
+    })
+  });
+  if (!upstream.ok || !upstream.body) {
+    throw new Error(`upstream primary ${url} returned HTTP ${upstream.status}`);
+  }
+
+  // Same SSE-line parser shape the Petals proxy uses.
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullText = "";
+  let lastEventName = "data";
+  let layerByPeer = null;
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buffer.indexOf("\n\n")) >= 0) {
+      const block = buffer.slice(0, nl);
+      buffer = buffer.slice(nl + 2);
+      let evName = lastEventName;
+      let evData = null;
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event:")) evName = line.slice(6).trim();
+        else if (line.startsWith("data:")) {
+          try { evData = JSON.parse(line.slice(5).trim()); } catch { /* skip */ }
+        }
+      }
+      lastEventName = evName;
+      if (!evData) continue;
+
+      if (evName === "token") {
+        const t = evData.text ?? "";
+        fullText += t;
+        safeEnqueue(sseFrame("token", { text: t }));
+        insertJobEvent(supabase, job.id, "token", { text: t }).catch(() => {});
+      } else if (evName === "routing") {
+        // Daemon-side routing frame carries the per-peer layer
+        // assignments parsed from llama-server's stderr (rpc-adapter's
+        // aggregateLayerAssignments). Merge with our pubkey lookup so
+        // the UI gets operator names alongside host:port.
+        layerByPeer = Array.isArray(evData.peers) ? evData.peers : null;
+        const enriched = mergeRpcRouting({ daemonPeers: layerByPeer, slices: chosenSlices });
+        safeEnqueue(sseFrame("routing", {
+          engine: ENGINE_ID,
+          primary: { id: primary.id, name: primary.name, pubkey: primary.public_key },
+          peers: enriched,
+          pending: false,
+          model
+        }));
+        insertJobEvent(supabase, job.id, "routing", { peers: enriched }).catch(() => {});
+      } else if (evName === "log") {
+        safeEnqueue(sseFrame("log", evData));
+      } else if (evName === "done") {
+        const data = { text: fullText, finished_at: new Date().toISOString() };
+        const persisted = await insertJobEvent(supabase, job.id, "done", data);
+        safeEnqueue(sseFrame("done", data, persisted?.id));
+        await finalizeJob(supabase, job.id, {
+          status: "completed",
+          result: { type: "chat", text: fullText, source: "rpc", primary_id: primary.id }
+        });
+        await emitRpcReceipts({ supabase, job, primary, chosenSlices, layerByPeer });
+        return;
+      } else if (evName === "error") {
+        const persisted = await insertJobEvent(supabase, job.id, "error", evData);
+        safeEnqueue(sseFrame("error", evData, persisted?.id));
+        await finalizeJob(supabase, job.id, { status: "failed", error: evData.message ?? "rpc primary error" });
+        return;
+      }
+    }
+  }
+
+  // Stream ended without a `done` frame. Treat as graceful close.
+  if (!fullText) {
+    safeEnqueue(sseFrame("error", { message: "rpc primary closed stream before any tokens" }));
+    await finalizeJob(supabase, job.id, { status: "failed", error: "rpc primary closed stream" }).catch(() => {});
+  }
+}
+
+/**
+ * IPIP-0033 §6 — split a CPR receipt across the primary + the layer-
+ * contributing slices. Primary gets a `1 / (n + 1)` base share for
+ * orchestration + embedding + final-layer compute; the rest is
+ * weighted by `(layers.end - layers.start)` per slice.
+ *
+ * If the daemon never reported per-peer layer ranges (older builds /
+ * llama-server stderr format we don't recognize), credit the primary
+ * for the full job — same fallback the Petals path uses.
+ */
+async function emitRpcReceipts({ supabase, job, primary, chosenSlices, layerByPeer }) {
+  try {
+    const { buildReceiptBody } = await import("@/lib/cpr/receipts");
+    const { enqueueAndFlush } = await import("@/lib/cpr/queue");
+
+    const baseJob = {
+      id: job.id, type: "inference", status: "completed",
+      payment_offer: job.payment_offer ?? 0
+    };
+    const totalOffer = baseJob.payment_offer ?? 0;
+    const shares = splitRpcReceiptShares({
+      primary,
+      slices: chosenSlices,
+      daemonPeers: layerByPeer
+    });
+
+    for (const { provider, share, role } of shares) {
+      if (!provider?.public_key) continue;
+      const receipt = buildReceiptBody({
+        job: { ...baseJob, payment_offer: totalOffer * share },
+        provider: { public_key: provider.public_key, id: provider.id }
+      });
+      await enqueueAndFlush({ receipt, jobId: job.id }).catch((err) =>
+        console.warn(`CPR enqueueAndFlush (rpc ${role}): ${err?.message ?? err}`)
+      );
+    }
+  } catch (err) {
+    console.warn(`CPR rpc attribution failed: ${err?.message ?? err}`);
+  }
+}
+
 async function runPetalsProxy({ supabase, job, safeEnqueue, sseFrame }) {
   const input = job.input_spec ?? {};
   const messages = input.messages ?? [];

@@ -777,9 +777,163 @@ async function runDaemon(args, ctx) {
     }
 
     /**
-     * IPIP-0031: distributed inference proxy. Accepts a chat request,
-     * spawns a Python Petals client subprocess, streams its JSON-line
-     * output back as SSE.
+     * IPIP-0033 §4 — primary-side federated-inference endpoint.
+     *
+     *   POST /v1/rpc/inference
+     *   body: {
+     *     model, messages,
+     *     max_tokens?, temperature?,
+     *     rpc_peers: [{ host, port, pubkey }, ...]
+     *   }
+     *   response: text/event-stream with meta / routing / token /
+     *             log / done / error frames matching the IPIP shape.
+     *
+     * The handler spawns `llama-server --rpc h1:p1,h2:p2,...
+     * --model <local_gguf_path>`, streams its OpenAI-compatible
+     * `/v1/chat/completions` response back as SSE tokens, and emits
+     * a routing frame as soon as it has parsed enough stderr to know
+     * which slice owns which layers.
+     */
+    async function handleRpcInference(req, res) {
+        if (req.method !== 'POST' || req.url !== '/v1/rpc/inference') return false;
+
+        const { spawnLlamaServer, streamChatCompletion, aggregateLayerAssignments } =
+            await import('@infernetprotocol/rpc-adapter');
+
+        let body = '';
+        await new Promise((resolve, reject) => {
+            req.on('data', (chunk) => { body += chunk.toString(); });
+            req.on('end', resolve);
+            req.on('error', reject);
+        });
+        let payload;
+        try { payload = JSON.parse(body); } catch {
+            res.writeHead(400, { 'content-type': 'text/plain' });
+            res.end('bad json\n');
+            return true;
+        }
+
+        const { model, messages, max_tokens, temperature, rpc_peers } = payload ?? {};
+        if (!model || !Array.isArray(messages) || !Array.isArray(rpc_peers)) {
+            res.writeHead(400, { 'content-type': 'text/plain' });
+            res.end('model + messages[] + rpc_peers[] required\n');
+            return true;
+        }
+
+        // Resolve the GGUF path. Operators register served models
+        // through `infernet inference primary --model <id>` which
+        // writes the local path into runtime state. For now, accept
+        // either an absolute path or fall back to ~/.infernet/models.
+        const path = await import('node:path');
+        const fsp = await import('node:fs/promises');
+        let modelPath = model;
+        if (!modelPath.startsWith('/')) {
+            modelPath = path.join(process.env.HOME ?? '/tmp', '.infernet', 'models', `${model}.gguf`);
+        }
+        try {
+            await fsp.access(modelPath);
+        } catch {
+            res.writeHead(404, { 'content-type': 'text/plain' });
+            res.end(`gguf not found at ${modelPath}\n`);
+            return true;
+        }
+
+        res.writeHead(200, {
+            'content-type': 'text/event-stream',
+            'cache-control': 'no-cache',
+            'x-accel-buffering': 'no'
+        });
+
+        const writeFrame = (event, data) => {
+            try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); }
+            catch { /* socket closed */ }
+        };
+
+        let handle;
+        try {
+            handle = await spawnLlamaServer({
+                modelPath,
+                rpcPeers: rpc_peers,
+                host: '127.0.0.1',
+                port: 0
+            });
+        } catch (err) {
+            writeFrame('error', { message: `spawnLlamaServer: ${err?.message ?? err}` });
+            res.end();
+            return true;
+        }
+
+        // Collect parsed events while waiting for ready. As soon as
+        // we have at least one layer-assigned event, emit a routing
+        // frame so the control plane can show per-peer breakdown.
+        const layerEvents = [];
+        let routingEmitted = false;
+        const flushRouting = () => {
+            const peers = aggregateLayerAssignments(layerEvents);
+            writeFrame('routing', { peers });
+            routingEmitted = true;
+        };
+
+        // Pipe all parsed events out as `log` frames (except routing)
+        // so the control plane gets full diagnostic visibility.
+        const eventDrain = (async () => {
+            for await (const ev of handle.events()) {
+                if (ev.type === 'layer_assigned') {
+                    layerEvents.push(ev);
+                } else if (ev.type === 'server_ready') {
+                    if (!routingEmitted) flushRouting();
+                } else if (ev.type === 'log') {
+                    writeFrame('log', { text: ev.text });
+                } else if (ev.type === 'peer_connected' || ev.type === 'peer_failed' || ev.type === 'load_progress') {
+                    writeFrame('log', { event: ev.type, ...ev });
+                }
+            }
+        })().catch((err) => writeFrame('log', { warn: `events drain: ${err?.message ?? err}` }));
+
+        let serverInfo;
+        try {
+            serverInfo = await handle.ready;
+        } catch (err) {
+            writeFrame('error', { message: err?.message ?? String(err) });
+            res.end();
+            return true;
+        }
+
+        // Periodically re-flush routing in case more layer events come
+        // in after server_ready (some llama.cpp builds log assignments
+        // lazily as tensors are first touched).
+        const routingTimer = setInterval(flushRouting, 5000);
+        if (typeof routingTimer.unref === 'function') routingTimer.unref();
+
+        const baseUrl = `http://${serverInfo.host}:${serverInfo.port}`;
+        try {
+            for await (const ev of streamChatCompletion({
+                baseUrl,
+                model,
+                messages,
+                maxTokens: max_tokens,
+                temperature
+            })) {
+                if (ev.type === 'meta') continue; // emitted by control plane
+                writeFrame(ev.type, ev.data);
+                if (ev.type === 'done' || ev.type === 'error') break;
+            }
+        } catch (err) {
+            writeFrame('error', { message: err?.message ?? String(err) });
+        } finally {
+            clearInterval(routingTimer);
+            handle.kill();
+            await eventDrain.catch(() => {});
+            res.end();
+        }
+        return true;
+    }
+
+    /**
+     * IPIP-0031 (Replaced): legacy Petals proxy. Kept until daemons
+     * fully migrate to IPIP-0033's /v1/rpc/inference. Accepts a chat
+     * request, spawns the Python Petals client subprocess, streams
+     * its JSON-line output back as SSE.
      *
      *   POST /v1/petals/inference
      *   body: { model, messages, max_tokens?, temperature? }
@@ -1132,6 +1286,15 @@ async function runDaemon(args, ctx) {
             } catch (err) {
                 res.writeHead(500, { 'content-type': 'text/plain' });
                 res.end(`training http error: ${err?.message ?? err}\n`);
+                return;
+            }
+
+            try {
+                const rpcHandled = await handleRpcInference(req, res);
+                if (rpcHandled) return;
+            } catch (err) {
+                res.writeHead(500, { 'content-type': 'text/plain' });
+                res.end(`rpc http error: ${err?.message ?? err}\n`);
                 return;
             }
 

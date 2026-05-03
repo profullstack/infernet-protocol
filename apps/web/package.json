@@ -19,6 +19,7 @@
     "@infernetprotocol/deploy-providers": "workspace:*",
     "@infernetprotocol/nim-adapter": "workspace:*",
     "@infernetprotocol/payments": "workspace:*",
+    "@infernetprotocol/rpc-adapter": "workspace:*",
     "@noble/ciphers": "^2.2.0",
     "@noble/curves": "^2.2.0",
     "@noble/hashes": "^2.2.0",

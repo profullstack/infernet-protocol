@@ -126,4 +126,49 @@ describe('aggregateLayerAssignments — IPIP-0033 §5 routing shape', () => {
         expect(aggregateLayerAssignments(null)).toEqual([]);
         expect(aggregateLayerAssignments(undefined)).toEqual([]);
     });
+
+    it('flips a peer to status:dropped after peer_failed, keeping its layer range', () => {
+        const events = [
+            { type: 'layer_assigned', layer: 0, peer: { kind: 'rpc', host: 'a', port: 50052 } },
+            { type: 'layer_assigned', layer: 7, peer: { kind: 'rpc', host: 'a', port: 50052 } },
+            { type: 'peer_failed', host: 'a', port: 50052, reason: 'connection refused' }
+        ];
+        expect(aggregateLayerAssignments(events)).toEqual([
+            { host: 'a', port: 50052, layers: { start: 0, end: 7 }, count: 2, status: 'dropped', reason: 'connection refused' }
+        ]);
+    });
+
+    it('a fresh layer_assigned after peer_failed restores status:ok (peer recovered)', () => {
+        const events = [
+            { type: 'layer_assigned', layer: 0, peer: { kind: 'rpc', host: 'a', port: 50052 } },
+            { type: 'peer_failed', host: 'a', port: 50052, reason: 'timeout' },
+            { type: 'layer_assigned', layer: 1, peer: { kind: 'rpc', host: 'a', port: 50052 } }
+        ];
+        const out = aggregateLayerAssignments(events);
+        expect(out[0].status).toBe('ok');
+        expect(out[0].reason).toBeUndefined();
+    });
+
+    it('peer_connected without a layer assignment is dropped from the routing peers list', () => {
+        const events = [
+            { type: 'peer_connected', host: 'a', port: 50052 }
+        ];
+        expect(aggregateLayerAssignments(events)).toEqual([]);
+    });
+
+    it('mixed peers — one ok with layers, one dropped with layers, one connected only', () => {
+        const events = [
+            { type: 'layer_assigned', layer: 0,  peer: { kind: 'rpc', host: 'ok',   port: 50052 } },
+            { type: 'layer_assigned', layer: 1,  peer: { kind: 'rpc', host: 'ok',   port: 50052 } },
+            { type: 'layer_assigned', layer: 8,  peer: { kind: 'rpc', host: 'gone', port: 50053 } },
+            { type: 'layer_assigned', layer: 15, peer: { kind: 'rpc', host: 'gone', port: 50053 } },
+            { type: 'peer_failed', host: 'gone', port: 50053, reason: 'rpc backend connect failed' },
+            { type: 'peer_connected', host: 'lurker', port: 50054 }
+        ];
+        const out = aggregateLayerAssignments(events);
+        expect(out).toHaveLength(2);
+        expect(out[0]).toMatchObject({ host: 'ok', layers: { start: 0, end: 1 }, status: 'ok' });
+        expect(out[1]).toMatchObject({ host: 'gone', layers: { start: 8, end: 15 }, status: 'dropped' });
+        // No `lurker` row because we never assigned it any layers.
+    });
 });

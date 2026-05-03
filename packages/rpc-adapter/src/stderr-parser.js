@@ -125,46 +125,93 @@ export function parseLlamaStderrLine(line) {
 }
 
 /**
- * Roll up a stream of `layer_assigned` events into per-peer layer
- * ranges. Drops `local` assignments — the routing event is for the
- * remote-RPC peer breakdown that the chat UI surfaces. Gaps inside a
- * single peer's range are tolerated (the IPIP routing shape carries
- * a single { start, end } so we record the min/max).
+ * Roll up a stream of stderr events into per-peer layer ranges +
+ * lifecycle status. Drops `local` device assignments — the routing
+ * event is the remote-RPC peer breakdown that the chat UI surfaces.
+ * Gaps inside a single peer's range are tolerated (the IPIP routing
+ * shape carries a single { start, end }).
+ *
+ * Status comes from the most recent lifecycle event for that
+ * (host, port):
+ *
+ *   peer_connected → 'ok'
+ *   layer_assigned → 'ok'   (implicitly — assignment means the slice is in use)
+ *   peer_failed    → 'dropped' (with `reason` carried through)
+ *
+ * A peer that flaps (failed → connected → failed) ends in whichever
+ * state the most recent event suggests.
  *
  * Returns an array shape compatible with IPIP-0033 §5:
  *
- *   [{ host, port, layers: { start, end }, count, status: 'ok' }, ...]
+ *   [{ host, port, layers: { start, end }, count,
+ *      status: 'ok' | 'dropped', reason? }, ...]
  *
- * Sorted by `start` ascending.
+ * Sorted by `layers.start` ascending.
  */
 export function aggregateLayerAssignments(events) {
-    const byPeer = new Map(); // "host:port" → { host, port, start, end, count }
+    const byPeer = new Map(); // "host:port" → { host, port, start, end, count, status, reason }
+
     for (const ev of events ?? []) {
-        if (ev?.type !== 'layer_assigned' || ev.peer?.kind !== 'rpc') continue;
-        const key = `${ev.peer.host}:${ev.peer.port}`;
-        const cur = byPeer.get(key);
-        if (cur) {
-            cur.start = Math.min(cur.start, ev.layer);
-            cur.end = Math.max(cur.end, ev.layer);
-            cur.count += 1;
+        let key;
+        let host;
+        let port;
+        if (ev?.type === 'layer_assigned' && ev.peer?.kind === 'rpc') {
+            host = ev.peer.host;
+            port = ev.peer.port;
+        } else if (ev?.type === 'peer_failed' || ev?.type === 'peer_connected') {
+            host = ev.host;
+            port = ev.port;
         } else {
-            byPeer.set(key, {
-                host: ev.peer.host,
-                port: ev.peer.port,
-                start: ev.layer,
-                end: ev.layer,
-                count: 1
-            });
+            continue;
         }
+        key = `${host}:${port}`;
+
+        const cur = byPeer.get(key);
+        const base = cur ?? {
+            host,
+            port,
+            start: null,
+            end: null,
+            count: 0,
+            status: 'ok',
+            reason: null
+        };
+
+        if (ev.type === 'layer_assigned') {
+            base.start = base.start === null ? ev.layer : Math.min(base.start, ev.layer);
+            base.end = base.end === null ? ev.layer : Math.max(base.end, ev.layer);
+            base.count += 1;
+            // A layer-assigned event always implies the peer is alive
+            // RIGHT NOW; a stale 'dropped' status from earlier is
+            // overwritten because llama.cpp wouldn't be assigning
+            // layers to a peer it can't reach.
+            base.status = 'ok';
+            base.reason = null;
+        } else if (ev.type === 'peer_failed') {
+            base.status = 'dropped';
+            if (typeof ev.reason === 'string' && ev.reason.length > 0) {
+                base.reason = ev.reason;
+            }
+        } else if (ev.type === 'peer_connected') {
+            base.status = 'ok';
+            base.reason = null;
+        }
+
+        byPeer.set(key, base);
     }
+
     return [...byPeer.values()]
+        // Drop peers we only saw a status event for and never had a
+        // layer assigned to — they aren't routing-event peers.
+        .filter((p) => p.start !== null)
         .sort((a, b) => a.start - b.start)
         .map((p) => ({
             host: p.host,
             port: p.port,
             layers: { start: p.start, end: p.end },
             count: p.count,
-            status: 'ok'
+            status: p.status,
+            ...(p.reason ? { reason: p.reason } : {})
         }));
 }
 

@@ -917,28 +917,46 @@ async function runDaemon(args, ctx) {
             return true;
         }
 
-        // Collect parsed events while waiting for ready. As soon as
-        // we have at least one layer-assigned event, emit a routing
-        // frame so the control plane can show per-peer breakdown.
-        const layerEvents = [];
+        // Collect parsed events while waiting for ready. The
+        // aggregator consumes layer_assigned + peer_connected +
+        // peer_failed events together so per-peer status reflects
+        // the current lifecycle, not just the layer roll-up.
+        const peerEvents = [];
         let routingEmitted = false;
+        let lastRoutingSig = '';
         const flushRouting = () => {
-            const peers = aggregateLayerAssignments(layerEvents);
+            const peers = aggregateLayerAssignments(peerEvents);
+            // Skip emit when nothing changed — saves SSE bandwidth +
+            // duplicate UI re-renders. Cheap stable signature.
+            const sig = peers
+                .map((p) => `${p.host}:${p.port}|${p.layers.start}-${p.layers.end}|${p.status}|${p.reason ?? ''}`)
+                .sort()
+                .join(';');
+            if (sig === lastRoutingSig) return;
+            lastRoutingSig = sig;
             writeFrame('routing', { peers });
             routingEmitted = true;
         };
 
         // Pipe all parsed events out as `log` frames (except routing)
-        // so the control plane gets full diagnostic visibility.
+        // so the control plane gets full diagnostic visibility, and
+        // immediately re-flush routing on any peer-state change so
+        // the chat UI sees a 'dropped' tag the moment llama.cpp
+        // reports it.
         const eventDrain = (async () => {
             for await (const ev of handle.events()) {
                 if (ev.type === 'layer_assigned') {
-                    layerEvents.push(ev);
+                    peerEvents.push(ev);
+                    if (routingEmitted) flushRouting();
                 } else if (ev.type === 'server_ready') {
                     if (!routingEmitted) flushRouting();
                 } else if (ev.type === 'log') {
                     writeFrame('log', { text: ev.text });
-                } else if (ev.type === 'peer_connected' || ev.type === 'peer_failed' || ev.type === 'load_progress') {
+                } else if (ev.type === 'peer_connected' || ev.type === 'peer_failed') {
+                    peerEvents.push(ev);
+                    writeFrame('log', { event: ev.type, ...ev });
+                    flushRouting();
+                } else if (ev.type === 'load_progress') {
                     writeFrame('log', { event: ev.type, ...ev });
                 }
             }

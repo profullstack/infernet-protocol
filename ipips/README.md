@@ -136,14 +136,36 @@ to the canonical conversation thread.
 
 | #     | Title                              | Type            | Status |
 | ----- | ---------------------------------- | --------------- | ------ |
-| 0001  | [Infernet v1.0 Launch Criteria](./ipip-0001.md) | Process         | Draft  |
-| 0002  | [Operator-to-Operator P2P Chat](./ipip-0002.md) | Standards Track | Draft  |
-| 0003  | [Authentication & Account Model](./ipip-0003.md) | Standards Track | Draft  |
-| 0004  | [Multi-currency Payments via CoinPayPortal](./ipip-0004.md) | Standards Track | Draft  |
-| 0005  | [Data Access Architecture](./ipip-0005.md) | Standards Track | Draft  |
-| 0006  | [Peer Discovery and Bootstrap](./ipip-0006.md) | Standards Track | Draft  |
-| 0007  | [CoinPay Reputation Protocol Integration](./ipip-0007.md) | Standards Track | Draft  |
-| 0008  | [Hardware capability advertisement (NVLink / xGMI / IB / EFA)](./ipip-0008.md) | Standards Track | Draft  |
+| 0001  | [Infernet v1.0 Launch Criteria](./ipip-0001.md) | Process         | Active |
+| 0002  | [Operator-to-Operator P2P Chat](./ipip-0002.md) | Standards Track | Active |
+| 0003  | [Authentication & Account Model](./ipip-0003.md) | Standards Track | Final  |
+| 0004  | [Multi-currency Payments via CoinPayPortal](./ipip-0004.md) | Standards Track | Active |
+| 0005  | [Data Access Architecture](./ipip-0005.md) | Standards Track | Final  |
+| 0006  | [Peer Discovery and Bootstrap](./ipip-0006.md) | Standards Track | Active |
+| 0007  | [CoinPay Reputation Protocol Integration](./ipip-0007.md) | Standards Track | Final  |
+| 0008  | [Hardware capability advertisement (NVLink / xGMI / IB / EFA)](./ipip-0008.md) | Standards Track | Active |
+| 0009  | [Inference Engine Adapter Protocol](./ipip-0009.md) | Standards Track | Final  |
+| 0010  | [Workload Classes (A / B / B.5 / C)](./ipip-0010.md) | Informational   | Active |
+| 0011  | [Training Adapter Protocol](./ipip-0011.md) | Standards Track | Active |
+| 0012  | [Federated Model Hosting (Pipeline-Parallel via Petals)](./ipip-0012.md) | Standards Track | Active |
+| 0013  | [Batch Inference Job Decomposition](./ipip-0013.md) | Standards Track | Final  |
+| 0014  | [Distributed-Systems Primitives](./ipip-0014.md) | Standards Track | Final  |
+| 0015  | [Causal Ordering Across Providers](./ipip-0015.md) | Standards Track | Draft  |
+| 0016  | [DHT-Based Decentralized Discovery](./ipip-0016.md) | Standards Track | Draft  |
+| 0017  | [Replicated State Convergence (CRDTs)](./ipip-0017.md) | Standards Track | Draft  |
+| 0018  | [Causal Broadcast for Cross-Provider Events](./ipip-0018.md) | Standards Track | Draft  |
+| 0019  | [Pricing-Aware GPU Provider Deployments](./ipip-0019.md) | Standards Track | Final  |
+| 0020  | [Consensus Primitives — When and How](./ipip-0020.md) | Informational   | Active |
+| 0021  | [Protocol IDL — Wire Contracts and RMI](./ipip-0021.md) | Standards Track | Active |
+| 0022  | [Host AI Runtime Detection + OpenVINO Engine](./ipip-0022.md) | Standards Track | Active |
+| 0023  | [Distributed Training + Custom Model Pipeline](./ipip-0023.md) | Standards Track | Active |
+| 0024  | [Token-Chunk Batching for P2P Chat Streaming](./ipip-0024.md) | Standards Track | Final  |
+| 0025  | [Message Privacy — Encrypt Prompts and Responses at Rest](./ipip-0025.md) | Standards Track | Final  |
+| 0026  | [Prompt Privacy — Secret Detection, Trusted Providers, TEE](./ipip-0026.md) | Standards Track | Active |
+| 0027  | [End-to-End Prompt Encryption via NIP-44 ECDH](./ipip-0027.md) | Standards Track | Active |
+| 0028  | [Multi-Party Encryption — Model / Node / Consumer Keys](./ipip-0028.md) | Standards Track | Active |
+| 0030  | [Open-Market Distributed Training](./ipip-0030.md) | Standards Track | Final  |
+| 0031  | [Federated Inference via Petals](./ipip-0031.md) | Standards Track | Final  |
 
 ## Editors
 

@@ -301,6 +301,133 @@ function relativeAgo(iso) {
   return `${h}h ago`;
 }
 
+async function fetchLiveProviderSpecs({ liveWindowMin = 10 } = {}) {
+  const supabase = getSupabaseServerClient();
+  const cutoff = new Date(Date.now() - liveWindowMin * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("providers")
+    .select("specs, last_seen, gpu_model")
+    .eq("status", "available")
+    .gte("last_seen", cutoff);
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+/**
+ * Network-wide GPU fleet — { vendor, model, vram_tier } counts across
+ * every live public provider. Mirrors the schema register.js sends:
+ *   specs.gpus = [{ vendor, model, vram_tier }, ...]
+ *   specs.gpu_count
+ * Plus the legacy `providers.gpu_model` column for older rows.
+ */
+export async function getGpuFleet({ liveWindowMin = 10 } = {}) {
+  const rows = await fetchLiveProviderSpecs({ liveWindowMin });
+  const fleet = new Map(); // key → { vendor, model, vram_tier, count, providers, freshest }
+
+  for (const row of rows) {
+    const specs = row.specs && typeof row.specs === "object" ? row.specs : {};
+    const seen = row.last_seen;
+    const gpus = Array.isArray(specs.gpus) && specs.gpus.length > 0
+      ? specs.gpus
+      : row.gpu_model
+        ? [{ vendor: null, model: row.gpu_model, vram_tier: null, count: 1 }]
+        : [];
+
+    for (const g of gpus) {
+      const vendor = String(g.vendor ?? "").trim() || null;
+      const model = String(g.model ?? g.vendor ?? "GPU").trim() || "GPU";
+      const vram_tier = g.vram_tier ?? null;
+      const key = `${vendor ?? ""}|${model}|${vram_tier ?? ""}`;
+      const count = Number(g.count ?? 1) || 1;
+      const cur = fleet.get(key) ?? {
+        vendor,
+        model,
+        vram_tier,
+        count: 0,
+        providers: 0,
+        freshest: null
+      };
+      cur.count += count;
+      cur.providers += 1;
+      if (!cur.freshest || (seen && seen > cur.freshest)) cur.freshest = seen;
+      fleet.set(key, cur);
+    }
+  }
+
+  return [...fleet.values()]
+    .map((g) => ({
+      id: `${g.vendor ?? "unknown"}-${g.model}-${g.vram_tier ?? "?"}`,
+      vendor: g.vendor ?? "—",
+      model: g.model,
+      vram_tier: g.vram_tier ?? "—",
+      count: g.count,
+      providers: g.providers,
+      freshest_seen: relativeAgo(g.freshest)
+    }))
+    .sort((a, b) => b.count - a.count || a.model.localeCompare(b.model));
+}
+
+/**
+ * Network-wide CPU fleet — { vendor, arch, cores, ram_gb } rolled up
+ * across every live public provider. Mirrors register.js:
+ *   specs.cpu = { vendor, arch, cores, groups, ram_gb }
+ */
+export async function getCpuFleet({ liveWindowMin = 10 } = {}) {
+  const rows = await fetchLiveProviderSpecs({ liveWindowMin });
+  const fleet = new Map(); // key → { vendor, arch, cores, ram_tier, providers, total_cores, total_ram_gb, freshest }
+
+  for (const row of rows) {
+    const specs = row.specs && typeof row.specs === "object" ? row.specs : {};
+    const cpu = specs.cpu && typeof specs.cpu === "object" ? specs.cpu : null;
+    if (!cpu) continue;
+    const vendor = String(cpu.vendor ?? "").trim() || "—";
+    const arch = String(cpu.arch ?? "").trim() || "—";
+    const cores = Number(cpu.cores ?? 0) || 0;
+    const ramGb = Number(cpu.ram_gb ?? 0) || 0;
+    const ramTier = cpuRamTier(ramGb);
+    const key = `${vendor}|${arch}|${ramTier}`;
+    const cur = fleet.get(key) ?? {
+      vendor,
+      arch,
+      ram_tier: ramTier,
+      providers: 0,
+      total_cores: 0,
+      total_ram_gb: 0,
+      freshest: null
+    };
+    cur.providers += 1;
+    cur.total_cores += cores;
+    cur.total_ram_gb += ramGb;
+    if (!cur.freshest || (row.last_seen && row.last_seen > cur.freshest)) {
+      cur.freshest = row.last_seen;
+    }
+    fleet.set(key, cur);
+  }
+
+  return [...fleet.values()]
+    .map((c) => ({
+      id: `${c.vendor}-${c.arch}-${c.ram_tier}`,
+      vendor: c.vendor,
+      arch: c.arch,
+      ram_tier: c.ram_tier,
+      providers: c.providers,
+      total_cores: c.total_cores,
+      total_ram_gb: c.total_ram_gb,
+      freshest_seen: relativeAgo(c.freshest)
+    }))
+    .sort((a, b) => b.providers - a.providers || a.vendor.localeCompare(b.vendor));
+}
+
+function cpuRamTier(gb) {
+  if (!Number.isFinite(gb) || gb <= 0) return "—";
+  if (gb < 8) return "<8 GB";
+  if (gb < 16) return "8–16 GB";
+  if (gb < 32) return "16–32 GB";
+  if (gb < 64) return "32–64 GB";
+  if (gb < 128) return "64–128 GB";
+  return "128+ GB";
+}
+
 export const __testables__ = {
   mapCurrency,
   mapJob,

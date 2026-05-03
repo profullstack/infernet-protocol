@@ -35,7 +35,8 @@
       "semver": "7.7.3",
       "fast-xml-parser": "5.7.0",
       "@xmldom/xmldom": "0.8.13",
-      "uuid": "14.0.0"
+      "uuid": "14.0.0",
+      "ip": "2.0.1"
     }
   }
 }

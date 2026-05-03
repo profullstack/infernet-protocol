@@ -14,6 +14,7 @@ overrides:
   fast-xml-parser: 5.7.0
   '@xmldom/xmldom': 0.8.13
   uuid: 14.0.0
+  ip: 2.0.1
 
 importers:
 
@@ -3889,8 +3890,8 @@ packages:
     resolution: {integrity: sha512-58yWmlHpp7VYfcdTwMTvwMmqx/Elfxjd9RXTDyMsbL7lLWmhMylLEqiYVLKuLzOZqVgiWXD9MfR62Vv89VRxkw==}
     engines: {node: '>=4'}
 
-  ip@1.1.9:
-    resolution: {integrity: sha512-cyRxvOEpNHNtchU3Ln9KC/auJgup87llfQpQ+t5ghoC/UhL16SWzbueiCsdTnWmqAWl7LadfuwhlqmtOaqMHdQ==}
+  ip@2.0.1:
+    resolution: {integrity: sha512-lJUL9imLTNi1ZfXT+DU6rBBdbiKGBuay9B6xGSPVjUeQwaH1RIGqef8RZkUtHioLmSNpPR5M4HVKJGm1j8FWVQ==}
 
   ipaddr.js@1.9.1:
     resolution: {integrity: sha512-0KI/607xoxSToH7GjN1FfSbLoU0+btTicjsQSWQlh/hZykN8KpmMf7uYwPW3R+akZ6R/w18ZlXSHBYXiYUPO3g==}
@@ -8357,7 +8358,7 @@ snapshots:
       envinfo: 7.21.0
       execa: 5.1.1
       hermes-profile-transformer: 0.0.6
-      ip: 1.1.9
+      ip: 2.0.1
       node-stream-zip: 1.15.0
       ora: 5.4.1
       semver: 7.7.3
@@ -8373,7 +8374,7 @@ snapshots:
       '@react-native-community/cli-tools': 12.3.2
       chalk: 4.1.2
       hermes-profile-transformer: 0.0.6
-      ip: 1.1.9
+      ip: 2.0.1
     transitivePeerDependencies:
       - encoding
 
@@ -10972,7 +10973,7 @@ snapshots:
 
   ip-regex@2.1.0: {}
 
-  ip@1.1.9: {}
+  ip@2.0.1: {}
 
   ipaddr.js@1.9.1: {}
 

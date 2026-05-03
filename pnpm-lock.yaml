@@ -276,6 +276,8 @@ importers:
         specifier: workspace:*
         version: link:../config
 
+  packages/rpc-adapter: {}
+
   packages/sdk-js: {}
 
   packages/training:

@@ -1,0 +1,28 @@
+{
+  "name": "@infernetprotocol/rpc-adapter",
+  "version": "0.0.1",
+  "description": "llama.cpp RPC adapter — spawn llama-server with --rpc peer list, parse layer assignments, stream chat tokens (IPIP-0033).",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./constants": "./src/constants.js",
+    "./parser": "./src/stderr-parser.js",
+    "./spawn": "./src/spawn.js",
+    "./stream": "./src/stream.js"
+  },
+  "files": [
+    "src/**/*.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/InfernetProtocol/infernet-protocol.git",
+    "directory": "packages/rpc-adapter"
+  },
+  "homepage": "https://github.com/InfernetProtocol/infernet-protocol#readme"
+}

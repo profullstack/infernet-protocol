@@ -16,10 +16,6 @@ All application data flows through **Supabase** — operators pick self-hosted (
 - [ ] Tighten error + loading states across the React app
   - Description: Audit server components and client fetchers for missing skeletons / error boundaries; the dashboard auto-refresh path is the most visible offender today.
 
-## Documentation
-
-- [ ] Document the migration flow for both self-hosted (`supabase db reset`) and cloud (`supabase db push`) deployments.
-
 ## Release pipeline (still blocked)
 
 - [ ] Regen npm `NPM_TOKEN` (issued under 2FA → invalid for CI). Revoke + create fresh Automation token at npmjs.com/settings/~/tokens, then `gh secret set NPM_TOKEN`. Homebrew unblocks when npm does.
@@ -43,3 +39,4 @@ The following items were on TODO.md but are live in master:
 - Nostr / BIP-340 signature auth on `/api/v1/node/*` — shipped 2026-04-19.
 - IPIP-0030 + IPIP-0031 proposal docs written; `ipips/README.md` index regenerated; 24 shipped IPIPs promoted out of `Draft` — shipped 2026-05-03 (commit `3314fd2`).
 - Dead post-Phase-1 code deleted: `packages/inference/` (superseded by Petals / IPIP-0031), `apps/cli/lib/runtime-config.js` (legacy `supabase: {}` block + 12 other unused sections), `apps/cli/examples/app.js` (used the removed CLI Supabase client) — shipped 2026-05-03.
+- Migration flow documented in `docs/MIGRATIONS.md` — covers `supabase db reset` (self-hosted), `supabase db push` (cloud), adding new migrations, and conventions — shipped 2026-05-03.

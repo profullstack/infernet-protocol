@@ -1161,11 +1161,10 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb11-1"><a href=
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">--domains</span> svelte.dev,kit.svelte.dev,github.com <span class="dt">\</span></span>
 <span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">--num</span> 30 <span class="dt">\</span></span>
 <span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">--out</span> ./data/svelte5.jsonl</span></code></pre></div>
-<p>Needs <code>VALUESERP_API_KEY</code> in env or under
-<code>integrations.valueserp.api_key</code> in
-<code>~/.config/infernet/config.json</code>. Output: a ChatML-format
-JSONL with ~hundreds of training examples extracted from the top web
-results.</p>
+<p>No search API key needed — the network proxies the crawl and enforces
+a per-node daily quota. (Self-host override: <code>--direct</code> with
+<code>VALUESERP_API_KEY</code>.) Output: a ChatML-format JSONL with
+hundreds of training examples extracted from the top web results.</p>
 <h3 id="scaffold-a-config">2. Scaffold a config</h3>
 <div class="sourceCode" id="cb12"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> train init <span class="at">--output</span> ./run</span></code></pre></div>
@@ -5768,17 +5767,24 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb252-1"><a href
 <span id="cb252-3"><a href="#cb252-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">--domains</span> svelte.dev,kit.svelte.dev,github.com <span class="dt">\</span></span>
 <span id="cb252-4"><a href="#cb252-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">--num</span> 30 <span class="dt">\</span></span>
 <span id="cb252-5"><a href="#cb252-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">--out</span> ./data/svelte5.jsonl</span></code></pre></div>
-<p>This hits <a href="https://valueserp.com">ValueSerp</a> for the top
-30 Google results, optionally filtered to a domain whitelist, then
-fetches each URL, extracts the readable text, and chunks it into
-ChatML-format JSONL:</p>
+<p>This calls <code>POST /api/v1/search</code> on the Infernet control
+plane, which proxies to a search provider and returns the top 30 Google
+results, optionally filtered to a domain whitelist. The CLI then fetches
+each URL, extracts the readable text, and chunks it into ChatML-format
+JSONL:</p>
 <div class="sourceCode" id="cb253"><pre
 class="sourceCode json"><code class="sourceCode json"><span id="cb253-1"><a href="#cb253-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;messages&quot;</span><span class="fu">:</span><span class="ot">[</span><span class="fu">{</span><span class="dt">&quot;role&quot;</span><span class="fu">:</span><span class="st">&quot;system&quot;</span><span class="fu">,</span><span class="dt">&quot;content&quot;</span><span class="fu">:</span><span class="st">&quot;You are an expert...&quot;</span><span class="fu">}</span><span class="ot">,</span></span>
 <span id="cb253-2"><a href="#cb253-2" aria-hidden="true" tabindex="-1"></a>             <span class="fu">{</span><span class="dt">&quot;role&quot;</span><span class="fu">:</span><span class="st">&quot;user&quot;</span><span class="fu">,</span><span class="dt">&quot;content&quot;</span><span class="fu">:</span><span class="st">&quot;svelte 5 framework documentation — section 1&quot;</span><span class="fu">}</span><span class="ot">,</span></span>
 <span id="cb253-3"><a href="#cb253-3" aria-hidden="true" tabindex="-1"></a>             <span class="fu">{</span><span class="dt">&quot;role&quot;</span><span class="fu">:</span><span class="st">&quot;assistant&quot;</span><span class="fu">,</span><span class="dt">&quot;content&quot;</span><span class="fu">:</span><span class="st">&quot;Svelte 5 introduces runes — the primary...&quot;</span><span class="fu">}</span><span class="ot">]</span><span class="fu">,</span></span>
 <span id="cb253-4"><a href="#cb253-4" aria-hidden="true" tabindex="-1"></a> <span class="dt">&quot;meta&quot;</span><span class="fu">:{</span><span class="dt">&quot;source_url&quot;</span><span class="fu">:</span><span class="st">&quot;https://svelte.dev/docs/svelte/runes&quot;</span><span class="fu">,</span><span class="dt">&quot;paragraph_index&quot;</span><span class="fu">:</span><span class="dv">0</span><span class="fu">}}</span></span></code></pre></div>
-<p>Set <code>VALUESERP_API_KEY</code> in your env (or under
-<code>integrations.valueserp.api_key</code> in
+<p>Auth is the same Nostr keypair the daemon already uses
+(<code>infernet init</code>); no extra credential is needed. Each pubkey
+gets a daily search quota (default 50 queries / 24h). When the quota is
+exhausted the CLI surfaces a <code>429</code> with the exact reset
+time.</p>
+<p><strong>Self-hosters</strong> who want to bypass the control plane
+can pass <code>--direct</code> with a <code>VALUESERP_API_KEY</code> set
+in env (or under <code>integrations.valueserp.api_key</code> in
 <code>~/.config/infernet/config.json</code>).</p>
 <p>The crawler will skip paragraphs shorter than
 <code>--min-chars</code> (default 200) and truncate paragraphs longer
@@ -5919,8 +5925,10 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb263-1"><a href
 <p>The control plane only sees URLs — never your dataset bytes.</p>
 <h2 id="prerequisites-2">Prerequisites</h2>
 <ul>
-<li><code>VALUESERP_API_KEY</code> for crawling (free tier covers
-experiments)</li>
+<li>A Nostr keypair (<code>infernet init</code>) — used to auth against
+<code>POST /api/v1/search</code> for the data-crawl step. The platform
+supplies the upstream search key. Self-hosters can override with
+<code>VALUESERP_API_KEY</code> + <code>--direct</code>.</li>
 <li><code>HUGGINGFACE_TOKEN</code> with write scope on your target
 org</li>
 <li><code>ollama signin</code> already done</li>

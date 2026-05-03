@@ -393,11 +393,10 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">--domains</span> svelte.dev,kit.svelte.dev,github.com <span class="dt">\</span></span>
 <span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">--num</span> 30 <span class="dt">\</span></span>
 <span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">--out</span> ./data/svelte5.jsonl</span></code></pre></div>
-<p>Needs <code>VALUESERP_API_KEY</code> in env or under
-<code>integrations.valueserp.api_key</code> in
-<code>~/.config/infernet/config.json</code>. Output: a ChatML-format
-JSONL with ~hundreds of training examples extracted from the top web
-results.</p>
+<p>No search API key needed — the network proxies the crawl and enforces
+a per-node daily quota. (Self-host override: <code>--direct</code> with
+<code>VALUESERP_API_KEY</code>.) Output: a ChatML-format JSONL with
+hundreds of training examples extracted from the top web results.</p>
 <h3 id="scaffold-a-config">2. Scaffold a config</h3>
 <div class="sourceCode" id="cb9"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> train init <span class="at">--output</span> ./run</span></code></pre></div>

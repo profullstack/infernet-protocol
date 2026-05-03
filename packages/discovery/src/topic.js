@@ -10,13 +10,13 @@ import { sha256 } from '@noble/hashes/sha2.js';
 
 const PREFIX = 'infernet:v1:';
 
-const VALID_KINDS = new Set(['model', 'class', 'node', 'petals']);
+const VALID_KINDS = new Set(['model', 'class', 'node', 'rpc']);
 const VALID_CLASSES = new Set(['A', 'B', 'B5', 'C']);
 
 /**
  * Derive the 32-byte topic key for a (kind, value) pair.
  *
- * @param {'model'|'class'|'node'|'petals'} kind
+ * @param {'model'|'class'|'node'|'rpc'} kind
  * @param {string} value Canonical, namespace-specific identifier.
  * @returns {Uint8Array} 32-byte topic key
  */
@@ -46,11 +46,12 @@ export function topicKeyHex(kind, value) {
  * - model: NFC-normalized, lowercased
  * - class: uppercase enum (A | B | B5 | C); throws otherwise
  * - node:  64-char lowercase hex (x-only pubkey); throws otherwise
- * - petals: passed through (Petals model ids are case-sensitive)
+ * - rpc:   same as model — IPIP-0033 federated inference via llama.cpp RPC
  */
 export function canonicalizeValue(kind, value) {
     switch (kind) {
         case 'model':
+        case 'rpc':
             return value.normalize('NFC').toLowerCase();
         case 'class': {
             const upper = value.toUpperCase();
@@ -65,8 +66,6 @@ export function canonicalizeValue(kind, value) {
             }
             return value.toLowerCase();
         }
-        case 'petals':
-            return value;
         default:
             throw new Error(`unknown topic kind: ${kind}`);
     }

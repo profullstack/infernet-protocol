@@ -361,17 +361,17 @@ export default function ChatView({ initialModels = [] }) {
                 ))}
             </select>
             <label
-              className="flex cursor-pointer items-center gap-2 text-xs text-[var(--muted)] hover:text-white"
-              title="Split the inference across multiple GPU nodes via Petals (experimental). Higher latency, but lets you run models too big for any single node."
+              className="flex cursor-not-allowed items-center gap-2 text-xs text-[var(--muted)] opacity-60"
+              title="Federated inference is being rebuilt on llama.cpp RPC over Hyperswarm (IPIP-0033). The previous Petals-based path is deprecated and currently runs only on the proxy node."
             >
               <input
                 type="checkbox"
-                checked={distributed}
-                onChange={(e) => setDistributed(e.target.checked)}
-                disabled={streaming}
+                checked={false}
+                disabled
+                readOnly
                 className="h-3.5 w-3.5 rounded border-white/30 bg-transparent text-[var(--accent)] disabled:opacity-50"
               />
-              <span>Distribute across all nodes <span className="text-[10px] text-amber-300">experimental</span></span>
+              <span>Distribute across all nodes <span className="text-[10px] text-amber-300">coming back soon</span></span>
             </label>
           </div>
         </header>

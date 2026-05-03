@@ -54,6 +54,6 @@ describe('canonicalizeValue', () => {
         expect(canonicalizeValue('model', 'Qwen2.5:7B')).toBe('qwen2.5:7b');
         expect(canonicalizeValue('class', 'b5')).toBe('B5');
         expect(canonicalizeValue('node', 'A'.repeat(64))).toBe('a'.repeat(64));
-        expect(canonicalizeValue('petals', 'meta-llama/Llama-3-70B')).toBe('meta-llama/Llama-3-70B');
+        expect(canonicalizeValue('rpc', 'Qwen2.5:72B')).toBe('qwen2.5:72b');
     });
 });

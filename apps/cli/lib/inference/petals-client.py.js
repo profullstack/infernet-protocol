@@ -1,4 +1,9 @@
 /**
+ * @deprecated Bundled Python Petals client — replaced by IPIP-0033
+ * (llama.cpp RPC over Hyperswarm). Kept for one release so existing
+ * daemons don't break; the control plane no longer routes
+ * `distributed: true` chats here.
+ *
  * Bundled Python petals client. Spawned by the daemon when it accepts
  * an /v1/petals/inference POST. Fans out across the public Petals
  * swarm using AutoDistributedModelForCausalLM and streams JSON lines

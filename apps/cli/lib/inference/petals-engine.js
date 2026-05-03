@@ -1,4 +1,14 @@
 /**
+ * @deprecated Petals backend — replaced by IPIP-0033 (llama.cpp RPC
+ * over Hyperswarm). The Petals public swarm is effectively dead and
+ * Infernet's distributed-mode jobs were resolving to "the proxy node
+ * only" — see IPIP-0031's Replaced header for the full diagnosis.
+ *
+ * This file remains for one release so existing daemons keep working;
+ * it MUST NOT be referenced from new code paths. Removal is scheduled
+ * for the next breaking version after IPIP-0033 Phase 4 lands.
+ *
+ * ---
  * Petals engine adapter — DISTRIBUTED inference across the volunteer
  * swarm (IPIP-0031, follow-up PR).
  *

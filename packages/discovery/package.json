@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/discovery",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Hyperswarm DHT discovery + signed peer handshake (IPIP-0032).",
   "license": "MIT",
   "type": "module",

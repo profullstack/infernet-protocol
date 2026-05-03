@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/rpc-adapter",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "llama.cpp RPC adapter — spawn llama-server with --rpc peer list, parse layer assignments, stream chat tokens (IPIP-0033).",
   "license": "MIT",
   "type": "module",

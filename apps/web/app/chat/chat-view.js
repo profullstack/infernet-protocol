@@ -39,6 +39,9 @@ export default function ChatView({ initialModels = [] }) {
   // layers. Persist so the footer can show "Used these N nodes".
   const [routingPeers, setRoutingPeers] = useState(null);
   const [routingProxy, setRoutingProxy] = useState(null);
+  const [routingPending, setRoutingPending] = useState(false);
+  const [routingNote, setRoutingNote] = useState(null);
+  const [daemonLogs, setDaemonLogs] = useState([]);
   // IPIP-0031: Petals swarm map. Populates "distributed across N nodes"
   // badge in the model picker + the checkbox helper text.
   const [swarmByModel, setSwarmByModel] = useState({});
@@ -96,6 +99,9 @@ export default function ChatView({ initialModels = [] }) {
     setInput("");
     setRoutingPeers(null);
     setRoutingProxy(null);
+    setRoutingPending(false);
+    setRoutingNote(null);
+    setDaemonLogs([]);
     const nextUser = { role: "user", content: text };
     // Assistant placeholder we'll append tokens into.
     const pendingAssistant = { role: "assistant", content: "", provider: null, pending: true };
@@ -186,6 +192,16 @@ export default function ChatView({ initialModels = [] }) {
         const data = JSON.parse(e.data);
         if (Array.isArray(data?.peers)) setRoutingPeers(data.peers);
         if (data?.proxy) setRoutingProxy(data.proxy);
+        setRoutingPending(Boolean(data?.pending));
+        setRoutingNote(typeof data?.note === "string" ? data.note : null);
+      } catch { /* ignore */ }
+    });
+
+    es.addEventListener("log", (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        const line = formatDaemonLogLine(data);
+        if (line) setDaemonLogs((prev) => prev.concat([{ at: Date.now(), text: line }]).slice(-50));
       } catch { /* ignore */ }
     });
 
@@ -300,6 +316,9 @@ export default function ChatView({ initialModels = [] }) {
     setProviderE2eCapable(true);
     setRoutingPeers(null);
     setRoutingProxy(null);
+    setRoutingPending(false);
+    setRoutingNote(null);
+    setDaemonLogs([]);
     ephemeralRef.current = null; // fresh keypair for next session
     convKeysRef.current.clear();
   }
@@ -379,7 +398,15 @@ export default function ChatView({ initialModels = [] }) {
         ) : null}
 
         <E2eIndicator active={e2eActive} provider={provider} capable={providerE2eCapable} streaming={streaming} />
-        <DistributedRouting active={distributed} peers={routingPeers} proxy={routingProxy} streaming={streaming} />
+        <DistributedRouting
+          active={distributed}
+          peers={routingPeers}
+          proxy={routingProxy}
+          pending={routingPending}
+          note={routingNote}
+          logs={daemonLogs}
+          streaming={streaming}
+        />
 
         <footer className="rounded-[2rem] border border-white/10 bg-[var(--panel)] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.25)]">
           <textarea
@@ -458,34 +485,45 @@ function E2eIndicator({ active, provider, capable, streaming }) {
 }
 
 /**
- * IPIP-0031 — show which Petals nodes are contributing layers when
- * "Distribute across all nodes" is checked. Lets the user verify the
- * job is actually fanning out across operators rather than running on
- * a single proxy. Three states:
- *   1. distributed off → don't render
- *   2. distributed on, no routing yet → "Awaiting peer assignments…"
- *   3. distributed on, peers received → table of peer_id · blocks · operator
+ * IPIP-0031 — verification panel for distributed mode. Lets the user
+ * confirm the job is actually fanning out across operators rather
+ * than running on a single proxy. States:
+ *
+ *   1. inactive (checkbox off, no proxy known) → don't render
+ *   2. proxy known, peers pending → show entry node + "awaiting…"
+ *   3. proxy known, no peers reported → entry node + explanatory note
+ *   4. peers received → list each contributing operator
+ *
+ * Also surfaces a rolling daemon log (last 50 lines of stderr +
+ * diagnostics) so the user can see what the entry node is doing.
  */
-function DistributedRouting({ active, peers, proxy, streaming }) {
+function DistributedRouting({ active, peers, proxy, pending, note, logs, streaming }) {
   if (!active) return null;
   const hasPeers = Array.isArray(peers) && peers.length > 0;
-  if (!hasPeers && !streaming && !proxy) return null;
+  const showStreamingPlaceholder = !proxy && streaming;
+  if (!proxy && !showStreamingPlaceholder && !hasPeers) return null;
+
+  const headline = hasPeers
+    ? `Distributed across ${peers.length} node${peers.length === 1 ? "" : "s"}`
+    : pending
+      ? "Connecting to swarm…"
+      : "Distributed mode";
 
   return (
     <div className="rounded-2xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 px-4 py-3 text-xs text-[var(--muted)]">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-          Distributed across {hasPeers ? `${peers.length} node${peers.length === 1 ? "" : "s"}` : "the swarm"}
+          {headline}
         </span>
         {proxy ? (
           <span>
             entry: <span className="font-mono text-white">{proxy.name ?? shortPubkey(proxy.pubkey) ?? "node"}</span>
+            {proxy.pubkey ? <span className="ml-1 opacity-60">· {shortPubkey(proxy.pubkey)}</span> : null}
           </span>
         ) : null}
       </div>
-      {!hasPeers ? (
-        <p className="mt-2">Awaiting peer assignments from the entry node…</p>
-      ) : (
+
+      {hasPeers ? (
         <ul className="mt-2 grid gap-1 sm:grid-cols-2">
           {peers.map((p, i) => (
             <li key={(p.peer_id ?? "") + i} className="flex items-baseline justify-between gap-3">
@@ -499,9 +537,43 @@ function DistributedRouting({ active, peers, proxy, streaming }) {
             </li>
           ))}
         </ul>
-      )}
+      ) : pending ? (
+        <p className="mt-2">Awaiting layer routing from the entry node…</p>
+      ) : note ? (
+        <p className="mt-2 text-amber-200">{note}</p>
+      ) : null}
+
+      {logs && logs.length > 0 ? (
+        <details className="mt-3" open>
+          <summary className="cursor-pointer text-[10px] uppercase tracking-[0.2em] text-[var(--muted)] hover:text-white">
+            Daemon log ({logs.length})
+          </summary>
+          <pre className="mt-2 max-h-40 overflow-y-auto rounded-md border border-white/10 bg-black/40 p-2 font-mono text-[10px] leading-snug text-[var(--muted)]">
+            {logs.map((l, i) => (
+              <div key={i}>{l.text}</div>
+            ))}
+          </pre>
+        </details>
+      ) : null}
     </div>
   );
+}
+
+/**
+ * Squash a daemon log frame into a single human-readable line. The
+ * Python Petals client emits both stderr (free-form) and structured
+ * `{ event: "log", warn: "..." }` shapes; the daemon HTTP wrapper
+ * also emits `{ exit_code }` on child exit. Normalize all of those.
+ */
+function formatDaemonLogLine(data) {
+  if (!data || typeof data !== "object") return null;
+  if (typeof data.stderr === "string") return data.stderr.trimEnd();
+  if (typeof data.raw === "string") return data.raw;
+  if (typeof data.warn === "string") return `WARN ${data.warn}`;
+  if (typeof data.message === "string") return data.message;
+  if (typeof data.exit_code === "number") return `daemon child exited (code=${data.exit_code})`;
+  // Unknown shape — render as compact JSON so something useful surfaces.
+  try { return JSON.stringify(data); } catch { return null; }
 }
 
 function shortPubkey(k) {

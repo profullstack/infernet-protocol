@@ -217,6 +217,19 @@ async function runPetalsProxy({ supabase, job, safeEnqueue, sseFrame }) {
   });
   if (persistedMeta) safeEnqueue(sseFrame("meta", persistedMeta.data, persistedMeta.id));
 
+  // IPIP-0031 §UX: emit a routing frame immediately so the chat UI
+  // can show "entry: <node>" without waiting for the daemon to extract
+  // chosen_servers. The daemon will overwrite this with the real peer
+  // list once Petals' inference_session has resolved (typically after
+  // the first token). On a small swarm or if chosen_servers is empty,
+  // this initial frame is also the final one.
+  safeEnqueue(sseFrame("routing", {
+    peers: [],
+    model,
+    proxy: { id: provider.id, name: provider.name, pubkey: provider.public_key },
+    pending: true
+  }));
+
   const upstream = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -275,11 +288,12 @@ async function runPetalsProxy({ supabase, job, safeEnqueue, sseFrame }) {
         // show *which* nodes are participating, not opaque libp2p IDs.
         // Best-effort: any peer_id we can't resolve still gets shown
         // as a short prefix.
+        const proxyInfo = { id: provider.id, name: provider.name, pubkey: provider.public_key };
         try {
           const enriched = await resolveRoutingPeers({ supabase, peers: chosenPeers });
-          safeEnqueue(sseFrame("routing", { peers: enriched, model, proxy: { id: provider.id, name: provider.name, pubkey: provider.public_key } }));
+          safeEnqueue(sseFrame("routing", { peers: enriched, model, proxy: proxyInfo, pending: false }));
         } catch {
-          safeEnqueue(sseFrame("routing", { peers: chosenPeers ?? [], model, proxy: { id: provider.id, name: provider.name, pubkey: provider.public_key } }));
+          safeEnqueue(sseFrame("routing", { peers: chosenPeers ?? [], model, proxy: proxyInfo, pending: false }));
         }
       } else if (evName === "done") {
         const data = { text: fullText, finished_at: new Date().toISOString() };
@@ -290,6 +304,15 @@ async function runPetalsProxy({ supabase, job, safeEnqueue, sseFrame }) {
           result: { type: "chat", text: fullText, source: "petals", provider_id: provider.id }
         });
         await emitPetalsReceipts({ supabase, job, proxyProvider: provider, chosenPeers });
+      } else if (evName === "log") {
+        // Daemon stderr + diagnostic lines from the Python Petals
+        // client. Relay to the browser so users can verify the swarm
+        // is actually doing work; surface as a `log` SSE event.
+        safeEnqueue(sseFrame("log", evData));
+      } else if (evName === "exit") {
+        // Daemon's child process exited. Useful diagnostic when no
+        // routing/done arrived (most often: missing python deps).
+        safeEnqueue(sseFrame("log", { exit_code: evData?.code ?? null }));
       } else if (evName === "error") {
         const persisted = await insertJobEvent(supabase, job.id, "error", evData);
         safeEnqueue(sseFrame("error", evData, persisted?.id));
@@ -297,6 +320,19 @@ async function runPetalsProxy({ supabase, job, safeEnqueue, sseFrame }) {
         return;
       }
     }
+  }
+
+  // Daemon stream ended without `done`. If we never got chosen_servers,
+  // synthesize one final routing frame so the UI replaces "pending" with
+  // a clear "entry-only" state instead of looping forever.
+  if (!chosenPeers) {
+    safeEnqueue(sseFrame("routing", {
+      peers: [],
+      model,
+      proxy: { id: provider.id, name: provider.name, pubkey: provider.public_key },
+      pending: false,
+      note: "Daemon did not report chosen_servers — Petals session likely returned without populating layer routing."
+    }));
   }
 }
 

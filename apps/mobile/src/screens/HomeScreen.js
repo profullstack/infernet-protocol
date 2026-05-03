@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, RefreshControl, Image } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { fetchJobs, fetchOverview } from '../lib/api';
 
 // Components (we'll create these later)
 import JobSummary from '../components/JobSummary';
@@ -16,39 +17,45 @@ const HomeScreen = ({ navigation }) => {
     availableProviders: 0
   });
   const [recentJobs, setRecentJobs] = useState([]);
+  const [error, setError] = useState(null);
 
   // Fetch data on mount
   useEffect(() => {
     fetchDashboardData();
   }, []);
 
-  // Simulate fetching dashboard data
   const fetchDashboardData = async () => {
     setRefreshing(true);
-    
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Mock data for demonstration
-    setStats({
-      activeJobs: Math.floor(Math.random() * 5),
-      completedJobs: Math.floor(Math.random() * 20) + 5,
-      totalSpent: parseFloat((Math.random() * 10).toFixed(2)),
-      availableProviders: Math.floor(Math.random() * 50) + 10
-    });
-    
-    // Generate mock recent jobs
-    const mockJobs = Array.from({ length: 5 }, (_, i) => ({
-      id: `job-${Date.now()}-${i}`,
-      model: `llama-${Math.floor(Math.random() * 3) + 1}b-${Math.floor(Math.random() * 3) + 1}t`,
-      status: Math.random() > 0.3 ? 'completed' : Math.random() > 0.5 ? 'processing' : 'pending',
-      cost: parseFloat((Math.random() * 2).toFixed(4)),
-      timestamp: new Date(Date.now() - Math.floor(Math.random() * 7 * 24 * 60 * 60 * 1000)).toISOString(),
-      provider: `provider-${Math.floor(Math.random() * 100)}`
-    }));
-    
-    setRecentJobs(mockJobs);
-    setRefreshing(false);
+    setError(null);
+    try {
+      const [overview, jobs] = await Promise.all([
+        fetchOverview().catch(() => ({})),
+        fetchJobs({ limit: 5 }),
+      ]);
+
+      setStats({
+        activeJobs: Number(overview?.activeJobs ?? 0),
+        completedJobs: Number(overview?.completedJobs ?? 0),
+        totalSpent: Number(overview?.totalSpent ?? 0),
+        availableProviders: Number(overview?.availableProviders ?? 0),
+      });
+
+      setRecentJobs(
+        (jobs ?? []).map((j) => ({
+          id: j.id,
+          model: j.model_name || j.title || 'unknown',
+          status: j.status || 'unknown',
+          cost: Number(j.payment_offer ?? 0),
+          timestamp: j.created_at,
+          provider: j.client_name || '—',
+        })),
+      );
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+      setError(err?.message ?? 'Failed to load dashboard');
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   return (
@@ -89,14 +96,18 @@ const HomeScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
           
-          {recentJobs.length > 0 ? (
+          {error ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>{error}</Text>
+            </View>
+          ) : recentJobs.length > 0 ? (
             recentJobs.map(job => (
               <JobSummary key={job.id} job={job} onPress={() => {}} />
             ))
           ) : (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>No recent jobs found</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.newJobButton}
                 onPress={() => {}}
               >

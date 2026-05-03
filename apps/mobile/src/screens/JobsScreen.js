@@ -1,62 +1,57 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, FlatList, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import JobSummary from '../components/JobSummary';
+import { fetchJobs as apiFetchJobs } from '../lib/api';
 
 const JobsScreen = ({ navigation }) => {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
+  const [error, setError] = useState(null);
 
-  // Fetch jobs on mount
+  // Fetch jobs on mount and when status filter changes
   useEffect(() => {
-    fetchJobs();
-  }, []);
+    refreshJobs();
+  }, [activeFilter]);
 
-  // Simulate fetching jobs from Supabase
-  const fetchJobs = async () => {
+  const refreshJobs = async () => {
     setLoading(true);
-
+    setError(null);
     try {
-      // In a real app, this would be a call to Supabase
-      // For demo, we'll simulate an API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Generate mock jobs
-      const mockJobs = Array.from({ length: 20 }, (_, i) => ({
-        id: `job-${Date.now()}-${i}`,
-        model: `llama-${Math.floor(Math.random() * 3) + 1}b-${Math.floor(Math.random() * 3) + 1}t`,
-        status: Math.random() > 0.3 ? 'completed' : 
-                Math.random() > 0.5 ? 'processing' : 
-                Math.random() > 0.7 ? 'pending' : 'failed',
-        cost: parseFloat((Math.random() * 2).toFixed(4)),
-        timestamp: new Date(Date.now() - Math.floor(Math.random() * 30 * 24 * 60 * 60 * 1000)).toISOString(),
-        provider: `provider-${Math.floor(Math.random() * 100)}`,
-        description: `Sample inference job ${i+1}`,
-        inputTokens: Math.floor(Math.random() * 500) + 100,
-        outputTokens: Math.floor(Math.random() * 1000) + 200
-      }));
-      
-      setJobs(mockJobs);
-    } catch (error) {
-      console.error('Error fetching jobs:', error);
+      const status = activeFilter === 'all' ? undefined : activeFilter;
+      const rows = await apiFetchJobs({ limit: 50, status });
+      setJobs(
+        rows.map((j, i) => ({
+          id: j.id ?? `job-${i}`,
+          model: j.model_name || j.title || 'unknown',
+          status: j.status || 'unknown',
+          cost: Number(j.payment_offer ?? 0),
+          timestamp: j.created_at,
+          provider: j.client_name || '—',
+          description: j.title || '',
+          inputTokens: Number(j.input_tokens ?? 0),
+          outputTokens: Number(j.output_tokens ?? 0),
+        })),
+      );
+    } catch (err) {
+      console.error('Error fetching jobs:', err);
+      setError(err?.message ?? 'Failed to load jobs');
+      setJobs([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Filter jobs based on search input and status filter
-  const filteredJobs = jobs.filter(job => {
-    const matchesSearch = 
-      job.model.toLowerCase().includes(filter.toLowerCase()) ||
-      job.description.toLowerCase().includes(filter.toLowerCase()) ||
-      job.id.toLowerCase().includes(filter.toLowerCase());
-      
-    const matchesStatus = 
-      activeFilter === 'all' || 
-      job.status === activeFilter;
-      
-    return matchesSearch && matchesStatus;
+  // Filter jobs by search input only — status filter is server-side.
+  const filteredJobs = jobs.filter((job) => {
+    if (!filter) return true;
+    const needle = filter.toLowerCase();
+    return (
+      (job.model || '').toLowerCase().includes(needle) ||
+      (job.description || '').toLowerCase().includes(needle) ||
+      (job.id || '').toLowerCase().includes(needle)
+    );
   });
 
   // Handle job selection
@@ -116,17 +111,19 @@ const JobsScreen = ({ navigation }) => {
             <JobSummary job={item} onPress={handleJobPress} />
           )}
           contentContainerStyle={styles.listContent}
-          onRefresh={fetchJobs}
+          onRefresh={refreshJobs}
           refreshing={loading}
         />
       ) : (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>
-            {filter || activeFilter !== 'all' 
-              ? 'No jobs match your filters' 
-              : 'No jobs found'}
+            {error
+              ? error
+              : filter || activeFilter !== 'all'
+                ? 'No jobs match your filters'
+                : 'No jobs found'}
           </Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.newJobButton}
             onPress={() => {}}
           >

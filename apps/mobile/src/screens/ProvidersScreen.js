@@ -1,61 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, FlatList, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import { fetchProviders as apiFetchProviders } from '../lib/api';
 
 const ProvidersScreen = ({ navigation }) => {
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [error, setError] = useState(null);
 
-  // Fetch providers on mount
   useEffect(() => {
-    fetchProviders();
+    refreshProviders();
   }, []);
 
-  // Simulate fetching providers from Supabase
-  const fetchProviders = async () => {
+  const refreshProviders = async () => {
     setLoading(true);
-
+    setError(null);
     try {
-      // In a real app, this would be a call to Supabase
-      // For demo, we'll simulate an API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Generate mock providers
-      const mockProviders = Array.from({ length: 15 }, (_, i) => ({
-        id: `provider-${i+1}`,
-        name: `Provider ${i+1}`,
-        status: Math.random() > 0.2 ? 'online' : 'offline',
-        reputation: (Math.random() * 5).toFixed(1),
-        jobsCompleted: Math.floor(Math.random() * 1000),
-        gpuType: ['NVIDIA RTX 4090', 'NVIDIA RTX 3090', 'NVIDIA A100', 'AMD Radeon RX 7900 XTX'][Math.floor(Math.random() * 4)],
-        gpuCount: Math.floor(Math.random() * 4) + 1,
-        supportedModels: [
-          'llama-2-7b',
-          'llama-2-13b',
-          'llama-2-70b',
-          'mistral-7b',
-          'mixtral-8x7b'
-        ].slice(0, Math.floor(Math.random() * 5) + 1),
-        pricePerToken: (Math.random() * 0.0001).toFixed(6),
-        latency: Math.floor(Math.random() * 200) + 50, // ms
-      }));
-      
-      setProviders(mockProviders);
-    } catch (error) {
-      console.error('Error fetching providers:', error);
+      const rows = await apiFetchProviders({ limit: 50 });
+      setProviders(
+        rows.map((p, i) => ({
+          id: p.id ?? `provider-${i}`,
+          name: p.name || `Provider ${i + 1}`,
+          status: p.status === 'available' ? 'online' : (p.status || 'offline'),
+          reputation: p.reputation ?? '—',
+          gpuSummary: p.gpu_summary || '—',
+          cpuSummary: p.cpu_summary || '—',
+          fabric: p.fabric || '',
+          price: p.price_display ?? '—',
+          cliVersion: p.cli_version ?? '—',
+        })),
+      );
+    } catch (err) {
+      console.error('Error fetching providers:', err);
+      setError(err?.message ?? 'Failed to load providers');
+      setProviders([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Filter providers based on search
-  const filteredProviders = providers.filter(provider => {
+  const filteredProviders = providers.filter((provider) => {
+    if (!searchQuery) return true;
+    const needle = searchQuery.toLowerCase();
     return (
-      provider.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      provider.gpuType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      provider.supportedModels.some(model => 
-        model.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      provider.name.toLowerCase().includes(needle) ||
+      provider.gpuSummary.toLowerCase().includes(needle) ||
+      provider.cpuSummary.toLowerCase().includes(needle)
     );
   });
 
@@ -79,34 +69,34 @@ const ProvidersScreen = ({ navigation }) => {
       <View style={styles.providerDetails}>
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>GPU:</Text>
-          <Text style={styles.detailValue}>{provider.gpuCount}× {provider.gpuType}</Text>
+          <Text style={styles.detailValue}>{provider.gpuSummary}</Text>
         </View>
-        
+
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Models:</Text>
+          <Text style={styles.detailLabel}>CPU:</Text>
           <Text style={styles.detailValue} numberOfLines={1} ellipsizeMode="tail">
-            {provider.supportedModels.join(', ')}
+            {provider.cpuSummary}
           </Text>
         </View>
-        
+
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Price:</Text>
-          <Text style={styles.detailValue}>${provider.pricePerToken}/token</Text>
+          <Text style={styles.detailValue}>{provider.price}</Text>
         </View>
-        
+
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Latency:</Text>
-          <Text style={styles.detailValue}>{provider.latency}ms</Text>
+          <Text style={styles.detailLabel}>CLI:</Text>
+          <Text style={styles.detailValue}>{provider.cliVersion}</Text>
         </View>
       </View>
-      
+
       <View style={styles.providerFooter}>
         <View style={styles.reputationContainer}>
           <Text style={styles.reputationText}>
-            ⭐ {provider.reputation} ({provider.jobsCompleted} jobs)
+            ⭐ {provider.reputation}
           </Text>
         </View>
-        
+
         <TouchableOpacity style={styles.useProviderButton}>
           <Text style={styles.useProviderButtonText}>Use Provider</Text>
         </TouchableOpacity>
@@ -140,15 +130,17 @@ const ProvidersScreen = ({ navigation }) => {
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <ProviderCard provider={item} />}
           contentContainerStyle={styles.listContent}
-          onRefresh={fetchProviders}
+          onRefresh={refreshProviders}
           refreshing={loading}
         />
       ) : (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>
-            {searchQuery 
-              ? 'No providers match your search' 
-              : 'No providers found'}
+            {error
+              ? error
+              : searchQuery
+                ? 'No providers match your search'
+                : 'No providers found'}
           </Text>
         </View>
       )}

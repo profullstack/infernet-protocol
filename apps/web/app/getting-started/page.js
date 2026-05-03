@@ -212,8 +212,10 @@ infernet upgrade                         # pull the latest CLI`}</Code>
     --num 30 \\
     --out ./data/svelte5.jsonl`}</Code>
                 <p className="text-xs">
-                    Needs <code className="text-[var(--accent)]">VALUESERP_API_KEY</code> in env or under
-                    {" "}<code className="text-[var(--accent)]">integrations.valueserp.api_key</code> in your config.
+                    No search API key needed — the network proxies the crawl and
+                    enforces a per-node daily quota. Self-hosting? Pass{" "}
+                    <code className="text-[var(--accent)]">--direct</code> with a{" "}
+                    <code className="text-[var(--accent)]">VALUESERP_API_KEY</code> to bypass.
                 </p>
 
                 <h3 className="mt-6 text-base font-semibold text-white">2. Scaffold a config</h3>

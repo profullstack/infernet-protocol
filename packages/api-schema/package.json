@@ -1,7 +1,7 @@
 {
   "name": "@infernetprotocol/api-schema",
   "private": true,
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "OpenAPI 3.1 specification for the Infernet Protocol control-plane API.",
   "license": "MIT",
   "type": "module",

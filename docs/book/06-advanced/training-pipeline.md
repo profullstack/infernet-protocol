@@ -26,8 +26,9 @@ infernet train data \
     --out ./data/svelte5.jsonl
 ```
 
-This hits [ValueSerp](https://valueserp.com) for the top 30 Google
-results, optionally filtered to a domain whitelist, then fetches each
+This calls `POST /api/v1/search` on the Infernet control plane, which
+proxies to a search provider and returns the top 30 Google results,
+optionally filtered to a domain whitelist. The CLI then fetches each
 URL, extracts the readable text, and chunks it into ChatML-format JSONL:
 
 ```json
@@ -37,7 +38,13 @@ URL, extracts the readable text, and chunks it into ChatML-format JSONL:
  "meta":{"source_url":"https://svelte.dev/docs/svelte/runes","paragraph_index":0}}
 ```
 
-Set `VALUESERP_API_KEY` in your env (or under
+Auth is the same Nostr keypair the daemon already uses (`infernet init`);
+no extra credential is needed. Each pubkey gets a daily search quota
+(default 50 queries / 24h). When the quota is exhausted the CLI surfaces
+a `429` with the exact reset time.
+
+**Self-hosters** who want to bypass the control plane can pass `--direct`
+with a `VALUESERP_API_KEY` set in env (or under
 `integrations.valueserp.api_key` in `~/.config/infernet/config.json`).
 
 The crawler will skip paragraphs shorter than `--min-chars` (default 200)
@@ -206,7 +213,9 @@ The control plane only sees URLs — never your dataset bytes.
 
 ## Prerequisites
 
-- `VALUESERP_API_KEY` for crawling (free tier covers experiments)
+- A Nostr keypair (`infernet init`) — used to auth against `POST /api/v1/search`
+  for the data-crawl step. The platform supplies the upstream search key.
+  Self-hosters can override with `VALUESERP_API_KEY` + `--direct`.
 - `HUGGINGFACE_TOKEN` with write scope on your target org
 - `ollama signin` already done
 - `llama.cpp` cloned + built at `$HOME/llama.cpp` for the GGUF convert

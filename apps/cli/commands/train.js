@@ -29,10 +29,14 @@ import {
 const HELP = `infernet train — fine-tune or train models on the P2P GPU network
 
 Usage:
-  infernet train data --query <q>             Crawl ValueSerp + emit JSONL
+  infernet train data --query <q>             Crawl the web + emit JSONL.
+                                              Routes through infernetprotocol.com
+                                              by default (no per-node API key).
                       [--out <file>]            (default: ./data/train.jsonl)
                       [--num <n>]               (default: 20 results)
                       [--domains <a,b,c>]       (whitelist filter)
+                      [--direct]                Bypass control plane —
+                                              uses VALUESERP_API_KEY directly
   infernet train init [--output <dir>]        Scaffold infernet.train.yml
   infernet train run  [--config <file>]       Run training (local | P2P | market)
                       [--local]               Force local execution
@@ -837,34 +841,82 @@ async function cmdData(args) {
         process.stderr.write(`example: infernet train data --query "svelte 5 framework docs"\n`);
         return 2;
     }
-    const apiKey = await resolveValueSerpKey();
-    if (!apiKey) {
-        process.stderr.write(
-            "error: VALUESERP_API_KEY is not set.\n" +
-            "Get a key at https://valueserp.com → set in env or in\n" +
-            "~/.config/infernet/config.json under integrations.valueserp.api_key\n"
-        );
-        return 1;
-    }
     const out = args.get("out") ?? args.get("output") ?? "./data/train.jsonl";
     const num = Number.parseInt(args.get("num") ?? "20", 10) || 20;
     const domains = args.get("domains")?.split(",").map((s) => s.trim()).filter(Boolean) ?? null;
     const minChars = Number.parseInt(args.get("min-chars") ?? "200", 10) || 200;
     const maxChars = Number.parseInt(args.get("max-chars") ?? "4000", 10) || 4000;
 
-    process.stdout.write(`Searching ValueSerp for: "${query}"\n`);
+    // Default: route search through the Infernet control plane. The platform
+    // holds the upstream provider key and applies a per-pubkey daily quota.
+    // Self-hosters can opt out with --direct or INFERNET_DIRECT_VALUESERP=1.
+    const useDirect =
+        args.has("direct") || process.env.INFERNET_DIRECT_VALUESERP === "1";
+
+    let search;
+    if (useDirect) {
+        const apiKey = await resolveValueSerpKey();
+        if (!apiKey) {
+            process.stderr.write(
+                "error: --direct requires VALUESERP_API_KEY.\n" +
+                "Set it in env or in ~/.config/infernet/config.json under\n" +
+                "integrations.valueserp.api_key\n"
+            );
+            return 1;
+        }
+        search = { mode: "direct", apiKey };
+        process.stdout.write(`Searching (direct ValueSerp): "${query}"\n`);
+    } else {
+        const cfg = await loadConfig().catch(() => ({}));
+        const controlPlaneUrl =
+            cfg?.controlPlane?.url ??
+            process.env.NEXT_PUBLIC_APP_URL ??
+            "https://infernetprotocol.com";
+        const publicKey = cfg?.node?.publicKey;
+        const privateKey = cfg?.node?.privateKey;
+        if (!publicKey || !privateKey) {
+            process.stderr.write(
+                "error: no Nostr keypair found in config — run `infernet init` first.\n" +
+                "(or pass --direct with a VALUESERP_API_KEY to bypass the control plane)\n"
+            );
+            return 1;
+        }
+        search = { mode: "control-plane", controlPlaneUrl, publicKey, privateKey };
+        process.stdout.write(`Searching via ${controlPlaneUrl}: "${query}"\n`);
+    }
+
     if (domains) process.stdout.write(`  domain whitelist: ${domains.join(", ")}\n`);
 
-    const result = await buildTrainingDataset({
-        query, apiKey, outPath: out, num, domains, minChars, maxChars,
-        onProgress: ({ stage, index, total, url }) => {
-            if (stage === "fetch") {
-                process.stdout.write(`  [${index}/${total}] ${url}\n`);
+    let result;
+    try {
+        result = await buildTrainingDataset({
+            query, search, outPath: out, num, domains, minChars, maxChars,
+            onProgress: ({ stage, index, total, url }) => {
+                if (stage === "fetch") {
+                    process.stdout.write(`  [${index}/${total}] ${url}\n`);
+                }
             }
+        });
+    } catch (err) {
+        if (err.status === 429 && err.body?.reset_at) {
+            process.stderr.write(
+                `error: search quota exceeded (${err.body.used}/${err.body.limit}).\n` +
+                `quota resets at ${err.body.reset_at}.\n` +
+                `for self-hosting, see --direct.\n`
+            );
+            return 1;
         }
-    });
+        if (err.status === 401) {
+            process.stderr.write(`error: search auth failed — is your config keypair valid? (${err.message})\n`);
+            return 1;
+        }
+        throw err;
+    }
 
     process.stdout.write(`\n✓ Wrote ${result.examples} examples from ${result.urls} URLs to ${result.outPath}\n`);
+    if (result.quota?.remaining !== undefined) {
+        process.stdout.write(`  search quota: ${result.quota.remaining}/${result.quota.limit} remaining today\n`);
+    }
     process.stdout.write(`\nNext steps:\n`);
     process.stdout.write(`  infernet train init --output ./run         # scaffold infernet.train.yml\n`);
     process.stdout.write(`  infernet train run  --local --output ./run # train against ${out}\n`);

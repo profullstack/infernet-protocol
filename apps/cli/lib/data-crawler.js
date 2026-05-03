@@ -2,21 +2,28 @@
  * Search-driven training-data collector.
  *
  * Pipeline:
- *   1. Hit valueserp.com /search with a query. Returns ranked URLs.
+ *   1. Hit infernetprotocol.com/api/v1/search with a query (Nostr-signed).
+ *      The control plane proxies to the real provider, holds the upstream
+ *      key, and enforces a per-pubkey daily quota.
  *   2. For each URL: fetch HTML, strip nav/script/style, extract main text.
  *   3. For each page: chunk into Q/A pairs (heading-based) and emit JSONL.
  *
  * The output JSONL uses the chatml `messages` shape, ready to feed into
  * `infernet train run` or any HF/Unsloth/Axolotl pipeline.
  *
- * VALUESERP_API_KEY must be set in env or `~/.config/infernet/config.json`
- * under integrations.valueserp.api_key.
+ * Self-host escape hatch: set INFERNET_DIRECT_VALUESERP=1 with a
+ * VALUESERP_API_KEY in env (or `integrations.valueserp.api_key` in config)
+ * to bypass the control plane and call valueserp directly.
  */
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import { signRequest, AUTH_HEADER } from "@infernetprotocol/auth";
 import { loadConfig } from "./config.js";
 
+const SEARCH_PATH = "/api/v1/search";
+
+/** Resolve a direct VALUESERP_API_KEY for the escape hatch. */
 export async function resolveValueSerpKey() {
     if (process.env.VALUESERP_API_KEY) return process.env.VALUESERP_API_KEY;
     const cfg = await loadConfig().catch(() => null);
@@ -26,12 +33,88 @@ export async function resolveValueSerpKey() {
 }
 
 /**
- * Search the web via ValueSerp and return the ranked list of result URLs.
+ * Search via the control plane (default path). Auth is the node's existing
+ * Nostr keypair — operators don't need a separate API key.
+ *
  * @param {object} opts
  * @param {string} opts.query
- * @param {string} opts.apiKey
+ * @param {string} opts.controlPlaneUrl
+ * @param {string} opts.publicKey   - 64-hex Nostr pubkey
+ * @param {string} opts.privateKey  - 64-hex Nostr privkey
  * @param {number} [opts.num=20]
  * @param {string} [opts.location]
+ * @param {string[]} [opts.domains]
+ * @param {number} [opts.timeoutMs=25000]
+ */
+export async function infernetSearch({
+    query,
+    controlPlaneUrl,
+    publicKey,
+    privateKey,
+    num = 20,
+    location,
+    domains,
+    timeoutMs = 25_000
+} = {}) {
+    if (!query) throw new Error("search: query required");
+    if (!controlPlaneUrl) throw new Error("search: controlPlaneUrl required");
+    if (!publicKey || !privateKey) throw new Error("search: Nostr keypair required (run `infernet init`)");
+
+    const base = controlPlaneUrl.replace(/\/+$/, "");
+    const bodyObj = { query, num };
+    if (location) bodyObj.location = location;
+    if (domains?.length) bodyObj.domains = domains;
+    const bodyText = JSON.stringify(bodyObj);
+
+    const { header } = signRequest({
+        method: "POST",
+        path: SEARCH_PATH,
+        body: bodyText,
+        publicKey,
+        privateKey
+    });
+
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    let res;
+    try {
+        res = await fetch(base + SEARCH_PATH, {
+            method: "POST",
+            headers: {
+                "content-type": "application/json",
+                [AUTH_HEADER]: header
+            },
+            body: bodyText,
+            signal: ctrl.signal
+        });
+    } finally {
+        clearTimeout(t);
+    }
+
+    const text = await res.text();
+    let payload = null;
+    if (text) {
+        try { payload = JSON.parse(text); } catch { payload = { raw: text }; }
+    }
+
+    if (!res.ok) {
+        const msg = payload?.error ?? `HTTP ${res.status}`;
+        const err = new Error(`search failed: ${msg}`);
+        err.status = res.status;
+        err.body = payload;
+        throw err;
+    }
+    return {
+        results: payload?.data ?? [],
+        remaining: payload?.remaining,
+        limit: payload?.limit,
+        resetAt: payload?.reset_at
+    };
+}
+
+/**
+ * Direct ValueSerp call — only used when INFERNET_DIRECT_VALUESERP=1.
+ * Kept for self-hosters who don't want to depend on the control plane.
  */
 export async function valueSerpSearch({ query, apiKey, num = 20, location } = {}) {
     if (!query) throw new Error("valueserp: query required");
@@ -142,11 +225,15 @@ export function paragraphsToChatml({ url, title, text, query, minChars = 200, ma
  * Top-level helper: search + crawl + chunk → write training JSONL.
  * Used by the `infernet train data` CLI surface.
  *
- * @returns {{ urls: number, examples: number, outPath: string }}
+ * Pass `search: { mode: "control-plane", controlPlaneUrl, publicKey, privateKey }`
+ * to route through the platform proxy (default), or
+ * `search: { mode: "direct", apiKey }` to call the upstream provider yourself.
+ *
+ * @returns {{ urls: number, examples: number, outPath: string, quota?: object }}
  */
 export async function buildTrainingDataset({
     query,
-    apiKey,
+    search,
     outPath,
     num = 20,
     minChars = 200,
@@ -154,7 +241,29 @@ export async function buildTrainingDataset({
     domains = null,        // optional whitelist (e.g. ["svelte.dev", "github.com"])
     onProgress = () => {}
 }) {
-    const results = await valueSerpSearch({ query, apiKey, num });
+    if (!search?.mode) throw new Error("buildTrainingDataset: search.mode is required");
+
+    let results;
+    let quota = null;
+    if (search.mode === "direct") {
+        results = await valueSerpSearch({ query, apiKey: search.apiKey, num });
+    } else if (search.mode === "control-plane") {
+        // Server applies the domain filter, but we still pass it so the
+        // server can short-circuit irrelevant results before billing them.
+        const out = await infernetSearch({
+            query,
+            num,
+            domains,
+            controlPlaneUrl: search.controlPlaneUrl,
+            publicKey: search.publicKey,
+            privateKey: search.privateKey
+        });
+        results = out.results;
+        quota = { remaining: out.remaining, limit: out.limit, resetAt: out.resetAt };
+    } else {
+        throw new Error(`buildTrainingDataset: unknown search.mode "${search.mode}"`);
+    }
+
     const filtered = domains
         ? results.filter((r) => domains.some((d) => r.domain?.includes(d)))
         : results;
@@ -179,5 +288,5 @@ export async function buildTrainingDataset({
         }
     }
     await out.close();
-    return { urls: urlsUsed, examples: totalExamples, outPath };
+    return { urls: urlsUsed, examples: totalExamples, outPath, quota };
 }

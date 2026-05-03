@@ -127,9 +127,10 @@ infernet train data \
     --out ./data/svelte5.jsonl
 ```
 
-Needs `VALUESERP_API_KEY` in env or under `integrations.valueserp.api_key`
-in `~/.config/infernet/config.json`. Output: a ChatML-format JSONL with
-~hundreds of training examples extracted from the top web results.
+No search API key needed — the network proxies the crawl and enforces
+a per-node daily quota. (Self-host override: `--direct` with
+`VALUESERP_API_KEY`.) Output: a ChatML-format JSONL with hundreds of
+training examples extracted from the top web results.
 
 ### 2. Scaffold a config
 

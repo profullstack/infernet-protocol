@@ -52,6 +52,11 @@
 #   INFERNET_RAY_HEAD=host:port   address of the Ray head (when MODE=worker)
 #   INFERNET_RAY_PORT=6379        head port (default 6379)
 #
+# CPU baseline model (always pulled — every node has a CPU):
+#
+#   INFERNET_CPU_BASELINE_MODEL=name  default qwen2.5:0.5b (≈400 MB)
+#   INFERNET_SKIP_CPU_BASELINE=1      skip the unconditional baseline pull
+#
 # Auto-bootstrap (everything below is optional — the script still works
 # without them, but with these set it leaves the node fully running
 # without ever needing an interactive `infernet setup` afterwards):
@@ -873,6 +878,48 @@ try_install_vllm() {
     unset _vllm_dir _mise_bin
 }
 
+# ---------------------------------------------------------------------------
+# CPU baseline model — every node has a CPU, so we unconditionally pull a
+# small Qwen model at install time. This guarantees that even operators
+# who set INFERNET_AUTOSTART=0 (or whose `infernet setup` later fails on
+# a different model) still have a working model to answer chat requests.
+#
+# Idempotent: `ollama pull` is a no-op if the model is already cached.
+# `infernet setup --yes` runs later (when AUTOSTART=1) and pulls the
+# operator-selected $INFERNET_MODEL alongside this baseline.
+#
+# Opt-out:  INFERNET_SKIP_CPU_BASELINE=1
+# Override: INFERNET_CPU_BASELINE_MODEL=<name>  (default qwen2.5:0.5b)
+# ---------------------------------------------------------------------------
+ensure_cpu_baseline_model() {
+    if [ "${INFERNET_SKIP_CPU_BASELINE:-0}" = "1" ]; then
+        info "INFERNET_SKIP_CPU_BASELINE=1 — skipping CPU baseline model pull"
+        return 0
+    fi
+
+    _cpu_model="${INFERNET_CPU_BASELINE_MODEL:-qwen2.5:0.5b}"
+    info "ensuring CPU baseline model is installed: $_cpu_model"
+
+    if ! command -v ollama >/dev/null 2>&1; then
+        info "  → ollama not found — installing via the official ollama.com script"
+        if ! curl -fsSL https://ollama.com/install.sh | sh; then
+            warn "ollama install failed — skipping baseline model pull"
+            warn "   retry later: curl -fsSL https://ollama.com/install.sh | sh"
+            unset _cpu_model
+            return 0
+        fi
+    fi
+
+    info "  → ollama pull $_cpu_model (≈400 MB; idempotent if already cached)"
+    if ollama pull "$_cpu_model"; then
+        ok "CPU baseline model ready: $_cpu_model"
+    else
+        warn "ollama pull $_cpu_model failed — retry later: ollama pull $_cpu_model"
+    fi
+
+    unset _cpu_model
+}
+
 run_install() {
     info "running pnpm install (downloads ~1.5 GB of node_modules; takes 1-3 min)"
     # Stream pnpm output directly to the terminal so the operator can
@@ -1247,6 +1294,12 @@ main() {
     # high-throughput engine alongside Ollama. Skipped on AMD / Apple
     # Silicon / CPU. Opt-out: INFERNET_INSTALL_VLLM=0.
     try_install_vllm || warn "vLLM install hit issues — continuing with Ollama only"
+
+    # Every node has a CPU, so unconditionally guarantee a small Qwen
+    # CPU model is available locally. Runs even when AUTOSTART=0 so
+    # operators who skip `infernet setup` still have a working model.
+    # Opt-out: INFERNET_SKIP_CPU_BASELINE=1.
+    ensure_cpu_baseline_model
 
     printf '\n%sInstall complete.%s\n' "$GREEN" "$RESET"
 

@@ -3,7 +3,8 @@ import {
     meetsRpcTier,
     selectRpcSlices,
     mergeRpcRouting,
-    splitRpcReceiptShares
+    splitRpcReceiptShares,
+    summarizeRpcCensus
 } from '../apps/web/lib/data/rpc-routing.js';
 
 describe('meetsRpcTier — IPIP-0033 §7', () => {
@@ -195,5 +196,103 @@ describe('splitRpcReceiptShares — IPIP-0033 §6', () => {
         // Unknown peer is dropped — primary + s1 remain. Note: this
         // means the receipt total is < 1.0; the IPIP §6 leaves that
         // tradeoff explicit (don't pay strangers we can't identify).
+    });
+});
+
+describe('summarizeRpcCensus — IPIP-0033 Phase 4', () => {
+    const liveSlice = (id, opts = {}) => ({
+        id,
+        name: `slice-${id}`,
+        public_key: id.repeat(64).slice(0, 64),
+        trust_tier: opts.trust_tier ?? 'public',
+        specs: { rpc: { host: opts.host ?? `10.0.0.${id}`, port: opts.port ?? 50050 + Number(id), models: ['qwen2.5:72b'] } }
+    });
+    const livePrimary = (id, opts = {}) => ({
+        id,
+        name: `primary-${id}`,
+        public_key: id.repeat(64).slice(0, 64),
+        trust_tier: opts.trust_tier ?? 'public'
+    });
+
+    it('reports ready when there is at least one primary and ≥ minSlices', () => {
+        const out = summarizeRpcCensus({
+            model: 'qwen2.5:72b',
+            primaries: [livePrimary('1')],
+            slices: [liveSlice('1'), liveSlice('2')],
+            minSlices: 2
+        });
+        expect(out).toEqual({
+            model: 'qwen2.5:72b',
+            primaries: 1,
+            slices: 2,
+            min_slices: 2,
+            ready: true
+        });
+    });
+
+    it('reports not ready when there is no primary', () => {
+        const out = summarizeRpcCensus({
+            model: 'qwen2.5:72b',
+            primaries: [],
+            slices: [liveSlice('1'), liveSlice('2'), liveSlice('3')],
+            minSlices: 2
+        });
+        expect(out.ready).toBe(false);
+        expect(out.primaries).toBe(0);
+        expect(out.slices).toBe(3);
+    });
+
+    it('reports not ready on slice shortfall', () => {
+        const out = summarizeRpcCensus({
+            model: 'qwen2.5:72b',
+            primaries: [livePrimary('1')],
+            slices: [liveSlice('1')], // only 1, need 2
+            minSlices: 2
+        });
+        expect(out.ready).toBe(false);
+        expect(out.slices).toBe(1);
+    });
+
+    it('drops private-tier primaries from the count', () => {
+        const out = summarizeRpcCensus({
+            model: 'qwen2.5:72b',
+            primaries: [livePrimary('1', { trust_tier: 'private' })],
+            slices: [liveSlice('1'), liveSlice('2')],
+            minSlices: 2
+        });
+        expect(out.primaries).toBe(0);
+        expect(out.ready).toBe(false);
+    });
+
+    it('runs slices through selectRpcSlices — drops private + unroutable', () => {
+        const out = summarizeRpcCensus({
+            model: 'qwen2.5:72b',
+            primaries: [livePrimary('1')],
+            slices: [
+                liveSlice('1'),
+                liveSlice('2', { trust_tier: 'private' }),       // dropped
+                { id: '3', public_key: 'c'.repeat(64), trust_tier: 'public', specs: { rpc: { models: ['qwen2.5:72b'] } } } // no host/port → dropped
+            ],
+            minSlices: 2
+        });
+        expect(out.slices).toBe(1);
+        expect(out.ready).toBe(false);
+    });
+
+    it('honors minTrustTier in slice filtering', () => {
+        const out = summarizeRpcCensus({
+            model: 'qwen2.5:72b',
+            primaries: [livePrimary('1')],
+            slices: [liveSlice('1'), liveSlice('2', { trust_tier: 'verified' })],
+            minSlices: 2,
+            minTrustTier: 'verified'
+        });
+        expect(out.slices).toBe(1);
+        expect(out.ready).toBe(false);
+    });
+
+    it('handles missing inputs gracefully', () => {
+        const out = summarizeRpcCensus({ minSlices: 2 });
+        expect(out).toEqual({ model: null, primaries: 0, slices: 0, min_slices: 2, ready: false });
     });
 });

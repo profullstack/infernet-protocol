@@ -45,6 +45,9 @@ export default function ChatView({ initialModels = [] }) {
   // IPIP-0031: Petals swarm map. Populates "distributed across N nodes"
   // badge in the model picker + the checkbox helper text.
   const [swarmByModel, setSwarmByModel] = useState({});
+  // IPIP-0033 Phase 4: per-model RPC census drives whether the
+  // "Distribute across all nodes" checkbox is enabled.
+  const [rpcCensus, setRpcCensus] = useState(null);
   useEffect(() => {
     let cancelled = false;
     fetch("/api/v1/petals/swarm")
@@ -58,6 +61,34 @@ export default function ChatView({ initialModels = [] }) {
       .catch(() => { /* non-fatal */ });
     return () => { cancelled = true; };
   }, []);
+
+  // IPIP-0033 Phase 4: census the network for live RPC primaries +
+  // slices on the picked model. The checkbox is gated on this — we
+  // only enable distributed mode when a job submitted right now
+  // wouldn't fail-closed on shortfall (matches runRpcProxy's filter).
+  useEffect(() => {
+    if (!modelName) {
+      setRpcCensus(null);
+      setDistributed(false);
+      return undefined;
+    }
+    let cancelled = false;
+    const url = `/api/v1/rpc/census?model=${encodeURIComponent(modelName)}`;
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => {
+        if (cancelled || !b) return;
+        setRpcCensus(b);
+        if (!b.ready) setDistributed(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRpcCensus(null);
+          setDistributed(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [modelName]);
 
   const esRef = useRef(null);
   const scrollRef = useRef(null);
@@ -360,19 +391,13 @@ export default function ChatView({ initialModels = [] }) {
                   </option>
                 ))}
             </select>
-            <label
-              className="flex cursor-not-allowed items-center gap-2 text-xs text-[var(--muted)] opacity-60"
-              title="Federated inference is being rebuilt on llama.cpp RPC over Hyperswarm (IPIP-0033). The previous Petals-based path is deprecated and currently runs only on the proxy node."
-            >
-              <input
-                type="checkbox"
-                checked={false}
-                disabled
-                readOnly
-                className="h-3.5 w-3.5 rounded border-white/30 bg-transparent text-[var(--accent)] disabled:opacity-50"
-              />
-              <span>Distribute across all nodes <span className="text-[10px] text-amber-300">coming back soon</span></span>
-            </label>
+            <DistributedCheckbox
+              modelName={modelName}
+              streaming={streaming}
+              checked={distributed}
+              onChange={(v) => setDistributed(v)}
+              census={rpcCensus}
+            />
           </div>
         </header>
 
@@ -452,6 +477,62 @@ export default function ChatView({ initialModels = [] }) {
         </footer>
       </div>
     </main>
+  );
+}
+
+/**
+ * IPIP-0033 Phase 4 — "Distribute across all nodes" checkbox driven
+ * by /api/v1/rpc/census. Three states:
+ *
+ *   1. census loading → disabled, "checking…" hint
+ *   2. census ready → enabled, normal toggle
+ *   3. census not ready → disabled, shortfall hint with live counts
+ */
+function DistributedCheckbox({ modelName, streaming, checked, onChange, census }) {
+  const loaded = census && census.model === modelName;
+  const ready = !!loaded && census.ready === true;
+
+  let label;
+  let title;
+  if (!modelName) {
+    label = "Pick a model first";
+    title = "Pick a specific model from the dropdown to see if distributed mode is available.";
+  } else if (!loaded) {
+    label = <span className="text-[10px] text-[var(--muted)]">checking…</span>;
+    title = "Querying the network for active RPC primaries + slices…";
+  } else if (ready) {
+    label = (
+      <span className="text-[10px] text-emerald-300">
+        {census.primaries} primary · {census.slices} slices live
+      </span>
+    );
+    title = "Splits the inference across multiple llama.cpp RPC slices (IPIP-0033). Higher latency, but lets you run models too big for any single node.";
+  } else {
+    const need = census.min_slices ?? 2;
+    label = (
+      <span className="text-[10px] text-amber-300">
+        {census.primaries} primary · {census.slices}/{need} slices
+      </span>
+    );
+    title = `Distributed mode needs ≥1 primary and ≥${need} live RPC slices for ${modelName}. Operators host slices via \`infernet inference serve --backend rpc --model ${modelName}\` (IPIP-0033).`;
+  }
+
+  const disabled = streaming || !ready;
+
+  return (
+    <label
+      className={`flex items-center gap-2 text-xs ${disabled ? "cursor-not-allowed text-[var(--muted)] opacity-60" : "cursor-pointer text-[var(--muted)] hover:text-white"}`}
+      title={title}
+    >
+      <input
+        type="checkbox"
+        checked={ready ? checked : false}
+        onChange={(e) => ready && onChange(e.target.checked)}
+        disabled={disabled}
+        className="h-3.5 w-3.5 rounded border-white/30 bg-transparent text-[var(--accent)] disabled:opacity-50"
+      />
+      <span>Distribute across all nodes {label}</span>
+    </label>
   );
 }
 

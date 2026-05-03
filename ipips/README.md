@@ -167,7 +167,7 @@ to the canonical conversation thread.
 | 0030  | [Open-Market Distributed Training](./ipip-0030.md) | Standards Track | Final  |
 | 0031  | [Federated Inference via Petals](./ipip-0031.md) | Standards Track | Replaced |
 | 0032  | [Hyperswarm DHT — Topic-Keyed Peer Discovery](./ipip-0032.md) | Standards Track | Draft  |
-| 0033  | [Federated Inference via llama.cpp RPC over Hyperswarm](./ipip-0033.md) | Standards Track | Draft  |
+| 0033  | [Federated Inference via llama.cpp RPC over Hyperswarm](./ipip-0033.md) | Standards Track | Active |
 
 ## Editors
 

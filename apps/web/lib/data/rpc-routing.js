@@ -76,6 +76,36 @@ export function mergeRpcRouting({ daemonPeers, slices }) {
 }
 
 /**
+ * IPIP-0033 Phase 4 — summarize the live federated-inference census
+ * for a single model so the chat playground can decide whether to
+ * enable the "Distribute across all nodes" checkbox.
+ *
+ * `slices` are run through `selectRpcSlices` so the count reflects
+ * what runRpcProxy would actually accept (private tier dropped,
+ * unroutable rows dropped, optional minTrustTier honored).
+ *
+ * Returns:
+ *   {
+ *     model,
+ *     primaries: <int>,
+ *     slices: <int>,           // eligible slices, post-filter
+ *     min_slices: <int>,       // MIN_RPC_PEERS (control-plane policy)
+ *     ready: <bool>            // primaries >= 1 AND slices >= min
+ *   }
+ */
+export function summarizeRpcCensus({ model, primaries, slices, minSlices, minTrustTier }) {
+    const eligible = selectRpcSlices(slices ?? [], { minTrustTier });
+    const livePrimaries = (primaries ?? []).filter((p) => (p.trust_tier ?? 'public') !== 'private');
+    return {
+        model: model ?? null,
+        primaries: livePrimaries.length,
+        slices: eligible.length,
+        min_slices: minSlices,
+        ready: livePrimaries.length >= 1 && eligible.length >= minSlices
+    };
+}
+
+/**
  * IPIP-0033 §6 — split a CPR receipt across the primary + the
  * layer-contributing slices. Pure function so the wire-format and
  * the math are testable without touching the queue.

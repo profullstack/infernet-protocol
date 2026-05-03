@@ -46,7 +46,7 @@ function Code({ lang = "bash", children }) {
     const code = String(children).trim();
     return (
         <div className="relative my-3 rounded-lg border border-white/10 bg-[var(--panel-strong)] text-sm">
-            <CopyButton value={code} className="absolute right-2 top-2 z-10" />
+            <CopyButton text={code} className="absolute right-2 top-2 z-10" />
             <pre className="overflow-x-auto px-4 py-3 pr-12 text-[13px] leading-6 text-white"><code>{code}</code></pre>
         </div>
     );

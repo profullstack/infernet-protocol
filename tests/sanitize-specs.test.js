@@ -67,3 +67,25 @@ describe("sanitizeSpecs — vram_tier handling", () => {
         expect(out.gpus.length).toBeLessThanOrEqual(16);
     });
 });
+
+describe("sanitizeSpecs — cli_version", () => {
+    it("preserves a well-formed cli_version through register", () => {
+        const out = sanitizeSpecs({ gpus: [], cli_version: "0.1.41" });
+        expect(out.cli_version).toBe("0.1.41");
+    });
+
+    it("preserves prerelease + build-metadata semver shapes", () => {
+        const out = sanitizeSpecs({ gpus: [], cli_version: "1.2.3-rc.1+build.5" });
+        expect(out.cli_version).toBe("1.2.3-rc.1+build.5");
+    });
+
+    it("drops a hostile cli_version that includes whitespace or shell chars", () => {
+        const out = sanitizeSpecs({ gpus: [], cli_version: "0.1.41; rm -rf /" });
+        expect(out.cli_version).toBeNull();
+    });
+
+    it("drops missing / non-string cli_version", () => {
+        expect(sanitizeSpecs({ gpus: [] }).cli_version).toBeNull();
+        expect(sanitizeSpecs({ gpus: [], cli_version: 41 }).cli_version).toBeNull();
+    });
+});

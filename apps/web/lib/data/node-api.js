@@ -56,6 +56,16 @@ export function sanitizeSpecs(input) {
             ? input.e2e_version
             : null;
 
+    // CLI version — semver-ish, public. Surfaced on /dashboard, /status,
+    // and the public /nodes/[id] page so operators can see which fleet
+    // members are out of date. Without this whitelist the daemon's
+    // version would only appear after the first heartbeat (~5 min after
+    // register) because heartbeat passes specs through unsanitized.
+    const cliVersion = typeof input.cli_version === "string"
+        && /^[0-9A-Za-z._+-]{1,32}$/.test(input.cli_version)
+            ? input.cli_version
+            : null;
+
     return {
         gpus: gpus.map(sanitizeGpu).filter(Boolean),
         gpu_count: gpus.length,
@@ -63,7 +73,8 @@ export function sanitizeSpecs(input) {
         petals_models: petalsModels,
         petals_peer_id: petalsPeerId,
         e2e_capable: e2eCapable,
-        e2e_version: e2eVersion
+        e2e_version: e2eVersion,
+        cli_version: cliVersion
     };
 }
 

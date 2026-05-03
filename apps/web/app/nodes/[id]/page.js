@@ -47,6 +47,11 @@ export default async function NodeDetailsPage({ params }) {
                         {node.status}
                     </span>
                     {" · "}Last heartbeat: {lastSeenAgo}
+                    {specs.cli_version ? (
+                        <>
+                            {" · "}CLI: <span className="font-mono text-white">{specs.cli_version}</span>
+                        </>
+                    ) : null}
                 </p>
             </header>
 

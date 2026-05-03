@@ -65,10 +65,10 @@ export async function POST(request) {
       modelName,
       maxTokens,
       temperature,
-      // IPIP-0031: when set, the router routes the request through a
-      // Petals client that fans out across the volunteer swarm instead
-      // of dispatching to a single provider. Persisted on the job so
-      // the SSE handler picks the correct streaming path.
+      // IPIP-0033: when set, runRpcProxy in /api/chat/stream picks an
+      // RPC primary + slice list and fans the request across them
+      // instead of dispatching to a single provider. Persisted on the
+      // job so the SSE handler picks the correct streaming path.
       distributed: distributed === true,
       minTrustTier
     });

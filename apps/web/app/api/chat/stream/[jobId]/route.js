@@ -85,16 +85,10 @@ export async function GET(_request, { params }) {
 
       // IPIP-0033: distributed inference via llama.cpp RPC over
       // Hyperswarm-discovered peers. Replaces the Petals path
-      // (IPIP-0031, Replaced) for all new `distributed: true` jobs.
-      // Legacy Petals jobs that explicitly set `backend: 'petals'`
-      // still route to the old proxy until the daemons fully migrate.
+      // (IPIP-0031, Replaced) — the legacy proxy was removed.
       if (job?.input_spec?.distributed) {
-        const usePetalsLegacy =
-          job.input_spec?.backend === "petals" ||
-          job.input_spec?.fallback === "petals";
-        const proxyFn = usePetalsLegacy ? runPetalsProxy : runRpcProxy;
         try {
-          await proxyFn({ supabase, job, safeEnqueue, sseFrame });
+          await runRpcProxy({ supabase, job, safeEnqueue, sseFrame });
         } catch (e) {
           safeEnqueue(sseFrame("error", { message: e?.message ?? String(e) }));
           await finalizeJob(supabase, job.id, { status: "failed", error: e?.message ?? String(e) }).catch(() => {});
@@ -188,15 +182,6 @@ export async function GET(_request, { params }) {
  * the job's audit trail looks identical to a real P2P provider run.
  */
 /**
- * IPIP-0031: stream tokens from a daemon hosting Petals. We pick any
- * provider whose specs.petals_models includes the requested model,
- * POST the chat to its /v1/petals/inference endpoint, and proxy the
- * resulting SSE frames straight through to the browser.
- *
- * Per-token receipts to the layer-contributing operators (CPR /
- * IPIP-0007) are a follow-up — the proxying is the load-bearing part.
- */
-/**
  * IPIP-0033 — federated inference via llama.cpp RPC. The control
  * plane:
  *
@@ -208,9 +193,8 @@ export async function GET(_request, { params }) {
  *      available — silent fallback was the credibility hole that made
  *      IPIP-0031 misleading
  *   3. POSTs to the primary's /v1/rpc/inference with the peer list
- *   4. proxies the resulting SSE stream back to the consumer in the
- *      same shape the Petals path used (meta → routing → token... →
- *      done) so chat-view's existing listeners just work
+ *   4. proxies the resulting SSE stream back to the consumer
+ *      (meta → routing → token... → done)
  */
 async function runRpcProxy({ supabase, job, safeEnqueue, sseFrame }) {
   const ENGINE_ID = RPC_ENGINE_ID;
@@ -294,8 +278,8 @@ async function runRpcProxy({ supabase, job, safeEnqueue, sseFrame }) {
   });
   if (persistedMeta) safeEnqueue(sseFrame("meta", persistedMeta.data, persistedMeta.id));
 
-  // Initial routing frame — like the petals path, show the entry node
-  // immediately so the UI doesn't sit on a placeholder.
+  // Initial routing frame — show the entry node immediately so the UI
+  // doesn't sit on a placeholder.
   safeEnqueue(sseFrame("routing", {
     engine: ENGINE_ID,
     primary: { id: primary.id, name: primary.name, pubkey: primary.public_key },
@@ -327,7 +311,8 @@ async function runRpcProxy({ supabase, job, safeEnqueue, sseFrame }) {
     throw new Error(`upstream primary ${url} returned HTTP ${upstream.status}`);
   }
 
-  // Same SSE-line parser shape the Petals proxy uses.
+  // SSE-line parser: each daemon frame looks like
+  // `event: <name>\ndata: {...json...}\n\n`.
   const reader = upstream.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -410,7 +395,7 @@ async function runRpcProxy({ supabase, job, safeEnqueue, sseFrame }) {
  *
  * If the daemon never reported per-peer layer ranges (older builds /
  * llama-server stderr format we don't recognize), credit the primary
- * for the full job — same fallback the Petals path uses.
+ * for the full job.
  */
 async function emitRpcReceipts({ supabase, job, primary, chosenSlices, layerByPeer }) {
   try {
@@ -443,206 +428,7 @@ async function emitRpcReceipts({ supabase, job, primary, chosenSlices, layerByPe
   }
 }
 
-async function runPetalsProxy({ supabase, job, safeEnqueue, sseFrame }) {
-  const input = job.input_spec ?? {};
-  const messages = input.messages ?? [];
-  const model = input.petals_model ?? job.model_name;
-  if (!model) throw new Error("distributed inference: model name required");
 
-  // Find a provider serving this model via Petals.
-  const { data: candidates } = await supabase
-    .from("providers")
-    .select("id, public_key, name, address, port, specs, status")
-    .eq("status", "available")
-    .contains("specs", { petals_models: [model] })
-    .limit(5);
-  if (!candidates || candidates.length === 0) {
-    throw new Error(
-      `No Petals server for ${model} on the network. Operators serve a model via ` +
-      `\`infernet inference serve --backend petals --model ${model}\`.`
-    );
-  }
-  const provider = candidates[Math.floor(Math.random() * candidates.length)];
-  const url = providerEndpoint(provider) + "/v1/petals/inference";
-
-  const persistedMeta = await insertJobEvent(supabase, job.id, "meta", {
-    provider_node_id: provider.id,
-    provider_name: provider.name,
-    model,
-    backend: "petals",
-    distributed: true,
-    started_at: new Date().toISOString()
-  });
-  if (persistedMeta) safeEnqueue(sseFrame("meta", persistedMeta.data, persistedMeta.id));
-
-  // IPIP-0031 §UX: emit a routing frame immediately so the chat UI
-  // can show "entry: <node>" without waiting for the daemon to extract
-  // chosen_servers. The daemon will overwrite this with the real peer
-  // list once Petals' inference_session has resolved (typically after
-  // the first token). On a small swarm or if chosen_servers is empty,
-  // this initial frame is also the final one.
-  safeEnqueue(sseFrame("routing", {
-    peers: [],
-    model,
-    proxy: { id: provider.id, name: provider.name, pubkey: provider.public_key },
-    pending: true
-  }));
-
-  const upstream = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages,
-      max_tokens: input.max_tokens ?? 512,
-      temperature: input.temperature ?? 0.7
-    })
-  });
-  if (!upstream.ok || !upstream.body) {
-    throw new Error(`upstream daemon ${url} returned HTTP ${upstream.status}`);
-  }
-
-  // Parse SSE from the daemon line-by-line and re-emit. Each daemon
-  // event looks like:  event: <name>\ndata: {...json...}\n\n
-  const reader = upstream.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let fullText = "";
-  let lastEventName = "data";
-  // IPIP-0031 per-layer attribution: filled in from the daemon's
-  // routing event. Each entry is { peer_id, start_block, end_block }.
-  // On done we'll resolve peer_id → providers and emit one CPR receipt
-  // per layer-contributing operator weighted by block share.
-  let chosenPeers = null;
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let nl;
-    while ((nl = buffer.indexOf("\n\n")) >= 0) {
-      const block = buffer.slice(0, nl);
-      buffer = buffer.slice(nl + 2);
-      let evName = lastEventName;
-      let evData = null;
-      for (const line of block.split("\n")) {
-        if (line.startsWith("event:")) evName = line.slice(6).trim();
-        else if (line.startsWith("data:")) {
-          try { evData = JSON.parse(line.slice(5).trim()); } catch { /* skip */ }
-        }
-      }
-      lastEventName = evName;
-      if (!evData) continue;
-      if (evName === "token") {
-        const t = evData.text ?? "";
-        fullText += t;
-        safeEnqueue(sseFrame("token", { text: t }));
-        insertJobEvent(supabase, job.id, "token", { text: t }).catch(() => {});
-      } else if (evName === "routing") {
-        chosenPeers = Array.isArray(evData.peers) ? evData.peers : null;
-        // Mirror to job_events so the audit trail captures attribution.
-        insertJobEvent(supabase, job.id, "routing", evData).catch(() => {});
-        // Resolve peer_id → provider name/pubkey so the chat UI can
-        // show *which* nodes are participating, not opaque libp2p IDs.
-        // Best-effort: any peer_id we can't resolve still gets shown
-        // as a short prefix.
-        const proxyInfo = { id: provider.id, name: provider.name, pubkey: provider.public_key };
-        try {
-          const enriched = await resolveRoutingPeers({ supabase, peers: chosenPeers });
-          safeEnqueue(sseFrame("routing", { peers: enriched, model, proxy: proxyInfo, pending: false }));
-        } catch {
-          safeEnqueue(sseFrame("routing", { peers: chosenPeers ?? [], model, proxy: proxyInfo, pending: false }));
-        }
-      } else if (evName === "done") {
-        const data = { text: fullText, finished_at: new Date().toISOString() };
-        const persisted = await insertJobEvent(supabase, job.id, "done", data);
-        safeEnqueue(sseFrame("done", data, persisted?.id));
-        await finalizeJob(supabase, job.id, {
-          status: "completed",
-          result: { type: "chat", text: fullText, source: "petals", provider_id: provider.id }
-        });
-        await emitPetalsReceipts({ supabase, job, proxyProvider: provider, chosenPeers });
-      } else if (evName === "log") {
-        // Daemon stderr + diagnostic lines from the Python Petals
-        // client. Relay to the browser so users can verify the swarm
-        // is actually doing work; surface as a `log` SSE event.
-        safeEnqueue(sseFrame("log", evData));
-      } else if (evName === "exit") {
-        // Daemon's child process exited. Useful diagnostic when no
-        // routing/done arrived (most often: missing python deps).
-        safeEnqueue(sseFrame("log", { exit_code: evData?.code ?? null }));
-      } else if (evName === "error") {
-        const persisted = await insertJobEvent(supabase, job.id, "error", evData);
-        safeEnqueue(sseFrame("error", evData, persisted?.id));
-        await finalizeJob(supabase, job.id, { status: "failed", error: evData.message ?? "petals error" });
-        return;
-      }
-    }
-  }
-
-  // Daemon stream ended without `done`. If we never got chosen_servers,
-  // synthesize one final routing frame so the UI replaces "pending" with
-  // a clear "entry-only" state instead of looping forever.
-  if (!chosenPeers) {
-    safeEnqueue(sseFrame("routing", {
-      peers: [],
-      model,
-      proxy: { id: provider.id, name: provider.name, pubkey: provider.public_key },
-      pending: false,
-      note: "Daemon did not report chosen_servers — Petals session likely returned without populating layer routing."
-    }));
-  }
-}
-
-/**
- * Map raw `chosen_servers` entries from a Petals daemon to friendly
- * `{ peer_id, blocks, name, pubkey }` rows the chat UI can render.
- *
- * Resolves peer_id → providers via specs.petals_peer_id. Peers we
- * don't have a row for are still returned (with name/pubkey null) so
- * the user sees their swarm contribution — not just our registry view.
- */
-async function resolveRoutingPeers({ supabase, peers }) {
-  if (!Array.isArray(peers) || peers.length === 0) return [];
-  const peerIds = peers
-    .map((p) => p?.peer_id)
-    .filter((id) => typeof id === "string" && id.length > 0);
-  if (peerIds.length === 0) {
-    return peers.map((p) => ({
-      peer_id: p?.peer_id ?? null,
-      blocks: blockSpan(p),
-      name: null,
-      pubkey: null
-    }));
-  }
-  const { data: rows } = await supabase
-    .from("providers")
-    .select("id, name, public_key, specs")
-    .in("specs->>petals_peer_id", peerIds)
-    .limit(64);
-  const byId = new Map();
-  for (const r of rows ?? []) {
-    const pid = r?.specs?.petals_peer_id;
-    if (pid) byId.set(pid, r);
-  }
-  return peers.map((p) => {
-    const row = byId.get(p?.peer_id);
-    return {
-      peer_id: p?.peer_id ?? null,
-      blocks: blockSpan(p),
-      start_block: p?.start_block ?? null,
-      end_block: p?.end_block ?? null,
-      name: row?.name ?? null,
-      pubkey: row?.public_key ?? null,
-      provider_id: row?.id ?? null
-    };
-  });
-}
-
-function blockSpan(p) {
-  const span = (p?.end_block ?? 0) - (p?.start_block ?? 0);
-  return Number.isFinite(span) && span > 0 ? span : 0;
-}
 
 function providerEndpoint(provider) {
   if (!provider?.address) throw new Error("provider has no advertised address");
@@ -650,77 +436,6 @@ function providerEndpoint(provider) {
   return `http://${provider.address}:${port}`;
 }
 
-/**
- * IPIP-0007 + IPIP-0031 per-layer attribution: split a CPR receipt
- * across the layer-contributing peers reported in the routing event,
- * weighted by each peer's block share. Falls back to a single receipt
- * to the proxying provider when chosen_servers is empty / unresolvable
- * (small swarm, peer not registered with the control plane, etc).
- */
-async function emitPetalsReceipts({ supabase, job, proxyProvider, chosenPeers }) {
-  try {
-    const { buildReceiptBody } = await import("@/lib/cpr/receipts");
-    const { enqueueAndFlush } = await import("@/lib/cpr/queue");
-
-    const baseJob = {
-      id: job.id, type: "inference", status: "completed",
-      payment_offer: job.payment_offer ?? 0
-    };
-
-    // Try to resolve peer_id → provider via specs.petals_peer_id.
-    const resolvable = (chosenPeers ?? [])
-      .filter((p) => typeof p?.peer_id === "string" && p.peer_id.length > 0)
-      .map((p) => ({
-        peer_id: p.peer_id,
-        blocks: Math.max(0, (p.end_block ?? 0) - (p.start_block ?? 0))
-      }));
-
-    if (resolvable.length === 0) {
-      // No routing data — credit the proxy as before.
-      const r = buildReceiptBody({ job: baseJob, provider: { public_key: proxyProvider.public_key, id: proxyProvider.id } });
-      await enqueueAndFlush({ receipt: r, jobId: job.id }).catch((err) =>
-        console.warn(`CPR enqueueAndFlush (petals proxy fallback): ${err?.message ?? err}`)
-      );
-      return;
-    }
-
-    const peerIds = resolvable.map((p) => p.peer_id);
-    const { data: peers } = await supabase
-      .from("providers")
-      .select("id, public_key, specs")
-      .in("specs->>petals_peer_id", peerIds)
-      .limit(64);
-    const peerMap = new Map();
-    for (const r of peers ?? []) {
-      const pid = r.specs?.petals_peer_id;
-      if (pid) peerMap.set(pid, r);
-    }
-
-    const totalBlocks = resolvable.reduce((a, p) => a + p.blocks, 0) || 1;
-    let attributed = 0;
-    for (const p of resolvable) {
-      const peer = peerMap.get(p.peer_id);
-      if (!peer) continue;             // peer not registered with us — skip
-      const share = p.blocks / totalBlocks;
-      const r = buildReceiptBody({
-        job: { ...baseJob, payment_offer: (baseJob.payment_offer ?? 0) * share },
-        provider: { public_key: peer.public_key, id: peer.id }
-      });
-      await enqueueAndFlush({ receipt: r, jobId: job.id }).catch((err) =>
-        console.warn(`CPR enqueueAndFlush (petals layer ${p.peer_id.slice(0, 12)}…): ${err?.message ?? err}`)
-      );
-      attributed += 1;
-    }
-
-    if (attributed === 0) {
-      // None of the chosen peers are registered with us — credit the proxy.
-      const r = buildReceiptBody({ job: baseJob, provider: { public_key: proxyProvider.public_key, id: proxyProvider.id } });
-      await enqueueAndFlush({ receipt: r, jobId: job.id }).catch(() => {});
-    }
-  } catch (err) {
-    console.warn(`CPR per-layer attribution failed: ${err?.message ?? err}`);
-  }
-}
 
 async function runNimFallback({ supabase, job, safeEnqueue, sseFrame }) {
   const input = job.input_spec ?? {};

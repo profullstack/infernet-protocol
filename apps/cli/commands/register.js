@@ -204,45 +204,8 @@ export async function gatherCoarseSpecs() {
             model: typeof g.model === 'string' ? g.model.slice(0, 64) : null
         })),
         interconnects: summarizeInterconnects(interconnects),
-        served_models,
-        // IPIP-0031: models this node is contributing to a Petals swarm.
-        // Empty array if the operator hasn't run `infernet inference serve`.
-        // Read from local state file written by inference.js.
-        petals_models: await readPetalsModels(),
-        // IPIP-0031 §per-layer-attribution: libp2p peer ID Petals
-        // assigned this server. The control plane uses this to map
-        // chosen_servers from a client's routing event back to the
-        // corresponding provider rows for CPR receipt distribution.
-        petals_peer_id: await readPetalsPeerId()
+        served_models
     };
-}
-
-async function readPetalsModels() {
-    const state = await readPetalsState();
-    if (!state) return [];
-    if (state.backend === 'petals' && typeof state.model === 'string') {
-        return [state.model];
-    }
-    return [];
-}
-
-async function readPetalsPeerId() {
-    const state = await readPetalsState();
-    return (state && typeof state.peer_id === 'string') ? state.peer_id : null;
-}
-
-async function readPetalsState() {
-    try {
-        const fsp = await import('node:fs/promises');
-        const path = await import('node:path');
-        const statePath = path.join(process.env.HOME ?? '/tmp', '.infernet', 'inference', 'state.json');
-        const raw = await fsp.readFile(statePath, 'utf8');
-        const state = JSON.parse(raw);
-        if (!state.pid) return null;
-        try { process.kill(state.pid, 0); }
-        catch { return null; }
-        return state;
-    } catch { return null; }
 }
 
 export default async function register(args, ctx) {

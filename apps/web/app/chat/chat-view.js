@@ -34,33 +34,17 @@ export default function ChatView({ initialModels = [] }) {
   // /api/chat/provider before we even POST the job. Drives the warning
   // banner on legacy providers that can't decrypt NIP-44.
   const [providerE2eCapable, setProviderE2eCapable] = useState(true);
-  // IPIP-0031: when distributed mode is on, the daemon publishes a
-  // `routing` SSE event listing the Petals peers that contributed
+  // IPIP-0033: when distributed mode is on, the daemon publishes a
+  // `routing` SSE event listing the RPC slices that contributed
   // layers. Persist so the footer can show "Used these N nodes".
   const [routingPeers, setRoutingPeers] = useState(null);
   const [routingProxy, setRoutingProxy] = useState(null);
   const [routingPending, setRoutingPending] = useState(false);
   const [routingNote, setRoutingNote] = useState(null);
   const [daemonLogs, setDaemonLogs] = useState([]);
-  // IPIP-0031: Petals swarm map. Populates "distributed across N nodes"
-  // badge in the model picker + the checkbox helper text.
-  const [swarmByModel, setSwarmByModel] = useState({});
   // IPIP-0033 Phase 4: per-model RPC census drives whether the
   // "Distribute across all nodes" checkbox is enabled.
   const [rpcCensus, setRpcCensus] = useState(null);
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/v1/petals/swarm")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((b) => {
-        if (cancelled || !b?.data?.models) return;
-        const map = {};
-        for (const m of b.data.models) map[m.model] = m.node_count;
-        setSwarmByModel(map);
-      })
-      .catch(() => { /* non-fatal */ });
-    return () => { cancelled = true; };
-  }, []);
 
   // IPIP-0033 Phase 4: census the network for live RPC primaries +
   // slices on the picked model. The checkbox is gated on this — we
@@ -374,22 +358,11 @@ export default function ChatView({ initialModels = [] }) {
               className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-4 py-2 text-sm text-white outline-none disabled:opacity-50"
             >
               <option value="">(any available)</option>
-              {initialModels.map((m) => {
-                const n = swarmByModel[m.name];
-                return (
-                  <option key={m.id} value={m.name}>
-                    {m.name}{n ? ` · ${n} node${n === 1 ? "" : "s"} via Petals` : ""}
-                  </option>
-                );
-              })}
-              {/* Petals-only models that aren't in initialModels (Ollama) */}
-              {Object.keys(swarmByModel)
-                .filter((m) => !initialModels.some((im) => im.name === m))
-                .map((m) => (
-                  <option key={m} value={m}>
-                    {m} · {swarmByModel[m]} node{swarmByModel[m] === 1 ? "" : "s"} via Petals
-                  </option>
-                ))}
+              {initialModels.map((m) => (
+                <option key={m.id} value={m.name}>
+                  {m.name}
+                </option>
+              ))}
             </select>
             <DistributedCheckbox
               modelName={modelName}
@@ -642,9 +615,10 @@ function DistributedRouting({ active, peers, proxy, pending, note, logs, streami
 
 /**
  * Squash a daemon log frame into a single human-readable line. The
- * Python Petals client emits both stderr (free-form) and structured
- * `{ event: "log", warn: "..." }` shapes; the daemon HTTP wrapper
- * also emits `{ exit_code }` on child exit. Normalize all of those.
+ * llama.cpp RPC primary emits stderr text plus structured
+ * `{ event: "log", warn: "..." }` and per-peer lifecycle frames;
+ * the daemon HTTP wrapper also emits `{ exit_code }` on child exit.
+ * Normalize all of those into a single line.
  */
 function formatDaemonLogLine(data) {
   if (!data || typeof data !== "object") return null;

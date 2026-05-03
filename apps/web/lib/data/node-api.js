@@ -16,15 +16,6 @@ export function sanitizeSpecs(input) {
     if (!input || typeof input !== "object") return null;
     const gpus = Array.isArray(input.gpus) ? input.gpus.slice(0, MAX_SPECS_GPUS) : [];
 
-    // IPIP-0031: petals_models is a small array of HF model ids the
-    // node is currently contributing to the public Petals swarm. Cap
-    // count + per-string length to keep the field bounded.
-    const petalsModels = Array.isArray(input.petals_models)
-        ? input.petals_models
-            .filter((m) => typeof m === "string" && m.length > 0 && m.length <= 200)
-            .slice(0, 5)
-        : [];
-
     // served_models — Ollama / vLLM model names the daemon advertises
     // for single-node inference. Already widely consumed; mirror in
     // case some daemons send it through register/heartbeat.
@@ -33,17 +24,6 @@ export function sanitizeSpecs(input) {
             .filter((m) => typeof m === "string" && m.length > 0 && m.length <= 200)
             .slice(0, 50)
         : [];
-
-    // libp2p peer IDs are alphanumeric (base58 multihash). When a
-    // daemon runs `infernet inference serve --backend petals`, it
-    // captures the peer ID from Petals' startup logs and re-registers
-    // — this field carries it. The control plane uses it to map
-    // chosen_servers entries from a client routing event back to
-    // provider rows for CPR receipt distribution.
-    const petalsPeerId = typeof input.petals_peer_id === "string"
-        && /^[1-9A-HJ-NP-Za-km-z]{40,128}$/.test(input.petals_peer_id)
-            ? input.petals_peer_id
-            : null;
 
     // IPIP-0027 §7: providers advertise E2E (NIP-44) capability so the
     // control plane can expose it via /api/chat/provider and the UI
@@ -78,8 +58,6 @@ export function sanitizeSpecs(input) {
         gpus: gpus.map(sanitizeGpu).filter(Boolean),
         gpu_count: gpus.length,
         served_models: servedModels,
-        petals_models: petalsModels,
-        petals_peer_id: petalsPeerId,
         e2e_capable: e2eCapable,
         e2e_version: e2eVersion,
         cli_version: cliVersion,

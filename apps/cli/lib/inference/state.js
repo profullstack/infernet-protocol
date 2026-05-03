@@ -8,8 +8,6 @@
  * present):
  *
  *   {
- *     "petals": { backend, model, port, prefix, num_blocks, pid,
- *                 peer_id, started_at, exited_with?, exited_at? },
  *     "rpc_slice": { models: [...], host, port, pid, started_at,
  *                    binary, gpu, vram_gb, ram_gb, max_concurrent },
  *     "rpc_primary": { models: [...], gguf_paths: { <model_id>: <path> },

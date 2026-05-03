@@ -53,7 +53,6 @@ import { pullLatestBinary } from './upgrade.js';
 import { nodeTokenLogin } from './login.js';
 import { CURRENT_VERSION, fetchLatestVersion, isNewerVersion } from '../lib/version.js';
 import { readInferenceState, readInferenceStateSync, isPidAlive } from '../lib/inference/state.js';
-import { startDiscoveryBridge } from '../lib/discovery-bridge.js';
 
 function readInferenceStateSyncSafe() {
     try { return readInferenceStateSync(); } catch { return {}; }
@@ -130,7 +129,6 @@ async function spawnAndReturn(args) {
     if (args.has('no-p2p')) passthrough.push('--no-p2p');
     if (args.has('no-advertise')) passthrough.push('--no-advertise');
     if (args.has('once')) passthrough.push('--once');
-    if (args.has('no-dht')) passthrough.push('--no-dht');
 
     const { pid, logPath } = spawnDetachedDaemon(passthrough);
     process.stdout.write(`infernet daemon started (pid ${pid})\n`);
@@ -154,11 +152,6 @@ async function runDaemon(args, ctx) {
 
     const p2pDisabled = args.has('no-p2p');
     const noAdvertise = args.has('no-advertise') || node.address === null;
-    // IPIP-0032: DHT discovery is on by default. Operators who want
-    // to opt out (private-only deployments, restricted networks, or
-    // an emergency kill switch) pass --no-dht or set
-    // INFERNET_DISABLE_DHT=1.
-    const enableDht = !(args.has('no-dht') || process.env.INFERNET_DISABLE_DHT === '1');
     // Bind port (what we listen on, locally) and advertised port (what we
     // tell the control plane to dial). Same value 99% of the time, but
     // hosting platforms that NAT the container (RunPod, anything with
@@ -229,7 +222,6 @@ async function runDaemon(args, ctx) {
     let ipcServer = null;
     let p2pServer = null;
     let healthServer = null;
-    let dhtBridge = null;
     let p2pConnections = 0;
     let p2pLastConnectionAt = null;
 
@@ -1002,18 +994,17 @@ async function runDaemon(args, ctx) {
     }
 
     /**
-     * IPIP-0032 + IPIP-0033 — daemon-side census. Returns the set of
-     * peers THIS daemon currently sees on the requested topic via
-     * its Hyperswarm DHT view (verified handshakes, currently
-     * connected). Useful as a second opinion when the control
-     * plane's heartbeat-based census looks stale, and as a smoke
-     * test for "is the DHT actually finding anyone."
+     * Daemon-side peer census for the rpc-adapter (IPIP-0033 — llama.cpp
+     * RPC peer assignment).
      *
      *   GET /v1/rpc/census?model=<id>[&kind=rpc|model|class]
-     *   response: { kind, value, count, peers: [{ pubkey, address }], dht: bool }
+     *   response: { kind, value, count, peers, dht, note? }
      *
-     * Public + cheap. The handler doesn't take any locks; verifiedPeers()
-     * reads from an in-memory map populated by the handshake path.
+     * Peer discovery used to come from the daemon's own Hyperswarm DHT
+     * (IPIP-0032). That layer has been moved to c0mpute. Until the
+     * c0mpute-backed query is wired in, this endpoint always returns
+     * `count: 0` with a note — the chat client falls back to
+     * control-plane routing.
      */
     async function handleRpcCensus(req, res) {
         if (req.method !== 'GET') return false;
@@ -1028,30 +1019,17 @@ async function runDaemon(args, ctx) {
             return true;
         }
 
-        const empty = {
-            kind, value: model, count: 0, peers: [],
-            dht: Boolean(dhtBridge),
-            note: dhtBridge ? null : 'this daemon has DHT discovery disabled (--no-dht or INFERNET_DISABLE_DHT=1)'
-        };
-        if (!dhtBridge?.node?.peersOnTopic) {
-            res.writeHead(200, { 'content-type': 'application/json' });
-            res.end(JSON.stringify(empty));
-            return true;
-        }
-
-        const peers = dhtBridge.node.peersOnTopic(kind, model);
+        // Peer discovery has moved to c0mpute (libp2p Kad-DHT +
+        // gossipsub capability ads). Until the c0mpute-backed query
+        // is wired in, return an empty list with a note so the chat
+        // client falls back to control-plane routing.
         const body = {
             kind,
             value: model,
-            count: peers.length,
-            peers: peers.map((p) => ({
-                pubkey: p.pubkey,
-                address: p.address ?? null,
-                first_seen: new Date(p.firstSeen).toISOString(),
-                last_seen: new Date(p.lastSeen).toISOString()
-            })),
-            dht: true,
-            self: { pubkey: dhtBridge.node.pubkey, topics: dhtBridge.node.topics }
+            count: 0,
+            peers: [],
+            dht: false,
+            note: 'peer discovery moved to c0mpute; query c0mpute capability registry instead'
         };
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify(body));
@@ -1280,7 +1258,6 @@ async function runDaemon(args, ctx) {
         if (ipcServer) { try { ipcServer.close(); } catch {} }
         if (p2pServer) { try { p2pServer.close(); } catch {} }
         if (healthServer) { try { healthServer.close(); } catch {} }
-        if (dhtBridge) { try { await dhtBridge.stop(); } catch {} }
         try { await shutdownEngine(); } catch {}
         removeSocketFile();
         await removePidFile();
@@ -1298,40 +1275,12 @@ async function runDaemon(args, ctx) {
         process.stderr.write(`Failed to bind IPC socket at ${socketPath}: ${err?.message ?? err}\n`);
     }
 
-    // IPIP-0032 Phase 3: when --enable-dht (or INFERNET_ENABLE_DHT=1)
-    // is set, also publish on the Hyperswarm DHT alongside heartbeats.
-    // The bridge dynamically imports hyperswarm so legacy daemons
-    // never load it.
-    if (enableDht) {
-        try {
-            const dhtAddress = noAdvertise || !advertisedAddress
-                ? null
-                : `${advertisedAddress}:${advertisedPort}`;
-            dhtBridge = await startDiscoveryBridge({
-                config,
-                advertise: !noAdvertise,
-                address: dhtAddress,
-                getState: () => ({
-                    servedModels: cachedSpecs?.served_models ?? [],
-                    inferenceState: readInferenceStateSyncSafe()
-                }),
-                onPeer: ({ peer }) => {
-                    process.stdout.write(
-                        `[dht] peer ${peer.pubkey.slice(0, 8)}… topics=[${peer.topics.join(',')}]\n`
-                    );
-                },
-                onHandshakeFailed: ({ error }) => {
-                    process.stderr.write(`[dht] handshake-failed: ${error?.message ?? error}\n`);
-                }
-            });
-            process.stdout.write(
-                `[dht] joined ${dhtBridge.currentTopics.length} topic(s): ${dhtBridge.currentTopics.join(', ')}\n`
-            );
-        } catch (err) {
-            process.stderr.write(`[dht] startup failed: ${err?.message ?? err}\n`);
-            process.stderr.write(`[dht] continuing without DHT discovery — heartbeats still active\n`);
-        }
-    }
+    // Peer discovery (formerly Hyperswarm DHT, IPIP-0032) has moved
+    // to c0mpute's libp2p Kad-DHT + gossipsub. The infernet daemon no
+    // longer maintains its own discovery bridge — workers advertise
+    // capabilities via the c0mpute supervisor and the chat client
+    // routes through the control plane until c0mpute-backed query
+    // is wired in.
 
     // /healthz — bind a tiny HTTP server on $PORT (default 8080) so
     // Docker / Runpod / Kubernetes HEALTHCHECK probes can reach the

@@ -284,8 +284,9 @@ async function isRegistered(config) {
  *
  * The control-plane-mediated chat path doesn't actually need inbound
  * (daemon polls/posts outbound), so unreachable is a soft warning.
- * But IPIP-0002 P2P chat and libp2p discovery DO need it, so we
- * surface this clearly.
+ * But the direct P2P chat transport DOES need inbound, so we surface
+ * this clearly. (Peer discovery for the chat transport runs through
+ * c0mpute now — install the c0mpute plugin to enable it.)
  */
 async function reportReachability(row, config, port) {
     const address = row?.address ?? null;

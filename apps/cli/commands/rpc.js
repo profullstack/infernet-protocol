@@ -4,15 +4,14 @@
  *
  *   infernet rpc census --model <id>
  *       Asks THIS daemon's HTTP /v1/rpc/census endpoint for the set
- *       of peers it sees on the rpc:<model> Hyperswarm topic. The
- *       answer is a second opinion to the control-plane census —
- *       useful when the providers table looks stale, or to confirm
- *       the DHT is actually finding anyone.
+ *       of peers it sees on rpc:<model>. The answer is a second
+ *       opinion to the control-plane census — useful when the
+ *       providers table looks stale.
  *
- * Why this isn't fetching from the public control plane: per IPIP-0032,
- * the control plane MUST NOT itself join the DHT. The daemon is the
- * canonical DHT view; the control-plane census reflects heartbeats
- * only.
+ * The peer discovery substrate moved out of infernet — it's now
+ * c0mpute's libp2p Kad-DHT + gossipsub. Until /v1/rpc/census is
+ * wired through the c0mpute capability registry, this returns an
+ * empty set with a `note`.
  */
 
 const HELP = `infernet rpc — federated-inference diagnostics
@@ -23,7 +22,7 @@ Usage:
 
 Flags:
   --model <id>     Required. Canonical model id (e.g. qwen2.5:72b).
-  --kind <ns>      Topic namespace (default: rpc; see IPIP-0032 §3).
+  --kind <ns>      Topic namespace (default: rpc).
   --daemon <url>   Daemon HTTP base. Defaults to http://127.0.0.1:8080,
                    matching the local daemon's healthz port. Set this
                    to query a peer's daemon directly.

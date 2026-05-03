@@ -1,6 +1,6 @@
 {
   "name": "@infernetprotocol/web",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "private": true,
   "description": "Infernet Protocol control plane — Next.js + Supabase web app",
   "type": "module",

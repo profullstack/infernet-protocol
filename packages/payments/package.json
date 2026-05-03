@@ -1,7 +1,7 @@
 {
   "name": "@infernetprotocol/payments",
   "private": true,
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "CoinPayPortal payment gateway integration for the Infernet Protocol.",
   "license": "MIT",
   "type": "module",
@@ -10,8 +10,13 @@
     ".": "./src/index.js",
     "./coinpayportal": "./src/coinpayportal.js"
   },
-  "files": ["src/**/*.js", "README.md"],
-  "engines": { "node": ">=18" },
+  "files": [
+    "src/**/*.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@infernetprotocol/config": "workspace:*"
   },

@@ -1,0 +1,6 @@
+/* TEAM */
+/* SITE */
+Last update: 2026/05/03
+Language: English
+Standards: HTML5
+Components: Node.js, JavaScript

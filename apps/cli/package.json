@@ -30,6 +30,7 @@
     "@infernetprotocol/deploy-providers": "workspace:*",
     "@infernetprotocol/engine": "workspace:*",
     "@infernetprotocol/gpu": "workspace:*",
+    "@infernetprotocol/discovery": "workspace:*",
     "@infernetprotocol/rpc-adapter": "workspace:*",
     "@noble/ciphers": "^2.2.0",
     "@noble/curves": "^2.2.0",

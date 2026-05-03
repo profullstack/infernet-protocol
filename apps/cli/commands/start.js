@@ -52,7 +52,12 @@ import { getOrCreateModelKey, getModelPublicKeys } from '../lib/model-key.js';
 import { pullLatestBinary } from './upgrade.js';
 import { nodeTokenLogin } from './login.js';
 import { CURRENT_VERSION, fetchLatestVersion, isNewerVersion } from '../lib/version.js';
-import { readInferenceState, isPidAlive } from '../lib/inference/state.js';
+import { readInferenceState, readInferenceStateSync, isPidAlive } from '../lib/inference/state.js';
+import { startDiscoveryBridge } from '../lib/discovery-bridge.js';
+
+function readInferenceStateSyncSafe() {
+    try { return readInferenceStateSync(); } catch { return {}; }
+}
 
 const HELP = `infernet start — run the node daemon
 
@@ -125,6 +130,7 @@ async function spawnAndReturn(args) {
     if (args.has('no-p2p')) passthrough.push('--no-p2p');
     if (args.has('no-advertise')) passthrough.push('--no-advertise');
     if (args.has('once')) passthrough.push('--once');
+    if (args.has('no-dht')) passthrough.push('--no-dht');
 
     const { pid, logPath } = spawnDetachedDaemon(passthrough);
     process.stdout.write(`infernet daemon started (pid ${pid})\n`);
@@ -148,6 +154,11 @@ async function runDaemon(args, ctx) {
 
     const p2pDisabled = args.has('no-p2p');
     const noAdvertise = args.has('no-advertise') || node.address === null;
+    // IPIP-0032: DHT discovery is on by default. Operators who want
+    // to opt out (private-only deployments, restricted networks, or
+    // an emergency kill switch) pass --no-dht or set
+    // INFERNET_DISABLE_DHT=1.
+    const enableDht = !(args.has('no-dht') || process.env.INFERNET_DISABLE_DHT === '1');
     // Bind port (what we listen on, locally) and advertised port (what we
     // tell the control plane to dial). Same value 99% of the time, but
     // hosting platforms that NAT the container (RunPod, anything with
@@ -218,6 +229,7 @@ async function runDaemon(args, ctx) {
     let ipcServer = null;
     let p2pServer = null;
     let healthServer = null;
+    let dhtBridge = null;
     let p2pConnections = 0;
     let p2pLastConnectionAt = null;
 
@@ -1266,6 +1278,7 @@ async function runDaemon(args, ctx) {
         if (ipcServer) { try { ipcServer.close(); } catch {} }
         if (p2pServer) { try { p2pServer.close(); } catch {} }
         if (healthServer) { try { healthServer.close(); } catch {} }
+        if (dhtBridge) { try { await dhtBridge.stop(); } catch {} }
         try { await shutdownEngine(); } catch {}
         removeSocketFile();
         await removePidFile();
@@ -1281,6 +1294,41 @@ async function runDaemon(args, ctx) {
         process.stdout.write(`IPC listening on ${socketPath}\n`);
     } catch (err) {
         process.stderr.write(`Failed to bind IPC socket at ${socketPath}: ${err?.message ?? err}\n`);
+    }
+
+    // IPIP-0032 Phase 3: when --enable-dht (or INFERNET_ENABLE_DHT=1)
+    // is set, also publish on the Hyperswarm DHT alongside heartbeats.
+    // The bridge dynamically imports hyperswarm so legacy daemons
+    // never load it.
+    if (enableDht) {
+        try {
+            const dhtAddress = noAdvertise || !advertisedAddress
+                ? null
+                : `${advertisedAddress}:${advertisedPort}`;
+            dhtBridge = await startDiscoveryBridge({
+                config,
+                advertise: !noAdvertise,
+                address: dhtAddress,
+                getState: () => ({
+                    servedModels: cachedSpecs?.served_models ?? [],
+                    inferenceState: readInferenceStateSyncSafe()
+                }),
+                onPeer: ({ peer }) => {
+                    process.stdout.write(
+                        `[dht] peer ${peer.pubkey.slice(0, 8)}… topics=[${peer.topics.join(',')}]\n`
+                    );
+                },
+                onHandshakeFailed: ({ error }) => {
+                    process.stderr.write(`[dht] handshake-failed: ${error?.message ?? error}\n`);
+                }
+            });
+            process.stdout.write(
+                `[dht] joined ${dhtBridge.currentTopics.length} topic(s): ${dhtBridge.currentTopics.join(', ')}\n`
+            );
+        } catch (err) {
+            process.stderr.write(`[dht] startup failed: ${err?.message ?? err}\n`);
+            process.stderr.write(`[dht] continuing without DHT discovery — heartbeats still active\n`);
+        }
     }
 
     // /healthz — bind a tiny HTTP server on $PORT (default 8080) so

@@ -24,13 +24,8 @@ All application data flows through **Supabase** — operators pick self-hosted (
 
 - [ ] Regen npm `NPM_TOKEN` (issued under 2FA → invalid for CI). Revoke + create fresh Automation token at npmjs.com/settings/~/tokens, then `gh secret set NPM_TOKEN`. Homebrew unblocks when npm does.
 
-- [ ] Point `infernet.tech` DNS at the live Next.js deployment so the CLI's default `--url` is meaningful for users who don't self-host.
-
 ## Pending stubs / rough edges (carried forward)
 
-- [ ] `apps/cli/lib/chat-executor.js` still emits canned tokens; real llama.cpp / vLLM swap is a contained replacement.
-- [ ] `packages/inference/src/distributed/*.js` looks up `settings` / `node_roles` tables that aren't in the migrations — either build the tables or delete the skeleton.
-- [ ] `apps/cli/lib/runtime-config.js` still has a legacy `supabase: {}` block (unused). Prune.
 - [ ] Triage Dependabot alerts (44 outstanding, mostly pre-existing npm deps).
 
 ---
@@ -47,3 +42,4 @@ The following items were on TODO.md but are live in master:
 - `getStats()` in `packages/db/src/utils.js` runs real `count` queries against Supabase.
 - Nostr / BIP-340 signature auth on `/api/v1/node/*` — shipped 2026-04-19.
 - IPIP-0030 + IPIP-0031 proposal docs written; `ipips/README.md` index regenerated; 24 shipped IPIPs promoted out of `Draft` — shipped 2026-05-03 (commit `3314fd2`).
+- Dead post-Phase-1 code deleted: `packages/inference/` (superseded by Petals / IPIP-0031), `apps/cli/lib/runtime-config.js` (legacy `supabase: {}` block + 12 other unused sections), `apps/cli/examples/app.js` (used the removed CLI Supabase client) — shipped 2026-05-03.

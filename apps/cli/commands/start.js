@@ -52,6 +52,7 @@ import { getOrCreateModelKey, getModelPublicKeys } from '../lib/model-key.js';
 import { pullLatestBinary } from './upgrade.js';
 import { nodeTokenLogin } from './login.js';
 import { CURRENT_VERSION, fetchLatestVersion, isNewerVersion } from '../lib/version.js';
+import { readInferenceState, isPidAlive } from '../lib/inference/state.js';
 
 const HELP = `infernet start — run the node daemon
 
@@ -377,12 +378,50 @@ async function runDaemon(args, ctx) {
             // non-fatal — fall back to empty model_keys
         }
 
+        // IPIP-0033: read the inference state file (written by
+        // `infernet inference serve --backend rpc` / `infernet
+        // inference primary`) and surface the current rpc / rpc_primary
+        // capabilities. Heartbeats are how the control plane learns
+        // which models a node is willing to slice or drive.
+        const inf = await readInferenceState();
+        const rpcSlice = inf?.rpc_slice;
+        const rpcAdvert =
+            rpcSlice && Array.isArray(rpcSlice.models) && rpcSlice.models.length > 0
+                && (rpcSlice.pid == null || isPidAlive(rpcSlice.pid))
+                ? {
+                    rpc: {
+                        engine: 'llama.cpp',
+                        version: CURRENT_VERSION,
+                        models: rpcSlice.models,
+                        host: rpcSlice.host ?? null,
+                        port: rpcSlice.port ?? null,
+                        vram_gb: rpcSlice.vram_gb ?? null,
+                        ram_gb: rpcSlice.ram_gb ?? null,
+                        max_concurrent: rpcSlice.max_concurrent ?? 1
+                    }
+                }
+                : {};
+
+        const rpcPrimary = inf?.rpc_primary;
+        const primaryAdvert =
+            rpcPrimary && Array.isArray(rpcPrimary.models) && rpcPrimary.models.length > 0
+                ? {
+                    rpc_primary: {
+                        engine: 'llama.cpp',
+                        version: CURRENT_VERSION,
+                        models: rpcPrimary.models
+                    }
+                }
+                : {};
+
         return {
             ...base,
             ...(bench ? { bench } : {}),
             load,
             ...(reachable ? { reachable } : {}),
             ...(Object.keys(modelKeys).length > 0 ? { model_keys: modelKeys } : {}),
+            ...rpcAdvert,
+            ...primaryAdvert,
             public_key: config?.node?.publicKey ?? undefined,
             cli_version: CURRENT_VERSION
         };
@@ -820,15 +859,18 @@ async function runDaemon(args, ctx) {
             return true;
         }
 
-        // Resolve the GGUF path. Operators register served models
-        // through `infernet inference primary --model <id>` which
-        // writes the local path into runtime state. For now, accept
-        // either an absolute path or fall back to ~/.infernet/models.
+        // Resolve the GGUF path. The primary command writes the
+        // mapping (model_id → absolute path) into the inference state
+        // file; fall back to ~/.infernet/models/<id>.gguf for the
+        // ad-hoc case.
         const path = await import('node:path');
         const fsp = await import('node:fs/promises');
-        let modelPath = model;
-        if (!modelPath.startsWith('/')) {
-            modelPath = path.join(process.env.HOME ?? '/tmp', '.infernet', 'models', `${model}.gguf`);
+        const inf = await readInferenceState();
+        let modelPath = inf?.rpc_primary?.gguf_paths?.[model] ?? null;
+        if (!modelPath) {
+            modelPath = model.startsWith('/')
+                ? model
+                : path.join(process.env.HOME ?? '/tmp', '.infernet', 'models', `${model}.gguf`);
         }
         try {
             await fsp.access(modelPath);

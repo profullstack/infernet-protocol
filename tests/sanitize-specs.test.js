@@ -89,3 +89,74 @@ describe("sanitizeSpecs — cli_version", () => {
         expect(sanitizeSpecs({ gpus: [], cli_version: 41 }).cli_version).toBeNull();
     });
 });
+
+describe("sanitizeSpecs — IPIP-0033 rpc + rpc_primary slots", () => {
+    it("preserves a well-formed rpc slot", () => {
+        const out = sanitizeSpecs({
+            gpus: [],
+            rpc: {
+                engine: "llama.cpp",
+                version: "0.1.41",
+                models: ["qwen2.5:72b"],
+                host: "10.0.0.7",
+                port: 50052,
+                vram_gb: 24,
+                ram_gb: 32,
+                max_concurrent: 2
+            }
+        });
+        expect(out.rpc).toEqual({
+            engine: "llama.cpp",
+            version: "0.1.41",
+            models: ["qwen2.5:72b"],
+            host: "10.0.0.7",
+            port: 50052,
+            vram_gb: 24,
+            ram_gb: 32,
+            max_concurrent: 2
+        });
+    });
+
+    it("drops the rpc slot when models[] is empty", () => {
+        const out = sanitizeSpecs({ gpus: [], rpc: { models: [], port: 50052 } });
+        expect(out.rpc).toBeUndefined();
+    });
+
+    it("rejects out-of-range ports", () => {
+        const out = sanitizeSpecs({
+            gpus: [],
+            rpc: { models: ["x"], host: "h", port: 99999 }
+        });
+        expect(out.rpc.port).toBeNull();
+    });
+
+    it("caps max_concurrent at 64 and floors below 1 → default 1", () => {
+        const big = sanitizeSpecs({ gpus: [], rpc: { models: ["x"], max_concurrent: 9999 } });
+        expect(big.rpc.max_concurrent).toBe(64);
+        const zero = sanitizeSpecs({ gpus: [], rpc: { models: ["x"], max_concurrent: 0 } });
+        expect(zero.rpc.max_concurrent).toBe(1);
+    });
+
+    it("preserves a primary slot with just models", () => {
+        const out = sanitizeSpecs({
+            gpus: [],
+            rpc_primary: { models: ["qwen2.5:72b"], engine: "llama.cpp", version: "0.1.41" }
+        });
+        expect(out.rpc_primary).toEqual({
+            engine: "llama.cpp",
+            version: "0.1.41",
+            models: ["qwen2.5:72b"]
+        });
+    });
+
+    it("drops rpc_primary when models is missing or empty", () => {
+        expect(sanitizeSpecs({ gpus: [], rpc_primary: {} }).rpc_primary).toBeUndefined();
+        expect(sanitizeSpecs({ gpus: [], rpc_primary: { models: [] } }).rpc_primary).toBeUndefined();
+    });
+
+    it("omits rpc fields entirely when no slot is sent", () => {
+        const out = sanitizeSpecs({ gpus: [] });
+        expect(out.rpc).toBeUndefined();
+        expect(out.rpc_primary).toBeUndefined();
+    });
+});

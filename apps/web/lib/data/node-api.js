@@ -66,6 +66,14 @@ export function sanitizeSpecs(input) {
             ? input.cli_version
             : null;
 
+    // IPIP-0033: federated-inference advertisements. Daemons that
+    // run `infernet inference serve --backend rpc` populate `rpc`;
+    // daemons that run `infernet inference primary` populate
+    // `rpc_primary`. The control-plane proxy filters on these to
+    // assemble --rpc peer lists.
+    const rpc = sanitizeRpcSlot(input.rpc);
+    const rpcPrimary = sanitizeRpcPrimarySlot(input.rpc_primary);
+
     return {
         gpus: gpus.map(sanitizeGpu).filter(Boolean),
         gpu_count: gpus.length,
@@ -74,7 +82,56 @@ export function sanitizeSpecs(input) {
         petals_peer_id: petalsPeerId,
         e2e_capable: e2eCapable,
         e2e_version: e2eVersion,
-        cli_version: cliVersion
+        cli_version: cliVersion,
+        ...(rpc ? { rpc } : {}),
+        ...(rpcPrimary ? { rpc_primary: rpcPrimary } : {})
+    };
+}
+
+function sanitizeRpcSlot(input) {
+    if (!input || typeof input !== 'object') return null;
+    const models = Array.isArray(input.models)
+        ? input.models
+            .filter((m) => typeof m === 'string' && m.length > 0 && m.length <= 200)
+            .slice(0, 50)
+        : [];
+    if (models.length === 0) return null;
+    return {
+        engine: typeof input.engine === 'string' ? input.engine.slice(0, 32) : 'llama.cpp',
+        version: typeof input.version === 'string'
+            && /^[0-9A-Za-z._+-]{1,32}$/.test(input.version)
+            ? input.version
+            : null,
+        models,
+        host: typeof input.host === 'string' && input.host.length <= 253
+            ? input.host
+            : null,
+        port: Number.isFinite(input.port) && input.port > 0 && input.port < 65536
+            ? Number(input.port)
+            : null,
+        vram_gb: Number.isFinite(input.vram_gb) && input.vram_gb >= 0 ? Number(input.vram_gb) : null,
+        ram_gb: Number.isFinite(input.ram_gb) && input.ram_gb >= 0 ? Number(input.ram_gb) : null,
+        max_concurrent: Number.isFinite(input.max_concurrent) && input.max_concurrent > 0
+            ? Math.min(Math.floor(input.max_concurrent), 64)
+            : 1
+    };
+}
+
+function sanitizeRpcPrimarySlot(input) {
+    if (!input || typeof input !== 'object') return null;
+    const models = Array.isArray(input.models)
+        ? input.models
+            .filter((m) => typeof m === 'string' && m.length > 0 && m.length <= 200)
+            .slice(0, 50)
+        : [];
+    if (models.length === 0) return null;
+    return {
+        engine: typeof input.engine === 'string' ? input.engine.slice(0, 32) : 'llama.cpp',
+        version: typeof input.version === 'string'
+            && /^[0-9A-Za-z._+-]{1,32}$/.test(input.version)
+            ? input.version
+            : null,
+        models
     };
 }
 

@@ -1,156 +1,290 @@
 /**
- * `infernet inference` — distributed inference serving (IPIP-0031).
+ * `infernet inference` — distributed-inference serving.
  *
- *   infernet inference serve --backend petals --model <hf-id>
- *       Starts a Petals server contributing this node's VRAM to the
- *       public swarm for the given model. Re-registers with the control
- *       plane so the dashboard learns this node is petals-serving X.
+ * Two backends today:
  *
- *   infernet inference status
- *       Shows whether a Petals server is running locally + which blocks
- *       it's holding for which model.
+ *   --backend rpc     — IPIP-0033, the active path. Spawns
+ *                       llama.cpp's `rpc-server`, advertises the slot
+ *                       in heartbeat as specs.rpc.{models, host, port},
+ *                       lets primaries dial in via /v1/rpc/inference.
  *
- *   infernet inference stop
- *       Stops the locally-running Petals server.
+ *   --backend petals  — IPIP-0031, Replaced. Kept for one release for
+ *                       daemons mid-migration. Spawns Python Petals
+ *                       and joins the (effectively empty) public DHT
+ *                       swarm. New users should pick rpc.
  *
- * Petals (https://github.com/bigscience-workshop/petals) splits a
- * Llama-style transformer by layer across DHT-discovered volunteer
- * nodes. Each node holds N transformer blocks; activations flow through.
- * Bandwidth-tolerant — designed for residential connections.
+ * Plus a primary role:
+ *
+ *   infernet inference primary --model <id> --gguf <path>
+ *       Marks this node as a candidate primary for `model`. The
+ *       primary holds the GGUF locally; on /v1/rpc/inference it
+ *       spawns llama-server with --rpc <slice list> from the control
+ *       plane. No long-running child here — the daemon's HTTP
+ *       handler runs the actual binary per request.
  */
 
-import fs from "node:fs";
-import fsp from "node:fs/promises";
-import path from "node:path";
-import { spawn } from "node:child_process";
-import { loadConfig } from "../lib/config.js";
-import { startPetalsServer } from "../lib/inference/petals-engine.js";
+import fsp from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import { spawn } from 'node:child_process';
+import { loadConfig } from '../lib/config.js';
+import { startPetalsServer } from '../lib/inference/petals-engine.js';
+import {
+    readInferenceState,
+    patchInferenceState,
+    isPidAlive
+} from '../lib/inference/state.js';
 
-const HELP = `infernet inference — distributed inference serving (Petals swarm)
+const HELP = `infernet inference — distributed inference serving
 
 Usage:
-  infernet inference serve --model <hf-id> [flags]
+  infernet inference serve --backend rpc --model <id> [flags]      (IPIP-0033)
+  infernet inference serve --backend petals --model <hf-id> [flags](IPIP-0031, deprecated)
+  infernet inference primary --model <id> --gguf <path> [flags]    (IPIP-0033)
   infernet inference status
-  infernet inference stop
+  infernet inference stop [--backend rpc|petals]
   infernet inference list
 
-Flags (serve):
-  --model <hf-id>          Required. e.g. meta-llama/Llama-3.1-70B-Instruct
-  --backend <name>         petals (default; only supported backend today)
-  --num-blocks <n>         How many transformer blocks to host (auto if omitted)
-  --port <n>               Petals server port (default: 31330)
-  --dht-prefix <str>       DHT initial peers (default: /petals/v3-public)
-  --help
+Flags (serve --backend rpc):
+  --model <id>             Required. Canonical model id (e.g. qwen2.5:72b).
+  --port <n>               rpc-server port (default: 50052).
+  --host <addr>            Bind interface (default: 0.0.0.0).
+  --binary <path>          rpc-server binary (default: rpc-server in PATH).
+  --vram-gb <n>            VRAM offered to RPC clients (advertised in heartbeat).
+  --ram-gb <n>             RAM offered to RPC clients.
+  --max-concurrent <n>     Max simultaneous RPC clients (default: 1).
+
+Flags (primary):
+  --model <id>             Canonical model id.
+  --gguf <path>            Absolute path to the GGUF file the primary holds.
+
+Flags (serve --backend petals — DEPRECATED):
+  --model <hf-id>          e.g. meta-llama/Llama-3.1-70B-Instruct
+  --num-blocks <n>         Transformer blocks to host (auto if omitted).
+  --port <n>               Petals server port (default: 31330).
+  --dht-prefix <str>       DHT prefix (default: /petals/v3-public).
 
 Examples:
-  # Contribute to a Llama 3.1 70B swarm — node holds whatever blocks fit
-  infernet inference serve --model meta-llama/Llama-3.1-70B-Instruct
+  # Slice an RPC server for any primaries hosting Qwen 2.5 72B
+  infernet inference serve --backend rpc --model qwen2.5:72b --port 50052
 
-  # Same but only host 6 blocks (smaller VRAM footprint)
-  infernet inference serve --model meta-llama/Llama-3.1-70B-Instruct --num-blocks 6
+  # Register this node as a primary holding the GGUF locally
+  infernet inference primary --model qwen2.5:72b --gguf ~/models/qwen-72b.gguf
 
-What this means for the network:
-  When you serve a model via Petals, the control plane registers your
-  node as part of the swarm for that model. Inference requests with
-  the "Distribute across all nodes" checkbox set on /chat will route
-  through a Petals client that fans out across all swarm participants
-  (you + everyone else serving the same model). Per-token receipts
-  pay you for the blocks you contributed.
-
-Prerequisites:
-  pip install -U petals    # Python 3.10+
-  Inbound port \${port} reachable (cloudflared works for residential setups)
+What happens next:
+  Re-register so the control plane sees specs.rpc / specs.rpc_primary:
+    infernet register
+  Or just keep the daemon running — heartbeats pick up state changes
+  on the next tick.
 `;
-
-const STATE_DIR = path.join(process.env.HOME ?? "/tmp", ".infernet", "inference");
-
-async function ensureStateDir() {
-    await fsp.mkdir(STATE_DIR, { recursive: true });
-}
-
-async function readState() {
-    try {
-        const raw = await fsp.readFile(path.join(STATE_DIR, "state.json"), "utf8");
-        return JSON.parse(raw);
-    } catch { return null; }
-}
-
-async function writeState(s) {
-    await ensureStateDir();
-    await fsp.writeFile(path.join(STATE_DIR, "state.json"), JSON.stringify(s, null, 2));
-}
 
 async function pythonHasPetals() {
     return new Promise((resolve) => {
-        const p = spawn("python3", ["-c", "import petals"], { stdio: "ignore" });
-        p.on("exit", (code) => resolve(code === 0));
-        p.on("error", () => resolve(false));
+        const p = spawn('python3', ['-c', 'import petals'], { stdio: 'ignore' });
+        p.on('exit', (code) => resolve(code === 0));
+        p.on('error', () => resolve(false));
     });
 }
 
-async function cmdServe(args) {
-    const model = args.get("model");
+// ---- IPIP-0033: serve --backend rpc -----------------------------------------
+
+async function cmdServeRpc(args) {
+    const model = args.get('model');
     if (!model) {
-        process.stderr.write("error: --model <hf-id> is required\n");
+        process.stderr.write('error: --model <id> is required\n');
         return 2;
     }
-    const backend = args.get("backend") ?? "petals";
-    if (backend !== "petals") {
-        process.stderr.write(`error: only --backend petals is supported today (got ${backend})\n`);
+    const port = Number.parseInt(args.get('port') ?? '50052', 10);
+    const host = args.get('host') ?? '0.0.0.0';
+    const binary = args.get('binary') ?? 'rpc-server';
+    const vramGb = args.get('vram-gb') ? Number(args.get('vram-gb')) : null;
+    const ramGb = args.get('ram-gb') ? Number(args.get('ram-gb')) : null;
+    const maxConcurrent = args.get('max-concurrent')
+        ? Number.parseInt(args.get('max-concurrent'), 10)
+        : 1;
+
+    process.stdout.write(`Starting llama.cpp rpc-server for ${model} on ${host}:${port}…\n`);
+
+    let child;
+    try {
+        child = spawn(binary, ['-H', host, '-p', String(port)], {
+            stdio: ['ignore', 'inherit', 'inherit']
+        });
+    } catch (err) {
+        process.stderr.write(`error: failed to spawn ${binary}: ${err?.message ?? err}\n`);
+        return 1;
+    }
+    if (!child?.pid) {
+        process.stderr.write(`error: ${binary} did not start (binary missing? install llama.cpp)\n`);
+        return 1;
+    }
+
+    // Persist into state so the daemon's heartbeat advertises this slot.
+    // Multiple `infernet inference serve --backend rpc` invocations on
+    // the same daemon merge into a single rpc_slice block — the heartbeat
+    // path always reflects the most recent invocation.
+    await patchInferenceState((s) => {
+        const prev = s.rpc_slice ?? {};
+        const models = new Set([...(prev.models ?? []), model]);
+        return {
+            ...s,
+            rpc_slice: {
+                models: [...models],
+                host,
+                port,
+                pid: child.pid,
+                binary,
+                vram_gb: vramGb ?? prev.vram_gb ?? null,
+                ram_gb: ramGb ?? prev.ram_gb ?? null,
+                max_concurrent: maxConcurrent,
+                started_at: new Date().toISOString()
+            }
+        };
+    });
+
+    process.stdout.write(
+        `\n✓ rpc-server pid=${child.pid} started.\n` +
+        `   Heartbeat will advertise this slot as specs.rpc — re-run\n` +
+        `   \`infernet register\` if you don't want to wait for the next tick.\n\n` +
+        `   Stop with: infernet inference stop --backend rpc\n`
+    );
+
+    process.on('SIGINT', () => { try { child.kill('SIGTERM'); } catch { /* ignore */ } });
+
+    return new Promise((resolve) => {
+        child.on('exit', async (code) => {
+            await patchInferenceState((s) => {
+                if (s.rpc_slice?.pid === child.pid) {
+                    return {
+                        ...s,
+                        rpc_slice: {
+                            ...s.rpc_slice,
+                            pid: null,
+                            exited_at: new Date().toISOString(),
+                            exited_with: code
+                        }
+                    };
+                }
+                return s;
+            });
+            resolve(code === 0 ? 0 : 1);
+        });
+    });
+}
+
+// ---- IPIP-0033: primary -----------------------------------------------------
+
+async function cmdPrimary(args) {
+    const model = args.get('model');
+    const ggufPath = args.get('gguf');
+    if (!model || !ggufPath) {
+        process.stderr.write('error: --model <id> and --gguf <path> are both required\n');
         return 2;
     }
-    const numBlocks = args.get("num-blocks") ? Number.parseInt(args.get("num-blocks"), 10) : null;
-    const port = Number.parseInt(args.get("port") ?? "31330", 10);
-    const prefix = args.get("dht-prefix") ?? "/petals/v3-public";
+    const absPath = path.isAbsolute(ggufPath) ? ggufPath : path.resolve(process.cwd(), ggufPath);
+    try {
+        await fsp.access(absPath, fsp.constants.R_OK);
+    } catch {
+        process.stderr.write(`error: gguf not readable at ${absPath}\n`);
+        return 1;
+    }
+
+    await patchInferenceState((s) => {
+        const prev = s.rpc_primary ?? {};
+        const models = new Set([...(prev.models ?? []), model]);
+        const ggufPaths = { ...(prev.gguf_paths ?? {}), [model]: absPath };
+        return {
+            ...s,
+            rpc_primary: {
+                models: [...models],
+                gguf_paths: ggufPaths,
+                updated_at: new Date().toISOString()
+            }
+        };
+    });
+
+    // Also seed the canonical lookup the /v1/rpc/inference handler
+    // expects: ~/.infernet/models/<id>.gguf as a symlink. Best effort —
+    // the handler accepts an absolute path too, so this is convenience
+    // only.
+    try {
+        const modelsDir = path.join(os.homedir(), '.infernet', 'models');
+        await fsp.mkdir(modelsDir, { recursive: true });
+        const link = path.join(modelsDir, `${model}.gguf`);
+        try { await fsp.unlink(link); } catch { /* ignore */ }
+        await fsp.symlink(absPath, link);
+    } catch (err) {
+        process.stderr.write(`warn: could not create symlink (${err?.message ?? err})\n`);
+    }
+
+    process.stdout.write(
+        `✓ Registered as RPC primary for ${model}.\n` +
+        `   GGUF:     ${absPath}\n` +
+        `   Heartbeat will advertise specs.rpc_primary.\n` +
+        `   Run \`infernet register\` to push the change immediately.\n`
+    );
+    return 0;
+}
+
+// ---- IPIP-0031: petals (deprecated) -----------------------------------------
+
+async function cmdServePetals(args) {
+    const model = args.get('model');
+    if (!model) {
+        process.stderr.write('error: --model <hf-id> is required\n');
+        return 2;
+    }
+    const numBlocks = args.get('num-blocks') ? Number.parseInt(args.get('num-blocks'), 10) : null;
+    const port = Number.parseInt(args.get('port') ?? '31330', 10);
+    const prefix = args.get('dht-prefix') ?? '/petals/v3-public';
 
     if (!(await pythonHasPetals())) {
         process.stderr.write(
-            "error: petals isn't installed. Run:\n  pip install -U petals\n" +
-            "  python3 -c 'import petals'   # verify\n"
+            'error: petals isn\'t installed. Run:\n  pip install -U petals\n' +
+            '  python3 -c \'import petals\'   # verify\n'
         );
         return 1;
     }
 
-    process.stdout.write(`Starting Petals server for ${model} on :${port} (${numBlocks ?? "auto"} blocks)…\n`);
-    process.stdout.write("Initial DHT peers: " + prefix + "\n");
+    process.stdout.write(`[deprecated] Petals backend is being phased out — see IPIP-0033.\n`);
+    process.stdout.write(`Starting Petals server for ${model} on :${port} (${numBlocks ?? 'auto'} blocks)…\n`);
 
     const child = startPetalsServer({ model, numBlocks, port, prefix });
     if (!child?.pid) {
-        process.stderr.write("error: failed to spawn petals server\n");
+        process.stderr.write('error: failed to spawn petals server\n');
         return 1;
     }
 
-    await writeState({
-        backend,
-        model,
-        port,
-        prefix,
-        num_blocks: numBlocks,
-        pid: child.pid,
-        started_at: new Date().toISOString(),
-        peer_id: null
-    });
+    await patchInferenceState((s) => ({
+        ...s,
+        petals: {
+            backend: 'petals',
+            model,
+            port,
+            prefix,
+            num_blocks: numBlocks,
+            pid: child.pid,
+            started_at: new Date().toISOString(),
+            peer_id: null
+        }
+    }));
 
-    // Watch Petals' startup logs for the peer ID line — looks like
-    //   "This server's peer ID: 12D3KooW..." (libp2p Ed25519). We
-    //   capture it so `infernet register` can advertise it; the
-    //   control plane needs the mapping to attribute per-layer CPR
-    //   receipts to layer-contributing operators.
     const tapForPeerId = (stream, sink) => {
-        let buf = "";
-        stream.on("data", async (chunk) => {
+        let buf = '';
+        stream.on('data', async (chunk) => {
             const txt = chunk.toString();
             sink.write(txt);
             buf += txt;
             const m = buf.match(/peer ID[:\s]+([1-9A-HJ-NP-Za-km-z]{40,80})/i);
             if (m) {
-                const state = (await readState()) ?? {};
-                if (!state.peer_id) {
-                    state.peer_id = m[1];
-                    await writeState(state);
-                    process.stdout.write(`[infernet] captured petals peer id: ${m[1]}\n`);
-                }
-                buf = "";
+                await patchInferenceState((s) => {
+                    if (s.petals && !s.petals.peer_id) {
+                        return { ...s, petals: { ...s.petals, peer_id: m[1] } };
+                    }
+                    return s;
+                });
+                process.stdout.write(`[infernet] captured petals peer id: ${m[1]}\n`);
+                buf = '';
             }
             if (buf.length > 4096) buf = buf.slice(-2048);
         });
@@ -158,46 +292,100 @@ async function cmdServe(args) {
     if (child.stdout) tapForPeerId(child.stdout, process.stdout);
     if (child.stderr) tapForPeerId(child.stderr, process.stderr);
 
-    process.stdout.write(
-        `\n✓ Petals server pid=${child.pid} started.\n` +
-        `   Re-register your node so the control plane learns about this:\n` +
-        `   infernet register\n\n` +
-        `   Stop with: infernet inference stop\n`
-    );
-
-    // Stay attached so the user sees logs; Ctrl-C will SIGTERM the child.
-    process.on("SIGINT", () => { try { child.kill("SIGTERM"); } catch { /* ignore */ } });
+    process.on('SIGINT', () => { try { child.kill('SIGTERM'); } catch { /* ignore */ } });
     return new Promise((resolve) => {
-        child.on("exit", async (code) => {
-            await writeState({ backend, model, port, prefix, num_blocks: numBlocks, pid: null, exited_with: code, exited_at: new Date().toISOString() });
+        child.on('exit', async (code) => {
+            await patchInferenceState((s) => ({
+                ...s,
+                petals: {
+                    ...(s.petals ?? {}),
+                    pid: null,
+                    exited_with: code,
+                    exited_at: new Date().toISOString()
+                }
+            }));
             resolve(code === 0 ? 0 : 1);
         });
     });
 }
 
+async function cmdServe(args) {
+    const backend = (args.get('backend') ?? 'rpc').toLowerCase();
+    if (backend === 'rpc') return cmdServeRpc(args);
+    if (backend === 'petals') return cmdServePetals(args);
+    process.stderr.write(`error: unknown --backend ${backend} (use rpc or petals)\n`);
+    return 2;
+}
+
+// ---- status / stop / list ---------------------------------------------------
+
 async function cmdStatus() {
-    const state = await readState();
-    if (!state) {
-        process.stdout.write("(no inference server running locally)\n");
+    const state = await readInferenceState();
+    if (!state || Object.keys(state).length === 0) {
+        process.stdout.write('(no inference roles configured)\n');
         return 0;
     }
-    process.stdout.write(`backend:    ${state.backend}\n`);
-    process.stdout.write(`model:      ${state.model}\n`);
-    process.stdout.write(`port:       ${state.port}\n`);
-    process.stdout.write(`pid:        ${state.pid ?? "(exited)"}\n`);
-    if (state.pid) {
-        const alive = (() => { try { process.kill(state.pid, 0); return true; } catch { return false; } })();
-        process.stdout.write(`alive:      ${alive ? "yes" : "no — pid stale"}\n`);
+
+    if (state.rpc_slice) {
+        const s = state.rpc_slice;
+        process.stdout.write(`rpc-slice:\n`);
+        process.stdout.write(`  models:    ${(s.models ?? []).join(', ')}\n`);
+        process.stdout.write(`  endpoint:  ${s.host}:${s.port}\n`);
+        process.stdout.write(`  pid:       ${s.pid ?? '(exited)'}\n`);
+        if (s.pid) process.stdout.write(`  alive:     ${isPidAlive(s.pid) ? 'yes' : 'no — pid stale'}\n`);
+        if (s.exited_at) process.stdout.write(`  exited:    ${s.exited_at} (code ${s.exited_with})\n`);
     }
-    if (state.exited_at) {
-        process.stdout.write(`exited:     ${state.exited_at} (code ${state.exited_with})\n`);
+    if (state.rpc_primary) {
+        const p = state.rpc_primary;
+        process.stdout.write(`rpc-primary:\n`);
+        process.stdout.write(`  models:    ${(p.models ?? []).join(', ')}\n`);
+        for (const [m, gguf] of Object.entries(p.gguf_paths ?? {})) {
+            process.stdout.write(`    ${m} → ${gguf}\n`);
+        }
     }
+    if (state.petals) {
+        const p = state.petals;
+        process.stdout.write(`petals (deprecated):\n`);
+        process.stdout.write(`  model:     ${p.model}\n`);
+        process.stdout.write(`  port:      ${p.port}\n`);
+        process.stdout.write(`  pid:       ${p.pid ?? '(exited)'}\n`);
+        if (p.pid) process.stdout.write(`  alive:     ${isPidAlive(p.pid) ? 'yes' : 'no — pid stale'}\n`);
+        if (p.peer_id) process.stdout.write(`  peer_id:   ${p.peer_id}\n`);
+    }
+    return 0;
+}
+
+async function cmdStop(args) {
+    const which = args.get('backend');
+    const state = await readInferenceState();
+    let killed = 0;
+
+    if ((!which || which === 'rpc') && state.rpc_slice?.pid) {
+        try {
+            process.kill(state.rpc_slice.pid, 'SIGTERM');
+            process.stdout.write(`SIGTERM → rpc-slice pid ${state.rpc_slice.pid}\n`);
+            killed += 1;
+        } catch (err) {
+            process.stderr.write(`could not kill rpc-slice pid ${state.rpc_slice.pid}: ${err?.message ?? err}\n`);
+        }
+    }
+    if ((!which || which === 'petals') && state.petals?.pid) {
+        try {
+            process.kill(state.petals.pid, 'SIGTERM');
+            process.stdout.write(`SIGTERM → petals pid ${state.petals.pid}\n`);
+            killed += 1;
+        } catch (err) {
+            process.stderr.write(`could not kill petals pid ${state.petals.pid}: ${err?.message ?? err}\n`);
+        }
+    }
+
+    if (killed === 0) process.stdout.write('(nothing to stop)\n');
     return 0;
 }
 
 async function cmdList() {
     const cfg = await loadConfig().catch(() => ({}));
-    const controlPlaneUrl = cfg?.controlPlane?.url ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://infernetprotocol.com";
+    const controlPlaneUrl = cfg?.controlPlane?.url ?? process.env.NEXT_PUBLIC_APP_URL ?? 'https://infernetprotocol.com';
     const res = await fetch(`${controlPlaneUrl}/api/v1/petals/swarm`);
     if (!res.ok) {
         process.stderr.write(`error: HTTP ${res.status} from ${controlPlaneUrl}\n`);
@@ -205,49 +393,31 @@ async function cmdList() {
     }
     const { data } = await res.json();
     if (!data?.models?.length) {
-        process.stdout.write(`(no Petals swarms active right now)\n`);
-        process.stdout.write(`Be the first — \`infernet inference serve --backend petals --model <hf-id>\`\n`);
+        process.stdout.write(`(no swarms active right now)\n`);
+        process.stdout.write(`Be the first — \`infernet inference serve --backend rpc --model <id>\`\n`);
         return 0;
     }
-    process.stdout.write(`\nPetals swarms — ${data.total_models} models · ${data.total_nodes} nodes serving\n\n`);
-    process.stdout.write(`  ${"NODES".padEnd(7)} MODEL\n`);
-    process.stdout.write(`  ${"─────".padEnd(7)} ─────\n`);
+    process.stdout.write(`\nSwarms — ${data.total_models} models · ${data.total_nodes} nodes\n\n`);
     for (const m of data.models) {
-        process.stdout.write(`  ${String(m.node_count).padEnd(7)} ${m.model}\n`);
-    }
-    process.stdout.write(`\nQuery as a user: tick \"Distribute across all nodes\" on /chat and pick a model above.\n\n`);
-    return 0;
-}
-
-async function cmdStop() {
-    const state = await readState();
-    if (!state?.pid) {
-        process.stdout.write("(nothing to stop)\n");
-        return 0;
-    }
-    try {
-        process.kill(state.pid, "SIGTERM");
-        process.stdout.write(`SIGTERM sent to pid ${state.pid}\n`);
-    } catch (err) {
-        process.stderr.write(`could not kill pid ${state.pid}: ${err?.message ?? err}\n`);
-        return 1;
+        process.stdout.write(`  ${String(m.node_count).padEnd(5)} ${m.model}\n`);
     }
     return 0;
 }
 
 export default async function inference(args) {
-    if (args.has("help") || args.has("h")) {
+    if (args.has('help') || args.has('h')) {
         process.stdout.write(HELP);
         return 0;
     }
     const sub = args.positional?.[0];
     switch (sub) {
-        case "serve": case "start":  return cmdServe(args);
-        case "status":               return cmdStatus();
-        case "stop":                 return cmdStop();
-        case "list": case "ls":      return cmdList();
+        case 'serve': case 'start':  return cmdServe(args);
+        case 'primary':              return cmdPrimary(args);
+        case 'status':               return cmdStatus();
+        case 'stop':                 return cmdStop(args);
+        case 'list': case 'ls':      return cmdList();
         default:
-            process.stderr.write(sub ? `unknown subcommand: ${sub}\n\n` : "error: missing subcommand\n\n");
+            process.stderr.write(sub ? `unknown subcommand: ${sub}\n\n` : 'error: missing subcommand\n\n');
             process.stderr.write(HELP);
             return 2;
     }

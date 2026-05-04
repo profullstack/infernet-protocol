@@ -87,11 +87,15 @@ export default function DocsPage() {
             {/* QUICK START */}
             <Section id="quick-start" title="Quick start">
                 <p>
-                    On Linux, macOS, or Windows (WSL2), one line gets you the{" "}
-                    <code>infernet</code> CLI plus everything it needs:
+                    On Linux, macOS, or Windows (WSL2), two lines get you the{" "}
+                    <code>infernet</code> CLI plus everything it needs. The
+                    first installs <Link href="https://c0mpute.com" className="text-[var(--accent)] hover:underline">c0mpute</Link>{" "}
+                    (the p2p substrate infernet runs on); the second adds the
+                    infernet plugin:
                 </p>
                 <CodeBlock>
-{`curl -fsSL https://infernetprotocol.com/install.sh | sh`}
+{`curl -fsSL https://c0mpute.com/install.sh | sh
+c0mpute plugin install infernet`}
                 </CodeBlock>
                 <p>
                     Then bootstrap your environment (Ollama, model, firewall, identity,
@@ -125,8 +129,9 @@ wsl --install -d Ubuntu
 #    needing a separate driver inside Ubuntu.
 #    https://www.nvidia.com/Download/index.aspx
 
-# 3. Open Ubuntu, then run the same one-liner:
-curl -fsSL https://infernetprotocol.com/install.sh | sh
+# 3. Open Ubuntu, then run the same two-liner:
+curl -fsSL https://c0mpute.com/install.sh | sh
+c0mpute plugin install infernet
 infernet setup`}
                 </CodeBlock>
                 <Aside type="note">
@@ -903,7 +908,7 @@ infernet start                                  # daemon takes paying jobs`}
                     <li>IPIP-0003 — auth + account model (two-tier, pubkey linking)</li>
                     <li>IPIP-0004 — multi-currency payments via CoinPayPortal</li>
                     <li>IPIP-0005 — data access architecture (no DB clients in browsers/CLI/SDK)</li>
-                    <li>IPIP-0006 — peer discovery + bootstrap (Nostr capability + libp2p Kad)</li>
+                    <li>IPIP-0006 — peer discovery + bootstrap (superseded; provided by c0mpute)</li>
                     <li>IPIP-0007 — CoinPay Reputation Protocol integration</li>
                 </ul>
             </Section>

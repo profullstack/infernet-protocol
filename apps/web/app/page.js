@@ -9,7 +9,7 @@ export const metadata = {
 };
 
 const INSTALL_ONE_LINER =
-  "curl -fsSL https://infernetprotocol.com/install.sh | sh";
+  "curl -fsSL https://c0mpute.com/install.sh | sh && c0mpute plugin install infernet";
 
 export default function HomePage() {
   return (
@@ -69,7 +69,7 @@ export default function HomePage() {
           <Pillar
             eyebrow="For the protocol"
             title="The control plane is convenience, not dependency"
-            body="Operators authenticate with a Nostr keypair — never a database credential. Discovery bootstraps from infernetprotocol.com, then peers gossip via libp2p Kademlia + Nostr relays. The site can go dark and the network keeps working."
+            body="Operators authenticate with a Nostr keypair — never a database credential. Peer discovery + workload auctions live in c0mpute (libp2p Kad-DHT + gossipsub), shared with other plugins. The control plane can go dark and the c0mpute network keeps working."
           />
         </div>
       </section>

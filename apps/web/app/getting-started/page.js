@@ -155,12 +155,18 @@ for chunk in stream:
             {/* ── Track 2: OPERATE ──────────────────────────────────────── */}
             <Section id="operate" kicker="Track 2" title="Run a node and earn">
                 <p>
-                    One curl command installs the CLI, sets up Ollama, drops a systemd unit,
-                    and registers your node with the control plane. Works on any Linux GPU
-                    box (RunPod, Vast, bare metal, or your home tower).
+                    Infernet runs as a workload plugin on top of{" "}
+                    <Link href="https://c0mpute.com" className="text-[var(--accent)] hover:underline">c0mpute</Link>{" "}
+                    (the p2p substrate — peer discovery, gossipsub auctions, shared
+                    toolchain). Two commands install both: the c0mpute installer brings
+                    in mise + bun + ffmpeg and lays down the c0mpute binary; the plugin
+                    installer drops the infernet CLI, sets up Ollama, opens the firewall
+                    port, and registers your node. Works on any Linux GPU box (RunPod,
+                    Vast, bare metal, or your home tower).
                 </p>
 
-                <Code>{`curl -fsSL https://infernetprotocol.com/install.sh | sh`}</Code>
+                <Code>{`curl -fsSL https://c0mpute.com/install.sh | sh
+c0mpute plugin install infernet`}</Code>
 
                 <p>Then:</p>
                 <Code>{`infernet init             # generates a Nostr keypair, picks defaults

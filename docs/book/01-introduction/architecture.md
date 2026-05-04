@@ -1,6 +1,6 @@
 # Architecture
 
-Infernet Protocol has four major components: the control plane, node daemons, inference backends, and the on-chain payment layer. Here's how they connect.
+Infernet Protocol has five major components: the **c0mpute p2p substrate**, the control plane, node daemons, inference backends, and the on-chain payment layer. Here's how they connect.
 
 ## Component Overview
 
@@ -28,6 +28,16 @@ Infernet Protocol has four major components: the control plane, node daemons, in
 │ │  (default)  │ │ │ │             │ │ │ │             │ │
 │ └─────────────┘ │ │ └─────────────┘ │ │ └─────────────┘ │
 └────────┬────────┘ └─────────────────┘ └─────────────────┘
+         │     ▲                ▲                ▲
+         │     │                │                │
+         │     └────────────────┴────────────────┘
+         │              libp2p (Kad-DHT, gossipsub)
+         │     ┌────────────────────────────────────────┐
+         │     │           c0mpute                      │
+         │     │  peer discovery + workload auctions    │
+         │     │  (cap registry, JobOffer/Bid/Accept,   │
+         │     │   shared toolchain: mise + bun)        │
+         │     └────────────────────────────────────────┘
          │
          ▼ on-chain
 ┌─────────────────────────────┐
@@ -36,6 +46,17 @@ Infernet Protocol has four major components: the control plane, node daemons, in
 │   Compute Payment Receipts  │
 └─────────────────────────────┘
 ```
+
+## c0mpute (p2p substrate)
+
+[c0mpute](https://c0mpute.com) is the generic decentralized compute marketplace infernet runs on. It provides:
+
+- **Peer discovery** — libp2p Kad-DHT. Nodes find each other across operators without infernet running its own DHT.
+- **Capability advertisement** — every c0mpute worker periodically publishes a `CapabilityAd` on the `c0mpute/cap/v1` gossipsub topic. Infernet workers tag themselves with `c0mpute:role:infernet` plus model + GPU class capabilities.
+- **Workload auctions** — buyers publish `JobOffer`s on `c0mpute/jobs/infernet.inference`; eligible workers reply with `JobBid`s; the buyer publishes a `JobAccept` naming the winner; the worker runs the job and emits a `JobReceipt`. Same shape as the transcode plugin's auction (DIP-0011).
+- **Shared toolchain** — installing c0mpute also lays down `mise` (toolchain manager) and `bun` (runtime), so plugins don't redo this work. ffmpeg comes with the transcode plugin and is shared with any infernet workload that needs it.
+
+Infernet historically maintained its own Hyperswarm DHT (IPIP-0032). That layer has been removed; the IPIP is preserved as a `Superseded` historical record. Direct chat-streaming TCP between consumer and provider (port 46337) is unchanged — that's the AI-specific transport, not p2p discovery.
 
 ## Control Plane
 

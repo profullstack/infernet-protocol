@@ -1,28 +1,49 @@
 # Installation
 
-## Install the CLI
+Infernet is a workload plugin on the [c0mpute](https://c0mpute.com) network. Installing it is two commands: c0mpute itself, then the infernet plugin.
+
+## Install c0mpute
 
 ```bash
-curl -sSL https://infernetprotocol.com/install | bash
+curl -fsSL https://c0mpute.com/install.sh | sh
 ```
 
-The installer:
-1. Detects your OS and architecture
-2. Downloads the appropriate pre-built Node.js binary
-3. Installs it to `/usr/local/bin/infernet` (or `~/.local/bin` if not root)
-4. Adds it to your PATH
+c0mpute's installer:
+1. Detects your OS and architecture, downloads the `c0mpute` binary
+2. Installs `mise` + `bun` (shared toolchain) and `ffmpeg` (transcode plugin's system dep — auto-skipped if you already have it)
+3. Drops the binary at `~/.c0mpute/bin/c0mpute` with a shim on PATH
+4. Symlinks the shard data dir (`~/.local/share/c0mpute`) onto the biggest writable volume when one is available — RunPod `/workspace`, Vast.ai `/data`, bare-metal `/mnt/*`, etc.
 
-After the install, either open a new shell or `source ~/.bashrc` / `source ~/.zshrc`.
+After the install, either open a new shell or `source ~/.bashrc` / `source ~/.zshrc`. The installer auto-execs a fresh shell on most systems so the new `$PATH` is picked up immediately.
 
-Verify:
+## Add the infernet plugin
 
 ```bash
+c0mpute plugin install infernet
+```
+
+This pulls `https://c0mpute.com/plugins/infernet/install.sh` and runs it. The script lays down the `infernet` CLI at `~/.local/bin/infernet` and registers your node as an infernet-capable worker on the c0mpute network.
+
+Verify both:
+
+```bash
+c0mpute version
 infernet --version
-# infernet v0.1.19
+# infernet v0.2.0
 #   up to date
 ```
 
-### Manual Install
+### Manual install
+
+If you'd rather not go through `c0mpute plugin install`, the plugin's installer is just a curl-able script:
+
+```bash
+curl -fsSL https://c0mpute.com/plugins/infernet/install.sh | sh
+```
+
+(Identical to what `c0mpute plugin install infernet` runs internally.)
+
+### Direct binary download
 
 ```bash
 INFERNET_VERSION=$(curl -s https://infernetprotocol.com/version)

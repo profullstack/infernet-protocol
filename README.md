@@ -8,7 +8,9 @@
 
 # Infernet Protocol
 
-A decentralized GPU compute marketplace for **inference and distributed training**. Rent a GPU anywhere, run one `docker` command, start earning crypto. The control plane is a Next.js dashboard; GPU nodes authenticate with **Nostr-signed HTTP requests** — they never hold a database credential, run as an unprivileged user, and can operate outbound-only. Scales horizontally — every new provider on the network is real, additional capacity.
+A decentralized GPU compute marketplace for **inference and distributed training**, running as a workload plugin on top of [**c0mpute**](https://c0mpute.com). Rent a GPU anywhere, install c0mpute, add the infernet plugin, start earning crypto. The control plane is a Next.js dashboard; GPU nodes authenticate with **Nostr-signed HTTP requests** — they never hold a database credential, run as an unprivileged user, and can operate outbound-only. Scales horizontally — every new provider on the network is real, additional capacity.
+
+**Infernet runs on c0mpute.** The peer discovery + auction substrate (libp2p Kad-DHT + gossipsub) lives in c0mpute, shared with other workload plugins (transcode, etc.). Infernet contributes the AI-specific layer: federated inference (llama.cpp RPC), the chat / completions API, the routing logic, and the Nostr-keyed identity model.
 
 **What we are, what we aren't.** Infernet is the economic substrate for inference jobs that don't need NVLink — single-GPU inference (7B–70B), embarrassingly parallel batch (embeddings, image grids, sweeps), LoRA fine-tunes, and async / federated distributed training (DiLoCo-style). We don't try to match hyperscalers on tight-sync 100B+ training from scratch — that workload's interconnect moat is real and conceding it costs us nothing. The dominant inference market is request-level parallel, where per-job latency is dominated by GPU compute, not network hops. As inference ASICs (Apple Neural Engine, Qualcomm Hexagon, Tenstorrent, Groq, Cerebras, AWS Trainium) commoditize the silicon, the protocol layer is what stays valuable. Bitcoin's real lesson: the protocol survived three hardware generations because it didn't depend on any of them.
 
@@ -30,19 +32,22 @@ Canonical links:
 
 ## Getting started
 
-One line on Linux, macOS, or Windows (WSL2):
+Two lines on Linux, macOS, or Windows (WSL2):
 
 ```bash
-curl -fsSL https://infernetprotocol.com/install.sh | sh
+# 1. Install c0mpute (the p2p substrate; brings in mise, bun, ffmpeg)
+curl -fsSL https://c0mpute.com/install.sh | sh
+
+# 2. Add the infernet plugin (installs the infernet CLI + daemon)
+c0mpute plugin install infernet
 ```
 
-(GitHub mirror, always pinned to master:
-`https://raw.githubusercontent.com/infernetprotocol/infernet-protocol/master/install.sh`)
-
-This installs the `infernet` CLI to `~/.infernet/source` and drops a
-shim at `~/.local/bin/infernet`. Re-run anytime to update. Node 20 is
-installed automatically via [mise](https://mise.jdx.dev) (single static
-binary under `$HOME` — does not collide with system Node).
+The first command sets up c0mpute itself — peer discovery, the
+gossipsub auction layer, capability registry, and the toolchain
+(mise + bun) that plugins share. The second pulls
+`https://c0mpute.com/plugins/infernet/install.sh` which lays down the
+`infernet` CLI at `~/.local/bin/infernet` and registers infernet as
+the AI-inference workload type on the c0mpute network.
 
 ### Windows (WSL2)
 
@@ -74,7 +79,8 @@ infernet help            # full command list
 
 | Method | Command | Status |
 | --- | --- | --- |
-| **One-line script** (above) | `curl … \| sh` | ✅ works today |
+| **c0mpute plugin** (above) | `c0mpute plugin install infernet` | ✅ works today |
+| **Direct plugin URL** | `curl -fsSL https://c0mpute.com/plugins/infernet/install.sh \| sh` | ✅ works today (same script) |
 | **Docker** | `docker run --rm -it --gpus all ghcr.io/profullstack/infernet-provider:latest` | ✅ works today |
 | **Manual git clone** | `git clone … && pnpm install && node apps/cli/index.js` | ✅ works today |
 | **npm global** | `npm install -g @infernetprotocol/cli` | 🚧 blocked on npm token regen |
@@ -83,9 +89,11 @@ infernet help            # full command list
 ### Uninstall
 
 ```bash
-rm -rf ~/.infernet ~/.local/bin/infernet
-rm -rf ~/.config/infernet     # also removes node identity + saved config
+c0mpute plugin uninstall infernet     # removes the infernet CLI + daemon
+rm -rf ~/.config/infernet              # also removes node identity + saved config
 ```
+
+(Or, to remove c0mpute entirely: `c0mpute uninstall --purge`.)
 
 ---
 
@@ -99,13 +107,13 @@ rm -rf ~/.config/infernet     # also removes node identity + saved config
 - **Workload classes (IPIP-0010)** — A (single GPU, real-time), B (provider's cluster, real-time), B.5 (cross-provider pipeline-parallel via Petals, batch only), C (distributed training via OpenDiLoCo / OpenRLHF / Hivemind, async).
 - **Training orchestration scaffold** — `@infernetprotocol/training` package with backends for DeepSpeed (Class B), OpenRLHF (Ray + vLLM rollouts + DeepSpeed updates), OpenDiLoCo (Class C), Petals (Class B.5 fine-tunes), and stub. See IPIP-0011.
 - **Batch job decomposition (IPIP-0013)** — `POST /api/v1/jobs/batch` splits one logical job (embed N docs, classify N items) into chunks fan-out across providers. BullMQ default queue, Postgres-queue fallback.
-- **`infernet` CLI** — one binary per GPU server. Subcommands: `init`, `login`, `register`, `update`, `remove`, `start`, `stop`, `status`, `stats`, `logs`, `payout`, `payments`, `gpu`, `firewall`, `chat`, `tui`, `model`, `setup`, `service`, `doctor`. Daemon has a local IPC socket for live queries + a **public P2P TCP port 46337** (dual-stack IPv4/IPv6) for direct peer communication.
+- **`infernet` CLI** — one binary per GPU server. Subcommands: `init`, `login`, `register`, `update`, `remove`, `start`, `stop`, `status`, `stats`, `logs`, `payout`, `payments`, `gpu`, `firewall`, `chat`, `tui`, `model`, `setup`, `service`, `doctor`. Daemon has a local IPC socket for live queries + a **direct P2P chat transport on TCP 46337** (dual-stack IPv4/IPv6) for streaming inference between consumer and provider. **Peer discovery + workload auction live in c0mpute** (libp2p Kad-DHT + gossipsub) — infernet doesn't run its own DHT anymore.
 - **Supabase** backend on the server — Postgres + Auth + Realtime. Self-hosted or cloud.
 - **Nostr-signed node API** at `/api/v1/node/*` — GPU nodes sign every request with their secp256k1 / BIP-340 keypair; the control plane verifies the signature before touching the DB. No service-role keys ever leave the server.
 - **Privacy-preserving telemetry** — heartbeats carry only coarse GPU capability (vendor + VRAM tier). No hostname, platform, CPU model, or RAM total is stored.
 - **Multi-coin payments** via CoinPayPortal — BTC, BCH, ETH, SOL, POL, BNB, XRP, ADA, DOGE, plus USDT/USDC on ETH/Polygon/Solana/Base.
 - **GPU auto-detect** — nvidia-smi, rocm-smi, Apple Silicon; stashed in `providers.specs.gpus` for control-plane job matching.
-- **Host-agnostic install** — `install.sh` scans `df`, finds the biggest writable volume that isn't the root overlay, and relocates the install onto it. Works for RunPod `/workspace`, Vast.ai `/data`, Lambda `/lambda`, bare metal `/mnt/*`, anywhere.
+- **Host-agnostic install** — c0mpute's `install.sh` scans `df`, finds the biggest writable volume that isn't the root overlay, and symlinks the shard data dir onto it. Works for RunPod `/workspace`, Vast.ai `/data`, Lambda `/lambda`, bare metal `/mnt/*`, anywhere. Inherited by every plugin including infernet.
 
 ## Security & anonymity model
 
@@ -131,29 +139,34 @@ Operators can point **many GPU nodes at the same control plane** — each node h
 
 ## Zero-touch install
 
-One command, zero ssh, no manual `infernet setup` afterwards. Mint a 24h
+One block, zero ssh, no manual `infernet setup` afterwards. Mint a 24h
 bearer at [/deploy](https://infernetprotocol.com/deploy), then on the
 target box:
 
 ```sh
-curl -fsSL https://infernetprotocol.com/install.sh \
-  | INFERNET_BEARER=$TOKEN INFERNET_MODEL=qwen2.5:7b sh
+curl -fsSL https://c0mpute.com/install.sh | sh
+INFERNET_BEARER=$TOKEN INFERNET_MODEL=qwen2.5:7b \
+  c0mpute plugin install infernet
 ```
 
-What it does: detects platform, installs Node 20 + `infernet` CLI, runs
-`infernet init` + `login --token` + `setup --yes` + `start` so the node
-registers, heartbeats, and starts taking jobs in one shot.
+What it does: c0mpute's installer detects platform, installs mise +
+bun + ffmpeg, lays down the `c0mpute` binary, and (by default) symlinks
+the shard data dir onto the biggest writable volume. The plugin
+installer then drops the `infernet` CLI, runs `infernet init` +
+`login --token` + `setup --yes` + `start` so the node registers,
+heartbeats, and starts taking jobs in one shot.
 
-For RunPod / DigitalOcean / AWS / bare-metal cloud-init, paste the same
-one-liner into the platform's "user data" or "container start command"
+For RunPod / DigitalOcean / AWS / bare-metal cloud-init, paste both
+lines into the platform's "user data" or "container start command"
 field. Works in any Linux box with `curl` and root.
 
 ### Reachability note
 
 The control-plane-mediated chat path **does not need inbound connectivity**
 — the daemon polls and posts outbound. Port 46337 only matters if you
-want IPIP-0002 direct P2P features. Residential operators behind NAT can
-skip port forwarding and still earn.
+want the direct P2P chat transport (consumer dials provider for low-latency
+streaming). Residential operators behind NAT can skip port forwarding and
+still earn.
 
 ---
 

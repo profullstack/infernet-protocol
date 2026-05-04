@@ -72,12 +72,14 @@ The browser-friendly playground is at <https://infernetprotocol.com/chat>.
 
 ## Track 2 — Run a node and earn
 
-One curl command bootstraps everything: installs the CLI, sets up Ollama,
-opens the firewall port, drops a systemd unit, and registers your node
-with the control plane.
+Two commands bootstrap everything: c0mpute itself (peer discovery + the
+gossipsub auction layer + shared toolchain), then the infernet plugin
+(installs the CLI, sets up Ollama, opens the firewall port, drops a
+systemd unit, and registers your node with the control plane).
 
 ```bash
-curl -fsSL https://infernetprotocol.com/install.sh | sh
+curl -fsSL https://c0mpute.com/install.sh | sh
+c0mpute plugin install infernet
 ```
 
 Then:

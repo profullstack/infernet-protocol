@@ -201,9 +201,9 @@
 <h1 class="title">Architecture · The Infernet Book</h1>
 </header>
 <h1 id="architecture">Architecture</h1>
-<p>Infernet Protocol has four major components: the control plane, node
-daemons, inference backends, and the on-chain payment layer. Here’s how
-they connect.</p>
+<p>Infernet Protocol has five major components: the <strong>c0mpute p2p
+substrate</strong>, the control plane, node daemons, inference backends,
+and the on-chain payment layer. Here’s how they connect.</p>
 <h2 id="component-overview">Component Overview</h2>
 <pre><code>┌─────────────────────────────────────────────────────────────────┐
 │                        CONTROL PLANE                            │
@@ -228,6 +228,16 @@ they connect.</p>
 │ │  (default)  │ │ │ │             │ │ │ │             │ │
 │ └─────────────┘ │ │ └─────────────┘ │ │ └─────────────┘ │
 └────────┬────────┘ └─────────────────┘ └─────────────────┘
+         │     ▲                ▲                ▲
+         │     │                │                │
+         │     └────────────────┴────────────────┘
+         │              libp2p (Kad-DHT, gossipsub)
+         │     ┌────────────────────────────────────────┐
+         │     │           c0mpute                      │
+         │     │  peer discovery + workload auctions    │
+         │     │  (cap registry, JobOffer/Bid/Accept,   │
+         │     │   shared toolchain: mise + bun)        │
+         │     └────────────────────────────────────────┘
          │
          ▼ on-chain
 ┌─────────────────────────────┐
@@ -235,6 +245,34 @@ they connect.</p>
 │   (EVM / Solana / etc.)     │
 │   Compute Payment Receipts  │
 └─────────────────────────────┘</code></pre>
+<h2 id="c0mpute-p2p-substrate">c0mpute (p2p substrate)</h2>
+<p><a href="https://c0mpute.com">c0mpute</a> is the generic
+decentralized compute marketplace infernet runs on. It provides:</p>
+<ul>
+<li><strong>Peer discovery</strong> — libp2p Kad-DHT. Nodes find each
+other across operators without infernet running its own DHT.</li>
+<li><strong>Capability advertisement</strong> — every c0mpute worker
+periodically publishes a <code>CapabilityAd</code> on the
+<code>c0mpute/cap/v1</code> gossipsub topic. Infernet workers tag
+themselves with <code>c0mpute:role:infernet</code> plus model + GPU
+class capabilities.</li>
+<li><strong>Workload auctions</strong> — buyers publish
+<code>JobOffer</code>s on <code>c0mpute/jobs/infernet.inference</code>;
+eligible workers reply with <code>JobBid</code>s; the buyer publishes a
+<code>JobAccept</code> naming the winner; the worker runs the job and
+emits a <code>JobReceipt</code>. Same shape as the transcode plugin’s
+auction (DIP-0011).</li>
+<li><strong>Shared toolchain</strong> — installing c0mpute also lays
+down <code>mise</code> (toolchain manager) and <code>bun</code>
+(runtime), so plugins don’t redo this work. ffmpeg comes with the
+transcode plugin and is shared with any infernet workload that needs
+it.</li>
+</ul>
+<p>Infernet historically maintained its own Hyperswarm DHT (IPIP-0032).
+That layer has been removed; the IPIP is preserved as a
+<code>Superseded</code> historical record. Direct chat-streaming TCP
+between consumer and provider (port 46337) is unchanged — that’s the
+AI-specific transport, not p2p discovery.</p>
 <h2 id="control-plane">Control Plane</h2>
 <p>The control plane is a Next.js application backed by Supabase. It
 serves two audiences:</p>

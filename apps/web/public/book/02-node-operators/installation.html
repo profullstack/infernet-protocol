@@ -264,37 +264,63 @@
 <h1 class="title">Installation · The Infernet Book</h1>
 </header>
 <h1 id="installation">Installation</h1>
-<h2 id="install-the-cli">Install the CLI</h2>
+<p>Infernet is a workload plugin on the <a
+href="https://c0mpute.com">c0mpute</a> network. Installing it is two
+commands: c0mpute itself, then the infernet plugin.</p>
+<h2 id="install-c0mpute">Install c0mpute</h2>
 <div class="sourceCode" id="cb1"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-sSL</span> https://infernetprotocol.com/install <span class="kw">|</span> <span class="fu">bash</span></span></code></pre></div>
-<p>The installer: 1. Detects your OS and architecture 2. Downloads the
-appropriate pre-built Node.js binary 3. Installs it to
-<code>/usr/local/bin/infernet</code> (or <code>~/.local/bin</code> if
-not root) 4. Adds it to your PATH</p>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-fsSL</span> https://c0mpute.com/install.sh <span class="kw">|</span> <span class="fu">sh</span></span></code></pre></div>
+<p>c0mpute’s installer: 1. Detects your OS and architecture, downloads
+the <code>c0mpute</code> binary 2. Installs <code>mise</code> +
+<code>bun</code> (shared toolchain) and <code>ffmpeg</code> (transcode
+plugin’s system dep — auto-skipped if you already have it) 3. Drops the
+binary at <code>~/.c0mpute/bin/c0mpute</code> with a shim on PATH 4.
+Symlinks the shard data dir (<code>~/.local/share/c0mpute</code>) onto
+the biggest writable volume when one is available — RunPod
+<code>/workspace</code>, Vast.ai <code>/data</code>, bare-metal
+<code>/mnt/*</code>, etc.</p>
 <p>After the install, either open a new shell or
-<code>source ~/.bashrc</code> / <code>source ~/.zshrc</code>.</p>
-<p>Verify:</p>
+<code>source ~/.bashrc</code> / <code>source ~/.zshrc</code>. The
+installer auto-execs a fresh shell on most systems so the new
+<code>$PATH</code> is picked up immediately.</p>
+<h2 id="add-the-infernet-plugin">Add the infernet plugin</h2>
 <div class="sourceCode" id="cb2"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> <span class="at">--version</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co"># infernet v0.1.19</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co">#   up to date</span></span></code></pre></div>
-<h3 id="manual-install">Manual Install</h3>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">c0mpute</span> plugin install infernet</span></code></pre></div>
+<p>This pulls
+<code>https://c0mpute.com/plugins/infernet/install.sh</code> and runs
+it. The script lays down the <code>infernet</code> CLI at
+<code>~/.local/bin/infernet</code> and registers your node as an
+infernet-capable worker on the c0mpute network.</p>
+<p>Verify both:</p>
 <div class="sourceCode" id="cb3"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="va">INFERNET_VERSION</span><span class="op">=</span><span class="va">$(</span><span class="ex">curl</span> <span class="at">-s</span> https://infernetprotocol.com/version<span class="va">)</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-sSL</span> <span class="st">&quot;https://github.com/infernetprotocol/infernet-protocol/releases/download/</span><span class="va">${INFERNET_VERSION}</span><span class="st">/infernet-linux-x86_64&quot;</span> <span class="dt">\</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">-o</span> /usr/local/bin/infernet</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="fu">chmod</span> +x /usr/local/bin/infernet</span></code></pre></div>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">c0mpute</span> version</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> <span class="at">--version</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co"># infernet v0.2.0</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co">#   up to date</span></span></code></pre></div>
+<h3 id="manual-install">Manual install</h3>
+<p>If you’d rather not go through <code>c0mpute plugin install</code>,
+the plugin’s installer is just a curl-able script:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-fsSL</span> https://c0mpute.com/plugins/infernet/install.sh <span class="kw">|</span> <span class="fu">sh</span></span></code></pre></div>
+<p>(Identical to what <code>c0mpute plugin install infernet</code> runs
+internally.)</p>
+<h3 id="direct-binary-download">Direct binary download</h3>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="va">INFERNET_VERSION</span><span class="op">=</span><span class="va">$(</span><span class="ex">curl</span> <span class="at">-s</span> https://infernetprotocol.com/version<span class="va">)</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-sSL</span> <span class="st">&quot;https://github.com/infernetprotocol/infernet-protocol/releases/download/</span><span class="va">${INFERNET_VERSION}</span><span class="st">/infernet-linux-x86_64&quot;</span> <span class="dt">\</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">-o</span> /usr/local/bin/infernet</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="fu">chmod</span> +x /usr/local/bin/infernet</span></code></pre></div>
 <p>Available platforms: <code>linux-x86_64</code>,
 <code>linux-aarch64</code>, <code>darwin-arm64</code>,
 <code>darwin-x86_64</code>.</p>
 <hr />
 <h2 id="run-setup">Run Setup</h2>
-<div class="sourceCode" id="cb4"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> setup</span></code></pre></div>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> setup</span></code></pre></div>
 <p><code>setup</code> is interactive and walks through every step. Pass
 <code>--yes</code> to accept defaults non-interactively:</p>
-<div class="sourceCode" id="cb5"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> setup <span class="at">--yes</span></span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> setup <span class="at">--yes</span></span></code></pre></div>
 <h3 id="what-setup-does">What Setup Does</h3>
 <p><strong>1. Collect registration token</strong></p>
 <p>You’ll be prompted for the one-time registration token from the
@@ -346,25 +372,25 @@ setup — it will detect and configure it.</p>
 <p>A secp256k1 keypair (Nostr-compatible) is generated. Config is
 written to <code>~/.config/infernet/config.json</code> with mode
 <code>0600</code>:</p>
-<div class="sourceCode" id="cb6"><pre
-class="sourceCode json"><code class="sourceCode json"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;controlPlane&quot;</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">&quot;url&quot;</span><span class="fu">:</span> <span class="st">&quot;https://infernetprotocol.com&quot;</span> <span class="fu">},</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;node&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;id&quot;</span><span class="fu">:</span> <span class="kw">null</span><span class="fu">,</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;nodeId&quot;</span><span class="fu">:</span> <span class="st">&quot;provider-a1b2c3d4&quot;</span><span class="fu">,</span></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;role&quot;</span><span class="fu">:</span> <span class="st">&quot;provider&quot;</span><span class="fu">,</span></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;name&quot;</span><span class="fu">:</span> <span class="st">&quot;user@hostname&quot;</span><span class="fu">,</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;publicKey&quot;</span><span class="fu">:</span> <span class="st">&quot;abcdef...&quot;</span><span class="fu">,</span></span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;privateKey&quot;</span><span class="fu">:</span> <span class="st">&quot;012345...&quot;</span><span class="fu">,</span></span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;address&quot;</span><span class="fu">:</span> <span class="st">&quot;1.2.3.4&quot;</span><span class="fu">,</span></span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;port&quot;</span><span class="fu">:</span> <span class="dv">46337</span></span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">},</span></span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;engine&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;backend&quot;</span><span class="fu">:</span> <span class="st">&quot;ollama&quot;</span><span class="fu">,</span></span>
-<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;ollamaHost&quot;</span><span class="fu">:</span> <span class="st">&quot;http://localhost:11434&quot;</span><span class="fu">,</span></span>
-<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;model&quot;</span><span class="fu">:</span> <span class="st">&quot;qwen2.5:7b&quot;</span></span>
-<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
-<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;controlPlane&quot;</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">&quot;url&quot;</span><span class="fu">:</span> <span class="st">&quot;https://infernetprotocol.com&quot;</span> <span class="fu">},</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;node&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;id&quot;</span><span class="fu">:</span> <span class="kw">null</span><span class="fu">,</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;nodeId&quot;</span><span class="fu">:</span> <span class="st">&quot;provider-a1b2c3d4&quot;</span><span class="fu">,</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;role&quot;</span><span class="fu">:</span> <span class="st">&quot;provider&quot;</span><span class="fu">,</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;name&quot;</span><span class="fu">:</span> <span class="st">&quot;user@hostname&quot;</span><span class="fu">,</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;publicKey&quot;</span><span class="fu">:</span> <span class="st">&quot;abcdef...&quot;</span><span class="fu">,</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;privateKey&quot;</span><span class="fu">:</span> <span class="st">&quot;012345...&quot;</span><span class="fu">,</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;address&quot;</span><span class="fu">:</span> <span class="st">&quot;1.2.3.4&quot;</span><span class="fu">,</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;port&quot;</span><span class="fu">:</span> <span class="dv">46337</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">},</span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;engine&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;backend&quot;</span><span class="fu">:</span> <span class="st">&quot;ollama&quot;</span><span class="fu">,</span></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;ollamaHost&quot;</span><span class="fu">:</span> <span class="st">&quot;http://localhost:11434&quot;</span><span class="fu">,</span></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;model&quot;</span><span class="fu">:</span> <span class="st">&quot;qwen2.5:7b&quot;</span></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
 <p><strong>6. Configure logrotate</strong></p>
 <p>On Linux, setup writes <code>/etc/logrotate.d/infernet</code> so logs
 in <code>/var/log/infernet/</code> rotate daily and are retained for 14
@@ -378,26 +404,26 @@ control plane.</p>
 <p>The daemon makes outbound HTTPS connections only — no inbound ports
 are required for basic operation. If clients connect directly to your
 node:</p>
-<div class="sourceCode" id="cb7"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># UFW</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> ufw allow out 443/tcp</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> ufw allow in 46337/tcp   <span class="co"># P2P port (default)</span></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="co"># iptables</span></span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="ex">iptables</span> <span class="at">-A</span> OUTPUT <span class="at">-p</span> tcp <span class="at">--dport</span> 443 <span class="at">-j</span> ACCEPT</span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="ex">iptables</span> <span class="at">-A</span> INPUT  <span class="at">-p</span> tcp <span class="at">--dport</span> 46337 <span class="at">-j</span> ACCEPT</span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># UFW</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> ufw allow out 443/tcp</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="fu">sudo</span> ufw allow in 46337/tcp   <span class="co"># P2P port (default)</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="co"># iptables</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="ex">iptables</span> <span class="at">-A</span> OUTPUT <span class="at">-p</span> tcp <span class="at">--dport</span> 443 <span class="at">-j</span> ACCEPT</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="ex">iptables</span> <span class="at">-A</span> INPUT  <span class="at">-p</span> tcp <span class="at">--dport</span> 46337 <span class="at">-j</span> ACCEPT</span></code></pre></div>
 <hr />
 <h2 id="running-as-a-system-service">Running as a System Service</h2>
-<div class="sourceCode" id="cb8"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> service install</span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> service install</span></code></pre></div>
 <p>This creates a systemd unit (Linux) or launchd plist (macOS) so the
 daemon starts at boot.</p>
-<div class="sourceCode" id="cb9"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> service start</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> service stop</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> service restart</span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> service status</span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> service uninstall</span></code></pre></div>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> service start</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> service stop</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> service restart</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> service status</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> service uninstall</span></code></pre></div>
 <hr />
 <h2 id="auto-upgrade">Auto-Upgrade</h2>
 <p>The daemon checks for a new CLI version every 5 minutes against the
@@ -410,21 +436,21 @@ GitHub releases API. When a newer version is available it:</p>
 </ol>
 <p>No manual intervention needed. You can also trigger an upgrade
 manually:</p>
-<div class="sourceCode" id="cb10"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> upgrade</span></code></pre></div>
-<p>Check your current version at any time:</p>
-<div class="sourceCode" id="cb11"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> <span class="at">--version</span></span></code></pre></div>
-<hr />
-<h2 id="upgrading-the-cli-manually">Upgrading the CLI Manually</h2>
 <div class="sourceCode" id="cb12"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> upgrade</span></code></pre></div>
+<p>Check your current version at any time:</p>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> <span class="at">--version</span></span></code></pre></div>
+<hr />
+<h2 id="upgrading-the-cli-manually">Upgrading the CLI Manually</h2>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> upgrade</span></code></pre></div>
 <p>Re-runs the curl installer. Config, keys, and registered node
 identity are preserved.</p>
 <hr />
 <h2 id="uninstalling">Uninstalling</h2>
-<div class="sourceCode" id="cb13"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> remove</span></code></pre></div>
+<div class="sourceCode" id="cb15"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> remove</span></code></pre></div>
 <p>Stops the daemon, removes the service unit, removes the binary, and
 optionally removes your config and keys (it will ask). The node’s
 registration on the control plane is deactivated.</p>

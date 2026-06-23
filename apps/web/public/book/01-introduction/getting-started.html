@@ -352,11 +352,13 @@ href="https://infernetprotocol.com/chat"
 class="uri">https://infernetprotocol.com/chat</a>.</p>
 <hr />
 <h2 id="track-2-run-a-node-and-earn">Track 2 — Run a node and earn</h2>
-<p>One curl command bootstraps everything: installs the CLI, sets up
-Ollama, opens the firewall port, drops a systemd unit, and registers
-your node with the control plane.</p>
+<p>Two commands bootstrap everything: c0mpute itself (peer discovery +
+the gossipsub auction layer + shared toolchain), then the infernet
+plugin (installs the CLI, sets up Ollama, opens the firewall port, drops
+a systemd unit, and registers your node with the control plane).</p>
 <div class="sourceCode" id="cb4"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-fsSL</span> https://infernetprotocol.com/install.sh <span class="kw">|</span> <span class="fu">sh</span></span></code></pre></div>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-fsSL</span> https://c0mpute.com/install.sh <span class="kw">|</span> <span class="fu">sh</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ex">c0mpute</span> plugin install infernet</span></code></pre></div>
 <p>Then:</p>
 <div class="sourceCode" id="cb5"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> init             <span class="co"># generates a Nostr keypair, picks defaults</span></span>

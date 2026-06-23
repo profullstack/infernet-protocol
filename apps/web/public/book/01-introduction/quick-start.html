@@ -264,9 +264,9 @@
 <h1 class="title">Quick Start · The Infernet Book</h1>
 </header>
 <h1 id="quick-start">Quick Start</h1>
-<p>Get a node online in under 5 minutes. This walkthrough installs the
-CLI, runs setup, and verifies the node is heartbeating to the control
-plane.</p>
+<p>Get a node online in under 5 minutes. This walkthrough installs
+c0mpute (the p2p substrate), adds the infernet plugin, runs setup, and
+verifies the node is heartbeating to the control plane.</p>
 <h2 id="prerequisites">Prerequisites</h2>
 <ul>
 <li>Linux (Ubuntu 22.04+ recommended) or macOS</li>
@@ -278,16 +278,28 @@ token</li>
 <p>If you’re on a GPU machine, make sure your GPU drivers are installed
 before starting. The setup wizard will detect the GPU, but it can’t
 install drivers for you.</p>
-<h2 id="step-1-install-the-cli">Step 1: Install the CLI</h2>
+<h2 id="step-1-install-c0mpute-and-the-infernet-plugin">Step 1: Install
+c0mpute and the Infernet plugin</h2>
+<p>Infernet runs as a workload plugin on top of <a
+href="https://c0mpute.com">c0mpute</a>, which provides peer discovery,
+the gossipsub auction layer, and a shared toolchain (mise + bun). Two
+commands:</p>
 <div class="sourceCode" id="cb1"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-sSL</span> https://infernetprotocol.com/install <span class="kw">|</span> <span class="fu">bash</span></span></code></pre></div>
-<p>This script installs the <code>infernet</code> binary to
-<code>~/.local/bin</code> (or <code>/usr/local/bin</code> if you have
-write access) and adds it to your PATH. It takes about 30 seconds.</p>
-<p>Verify the install:</p>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Install c0mpute itself</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-fsSL</span> https://c0mpute.com/install.sh <span class="kw">|</span> <span class="fu">sh</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Add the infernet plugin (drops the `infernet` CLI on PATH)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="ex">c0mpute</span> plugin install infernet</span></code></pre></div>
+<p>The c0mpute installer takes ~30 seconds (downloads the
+<code>c0mpute</code> binary, installs mise + bun + ffmpeg, optionally
+symlinks the data dir to a bigger volume on hosts with one). The plugin
+install takes another ~30 seconds and registers your box as an
+infernet-capable worker on the c0mpute network.</p>
+<p>Verify both:</p>
 <div class="sourceCode" id="cb2"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> <span class="at">--version</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co"># infernet 0.9.2</span></span></code></pre></div>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">c0mpute</span> version</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">infernet</span> <span class="at">--version</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co"># infernet 0.9.2</span></span></code></pre></div>
 <h2 id="step-2-get-your-registration-token">Step 2: Get Your
 Registration Token</h2>
 <p>Open the <a href="https://infernetprotocol.com">Infernet

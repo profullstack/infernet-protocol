@@ -1,23 +1,33 @@
 # Protocol architecture
 
-The Infernet peer-to-peer protocol is defined as a set of versioned
-Protocol Buffers packages under `protocol/proto/`. This document is
-the entry point — read it first, then dive into the per-protocol
-markdown for the wire details.
+> **Note (2026-05).** The peer-discovery / DHT / pubsub layer has moved
+> out of infernet and into [c0mpute](https://c0mpute.com), which is now
+> the p2p substrate infernet runs on. The `infernet.handshake.v1`,
+> `infernet.peer.v1`, `infernet.dht.v1`, and `infernet.pubsub.v1`
+> packages below are **deprecated** and pending removal from the
+> `protocol/proto/` tree — c0mpute uses libp2p's own protocol set
+> (Kad-DHT, gossipsub, identify, ping) directly, not these protobufs.
+> The AI-specific packages (`compute.v1`, `payment.v1`, `rmi.v1`) are
+> unaffected.
+
+The Infernet protocol is defined as a set of versioned Protocol
+Buffers packages under `protocol/proto/`. This document is the entry
+point — read it first, then dive into the per-protocol markdown for
+the wire details.
 
 Spec: [IPIP-0021](../../ipips/ipip-0021.md).
 
 ## Packages at a glance
 
-| Package | Purpose | Doc |
-|---|---|---|
-| `infernet.handshake.v1` | First contact: peer ID + version negotiation | [handshake.md](handshake.md) |
-| `infernet.peer.v1`      | Find peers by namespace + protocol filter | [discovery.md](discovery.md) |
-| `infernet.dht.v1`       | Kademlia key-value lookup | [dht.md](dht.md) |
-| `infernet.pubsub.v1`    | Topic gossip with TTL + dedup | [pubsub.md](pubsub.md) |
-| `infernet.compute.v1`   | Job submission + status streaming | [compute.md](compute.md) |
-| `infernet.payment.v1`   | Payment-intent verification (verify-only) | [payment.md](payment.md) |
-| `infernet.rmi.v1`       | Remote method invocation on stateful objects | [rmi.md](rmi.md) |
+| Package | Purpose | Doc | Status |
+|---|---|---|---|
+| `infernet.handshake.v1` | First contact: peer ID + version negotiation | _(removed)_ | **Deprecated — c0mpute provides** |
+| `infernet.peer.v1`      | Find peers by namespace + protocol filter   | _(removed)_ | **Deprecated — c0mpute provides** |
+| `infernet.dht.v1`       | Kademlia key-value lookup                   | _(removed)_ | **Deprecated — c0mpute provides** |
+| `infernet.pubsub.v1`    | Topic gossip with TTL + dedup               | _(removed)_ | **Deprecated — c0mpute provides** |
+| `infernet.compute.v1`   | Job submission + status streaming | [compute.md](compute.md) | Active |
+| `infernet.payment.v1`   | Payment-intent verification (verify-only) | [payment.md](payment.md) | Active |
+| `infernet.rmi.v1`       | Remote method invocation on stateful objects | [rmi.md](rmi.md) | Active |
 
 ## End-to-end flow
 
@@ -90,7 +100,7 @@ flowchart TD
         CB[causal broadcast]
     end
 
-    subgraph Transport[Transport]
+    subgraph Transport[Transport — provided by c0mpute]
         LP[libp2p streams<br/>Nostr-signed envelopes]
     end
 

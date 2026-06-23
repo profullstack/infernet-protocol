@@ -65,7 +65,7 @@ Every node — whether it's a rented H100 box or a home workstation — runs the
 - **Backend**: Supabase (Postgres + Auth + Storage + Realtime). Accessed only from server-side Next.js modules, the CLI daemon, and the mobile anon client. Never from browser bundles of the web app.
 - **Auth**: Nostr keypair identity. Every node has a Nostr pubkey stored in `providers.public_key` / `clients.public_key` / `aggregators.public_key`; Supabase RLS can be layered on top.
 - **Communication**: WebSockets for real-time coordinator ↔ worker traffic in distributed inference; Supabase Realtime channels for dashboard updates; REST for everything else.
-- **Networking**: Optional Kademlia DHT for peer discovery across operators (future phase).
+- **Networking**: Peer discovery + workload auctions live in [c0mpute](https://c0mpute.com) — libp2p Kad-DHT + gossipsub. Infernet runs as a c0mpute workload plugin and reads the capability registry instead of running its own DHT.
 - **Containerization**: Docker for job execution sandboxing.
 - **Payments**: CoinPayPortal gateway. Inbound payments land at one of the platform deposit addresses in `config/deposit-addresses.js` (mirrored into `platform_wallets`). Outbound payouts settle to the provider's preferred address in `provider_payouts`. Full audit trail in `payment_transactions`.
 
@@ -114,9 +114,13 @@ Desktop (`desktop/`) is an Electron shell that loads the Next.js app as its rend
 
 ---
 
-## Distributed Hash Table (DHT)
+## Peer discovery (provided by c0mpute)
 
-Kademlia-based DHT is planned for cross-operator node discovery. In the default single-operator deployment, discovery is unnecessary — the Supabase project is the rendezvous point.
+Cross-operator node discovery runs through [c0mpute](https://c0mpute.com), the p2p substrate infernet is built on. c0mpute exposes a libp2p Kad-DHT for peer discovery and a gossipsub auction layer (`c0mpute/jobs/infernet.inference` topic) for workload offers — see the [c0mpute DIPs](https://github.com/profullstack/c0mpute/tree/master/dips), particularly DIP-0010 (bootstrap), DIP-0011 (no-central-backend), and DIP-0014 (status aggregator).
+
+In the default single-operator deployment, discovery is still unnecessary — the Supabase project is the rendezvous point. Cross-operator deployments inherit c0mpute's DHT for free, no infernet-side wiring required.
+
+Infernet historically maintained its own Hyperswarm DHT (IPIP-0032). That layer was retired when c0mpute became the substrate; the IPIP is preserved as a `Superseded` historical record.
 
 ---
 

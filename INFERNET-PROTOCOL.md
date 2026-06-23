@@ -20,8 +20,8 @@ Providers earn tokens for completed jobs, while clients gain scalable, on-demand
 - **Aggregator Nodes**: Coordinate multi-node jobs, manage task distribution, verification, and result assembly.
 
 ### 2. Discovery Layer
-- Decentralized discovery using libp2p or Kademlia DHT.
-- Nodes announce availability, GPU specs (VRAM, CUDA cores, bandwidth), and reputation score.
+- Decentralized discovery is **provided by [c0mpute](https://c0mpute.com)** — libp2p Kad-DHT + gossipsub. Infernet runs as a c0mpute workload plugin and uses c0mpute's capability registry instead of running its own DHT.
+- Nodes announce availability, GPU specs (VRAM, CUDA cores, bandwidth), and reputation score by publishing `CapabilityAd`s on the c0mpute `c0mpute/cap/v1` topic, tagged with `c0mpute:role:infernet` plus model + GPU class. Job auctions land on `c0mpute/jobs/infernet.inference`.
 
 ### 3. Job Submission Layer
 - Clients submit containerized workloads with metadata:

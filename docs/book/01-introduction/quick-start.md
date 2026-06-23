@@ -1,6 +1,6 @@
 # Quick Start
 
-Get a node online in under 5 minutes. This walkthrough installs the CLI, runs setup, and verifies the node is heartbeating to the control plane.
+Get a node online in under 5 minutes. This walkthrough installs c0mpute (the p2p substrate), adds the infernet plugin, runs setup, and verifies the node is heartbeating to the control plane.
 
 ## Prerequisites
 
@@ -11,17 +11,24 @@ Get a node online in under 5 minutes. This walkthrough installs the CLI, runs se
 
 If you're on a GPU machine, make sure your GPU drivers are installed before starting. The setup wizard will detect the GPU, but it can't install drivers for you.
 
-## Step 1: Install the CLI
+## Step 1: Install c0mpute and the Infernet plugin
+
+Infernet runs as a workload plugin on top of [c0mpute](https://c0mpute.com), which provides peer discovery, the gossipsub auction layer, and a shared toolchain (mise + bun). Two commands:
 
 ```bash
-curl -sSL https://infernetprotocol.com/install | bash
+# 1. Install c0mpute itself
+curl -fsSL https://c0mpute.com/install.sh | sh
+
+# 2. Add the infernet plugin (drops the `infernet` CLI on PATH)
+c0mpute plugin install infernet
 ```
 
-This script installs the `infernet` binary to `~/.local/bin` (or `/usr/local/bin` if you have write access) and adds it to your PATH. It takes about 30 seconds.
+The c0mpute installer takes ~30 seconds (downloads the `c0mpute` binary, installs mise + bun + ffmpeg, optionally symlinks the data dir to a bigger volume on hosts with one). The plugin install takes another ~30 seconds and registers your box as an infernet-capable worker on the c0mpute network.
 
-Verify the install:
+Verify both:
 
 ```bash
+c0mpute version
 infernet --version
 # infernet 0.9.2
 ```

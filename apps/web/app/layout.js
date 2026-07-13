@@ -74,6 +74,61 @@ export const viewport = {
     colorScheme: "dark"
 };
 
+const SITE_URL =
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://infernetprotocol.com";
+
+// JSON-LD structured data so search + answer engines can resolve
+// "Infernet Protocol" as a distinct entity and describe the product
+// without guessing. Rendered as a single @graph in one script tag.
+const JSON_LD = {
+    "@context": "https://schema.org",
+    "@graph": [
+        {
+            "@type": "Organization",
+            "@id": `${SITE_URL}/#organization`,
+            name: "Infernet Protocol",
+            url: SITE_URL,
+            logo: `${SITE_URL}/logo.svg`,
+            description:
+                "A peer-to-peer GPU compute marketplace for inference and distributed training. No native token, no rent extraction.",
+            email: "hello@infernetprotocol.com",
+            sameAs: [
+                "https://github.com/InfernetProtocol/infernet-protocol",
+                "https://x.com/infernetproto"
+            ]
+        },
+        {
+            "@type": "WebSite",
+            "@id": `${SITE_URL}/#website`,
+            url: SITE_URL,
+            name: "Infernet Protocol",
+            publisher: { "@id": `${SITE_URL}/#organization` },
+            description:
+                "Decentralized GPU compute for inference and training. Operators earn crypto for the GPUs they already have; clients pay in any supported coin."
+        },
+        {
+            "@type": "SoftwareApplication",
+            "@id": `${SITE_URL}/#software`,
+            name: "Infernet Protocol",
+            applicationCategory: "DeveloperApplication",
+            operatingSystem: "Linux, macOS, Windows (WSL2)",
+            url: SITE_URL,
+            downloadUrl: `${SITE_URL}/install.sh`,
+            softwareHelp: `${SITE_URL}/docs`,
+            publisher: { "@id": `${SITE_URL}/#organization` },
+            description:
+                "Run one CLI command, point it at the hardware you have, and start earning crypto for inference and distributed-training jobs. Operators authenticate with a Nostr keypair; the control plane is convenience, not dependency.",
+            offers: {
+                "@type": "Offer",
+                price: "0",
+                priceCurrency: "USD",
+                description:
+                    "Open-source and free to run. Operators are paid in crypto for jobs they serve; clients pay per job in any supported coin."
+            }
+        }
+    ]
+};
+
 // SiteHeader (rendered on every route below) is an async server component
 // that reads per-request auth via cookies(). Under Next 16, a page that is
 // otherwise static-eligible (/, /careers, /faq, /terms, ...) gets statically
@@ -87,6 +142,10 @@ export default function RootLayout({ children }) {
     return (
         <html lang="en">
             <body className="flex min-h-screen flex-col">
+                <script
+                    type="application/ld+json"
+                    dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+                />
                 {/* SiteHeader is async (reads the user) — Next.js handles
                     the suspense boundary automatically. */}
                 <SiteHeader />

@@ -73,6 +73,15 @@ export const viewport = {
     colorScheme: "dark"
 };
 
+// SiteHeader (rendered on every route below) is an async server component
+// that reads per-request auth via cookies(). Under Next 16, a page that is
+// otherwise static-eligible (/, /careers, /faq, /terms, ...) gets statically
+// prerendered and then throws "Page changed from static to dynamic at runtime,
+// reason: cookies" at request time — a 500 on nearly every content page.
+// Since the shared header genuinely depends on the request cookies, no page
+// under this layout can be static; mark the whole tree dynamic.
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({ children }) {
     return (
         <html lang="en">

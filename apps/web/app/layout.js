@@ -82,6 +82,7 @@ export default function RootLayout({ children }) {
                 <SiteHeader />
                 <div className="flex-1">{children}</div>
                 <SiteFooter />
+                          <script data-site="a5ab20bb-34d5-4799-9c08-8620647ce772" src="https://crawlproof.com/stats.js" async></script>
             </body>
         </html>
     );

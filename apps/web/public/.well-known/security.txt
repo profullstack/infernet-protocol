@@ -1,0 +1,5 @@
+Contact: mailto:hello@infernetprotocol.com
+Expires: 2027-01-01T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://infernetprotocol.com/.well-known/security.txt
+Policy: https://infernetprotocol.com/terms

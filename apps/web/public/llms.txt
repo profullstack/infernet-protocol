@@ -1,0 +1,27 @@
+# Infernet Protocol
+
+> A peer-to-peer GPU compute marketplace for inference and distributed training. Operators run one CLI command, point it at the hardware they already have, and earn crypto for the jobs they serve; clients submit chat, embedding, and training jobs and pay in any supported coin. No native token, no rent extraction, no permission required.
+
+Infernet is the protocol layer — matchmaking, escrow, reputation (CPR), and payment routing. Operators authenticate with a Nostr keypair (never a database credential). Peer discovery and workload auctions live in the c0mpute network (libp2p Kad-DHT + gossipsub), so the control plane is convenience, not dependency: it can go dark and the network keeps working. The focus is workloads a peer network is genuinely best at — single-GPU and CPU inference, embarrassingly parallel batch, LoRA fine-tunes — not tight-sync frontier-scale training that needs NVLink.
+
+## Docs
+
+- [Getting started](https://infernetprotocol.com/getting-started): Install and run a node in two commands.
+- [Docs](https://infernetprotocol.com/docs): Operator and client documentation, CLI, API, self-hosting.
+- [Protocol](https://infernetprotocol.com/protocol): How the protocol works — matchmaking, escrow, CPR reputation, payment routing.
+- [The book](https://infernetprotocol.com/book): Full long-form explanation of the protocol and its design.
+- [Chat playground](https://infernetprotocol.com/chat): Public playground that routes prompts through real provider nodes.
+- [Deploy](https://infernetprotocol.com/deploy): Deploy providers to cloud GPU platforms.
+- [Live status](https://infernetprotocol.com/status): Live network state — online nodes, jobs, providers.
+
+## Reference
+
+- [GitHub](https://github.com/InfernetProtocol/infernet-protocol): Open-source monorepo — README, protocol spec, IPIPs, install scripts, media kit.
+- [FAQ](https://infernetprotocol.com/faq): Common questions about running nodes, payments, and workloads.
+- [Contact](https://infernetprotocol.com/contact): hello@infernetprotocol.com
+
+## About
+
+- [Careers](https://infernetprotocol.com/careers): Open roles.
+- [Privacy](https://infernetprotocol.com/privacy): Privacy policy.
+- [Terms](https://infernetprotocol.com/terms): Terms of service.

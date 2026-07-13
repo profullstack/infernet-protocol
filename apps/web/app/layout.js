@@ -1,4 +1,5 @@
 import "./globals.css";
+import Script from "next/script";
 import SiteHeader from "@/components/site-header";
 import SiteFooter from "@/components/site-footer";
 
@@ -82,7 +83,11 @@ export default function RootLayout({ children }) {
                 <SiteHeader />
                 <div className="flex-1">{children}</div>
                 <SiteFooter />
-                          <script data-site="a5ab20bb-34d5-4799-9c08-8620647ce772" src="https://crawlproof.com/stats.js" async></script>
+                <Script
+                    src="https://crawlproof.com/stats.js"
+                    data-site="a5ab20bb-34d5-4799-9c08-8620647ce772"
+                    strategy="afterInteractive"
+                />
             </body>
         </html>
     );

@@ -127,9 +127,27 @@ async function defaultEngine() {
     return buildEngine(`default:${eng.backend ?? 'auto'}`, opts);
 }
 
+/** Best-effort: does Ollama (at host) currently serve this exact tag? */
+async function ollamaHasModel(modelName, host) {
+    try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 800);
+        const r = await fetch(`${host}/api/tags`, { signal: ctrl.signal });
+        clearTimeout(t);
+        if (!r.ok) return false;
+        const data = await r.json();
+        return (data.models ?? []).some((m) => m.name === modelName || m.model === modelName);
+    } catch {
+        return false;
+    }
+}
+
 async function getEngineForModel(modelName) {
-    // vLLM-first for models vLLM is actually serving. Best-effort probe; if
-    // vLLM isn't installed/serving, fall straight through to the default.
+    // vLLM is the default serving path. Route PER MODEL so both engines coexist:
+    //   1. vLLM is serving this model  → vLLM (preferred, high throughput)
+    //   2. Ollama has this GGUF tag    → Ollama (its library keeps working even
+    //                                     while vLLM is up serving another model)
+    //   3. otherwise                   → default (auto-select, which prefers vLLM)
     if (modelName) {
         try {
             const { detectVllmModels, VLLM_HOST } = await import('./vllm.js');
@@ -138,7 +156,12 @@ async function getEngineForModel(modelName) {
                 return buildEngine('vllm', { backend: 'vllm', host: VLLM_HOST, defaultModel: modelName });
             }
         } catch {
-            // vLLM module/probe failed — use the default backend.
+            // vLLM module/probe failed — try Ollama, then the default.
+        }
+        const config = (await loadConfig().catch(() => null)) ?? {};
+        const ollamaHost = config.engine?.ollamaHost ?? process.env.OLLAMA_HOST ?? 'http://localhost:11434';
+        if (await ollamaHasModel(modelName, ollamaHost)) {
+            return buildEngine('ollama', { backend: 'ollama', host: ollamaHost, defaultModel: modelName });
         }
     }
     return defaultEngine();

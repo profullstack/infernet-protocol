@@ -46,7 +46,7 @@ Flags:
   --confirm, --yes       Auto-confirm every prompt. Use for unattended runs.
   --model <name>         Pre-select model to pull (e.g. qwen2.5:7b).
   --skip-pull            Skip the model-pull step.
-  --backend <kind>       Pin engine backend (ollama | mojo | stub). Default: ollama.
+  --backend <kind>       Pin engine backend (vllm | ollama | mojo | stub). Default: auto (prefers vLLM, falls back to Ollama).
   --host <url>           Override Ollama host. Default: http://localhost:11434.
   --port <n>             P2P port to open in the firewall. Default: ${DEFAULT_P2P_PORT}.
   --no-firewall          Skip the firewall step entirely.
@@ -481,7 +481,15 @@ export default async function setup(args) {
     const skipIdentity = args.has("skip-identity");
     const skipRegister = args.has("skip-register");
     const skipDaemon = args.has("skip-daemon") || args.has("no-start");
-    const backend = String(args.get("backend") ?? "ollama");
+    // Default backend is "auto": we DON'T pin it in config, so the engine's
+    // auto-select governs at serve time — and that precedence prefers
+    // vLLM > llama.cpp > Ollama. This is what makes vLLM the network default
+    // wherever it's installed, while boxes without vLLM still fall back to
+    // Ollama. Pass --backend ollama|vllm|stub to force one.
+    const backend = String(args.get("backend") ?? "auto");
+    // Still pull an Ollama starter model on "auto" so a fresh box has
+    // *something* to serve before an hf:/vLLM model is pushed.
+    const wantsOllamaStep = backend === "ollama" || backend === "auto";
     const host = String(args.get("host") ?? process.env.OLLAMA_HOST ?? "http://localhost:11434");
     const preselectedModel = args.get("model") ? String(args.get("model")) : null;
 
@@ -501,7 +509,7 @@ export default async function setup(args) {
     // Track the actual maximum so the printed counter never goes [7/6].
     const isProviderRole = (existing?.node?.role ?? "provider") === "provider";
     let total = 2; // hardware + node.js
-    if (backend === "ollama") total += 2; // ollama + model
+    if (wantsOllamaStep) total += 2; // ollama + model
     if (!skipFirewall && process.platform === "linux") total += 1;
     if (process.platform === "linux") total += 1; // logrotate
     total += 1; // config
@@ -600,7 +608,7 @@ export default async function setup(args) {
     let ollamaState = { running: false, models: [] };
     let chosenModel = null;
 
-    if (backend === "ollama") {
+    if (wantsOllamaStep) {
         n += 1;
         step(n, total, `Ollama (${host})`);
         ollamaState = await detectOllama(host);
@@ -751,18 +759,19 @@ export default async function setup(args) {
 
     n += 1;
     step(n, total, "Config");
-    const merged = {
-        ...existing,
-        engine: {
-            ...(existing.engine ?? {}),
-            backend,
-            ...(host ? { ollamaHost: host } : {}),
-            ...(chosenModel ? { model: chosenModel } : {})
-        }
+    const engineCfg = {
+        ...(existing.engine ?? {}),
+        ...(host ? { ollamaHost: host } : {}),
+        ...(chosenModel ? { model: chosenModel } : {})
     };
+    // "auto" → don't pin a backend; let the engine auto-select (vLLM > Ollama)
+    // at serve time. Any explicit --backend value is honored.
+    if (backend === "auto") delete engineCfg.backend;
+    else engineCfg.backend = backend;
+    const merged = { ...existing, engine: engineCfg };
     await saveConfig(merged);
     ok(`saved to ${getConfigPath()}`);
-    process.stdout.write(`    engine.backend:    ${merged.engine.backend}\n`);
+    process.stdout.write(`    engine.backend:    ${merged.engine.backend ?? "auto (vLLM > Ollama)"}\n`);
     if (merged.engine.ollamaHost) {
         process.stdout.write(`    engine.ollamaHost: ${merged.engine.ollamaHost}\n`);
     }

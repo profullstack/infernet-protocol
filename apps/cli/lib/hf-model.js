@@ -157,7 +157,7 @@ function resolveHfRunner() {
     if (existsSync(venvPy)) {
         if (!canImportHfHub(venvPy) && existsSync(`${venv}/bin/pip`)) {
             process.stdout.write('Installing huggingface_hub into the vLLM venv…\n');
-            spawnSync(`${venv}/bin/pip`, ['install', '-q', '-U', 'huggingface_hub[cli,hf_transfer]'], { stdio: 'inherit' });
+            spawnSync(`${venv}/bin/pip`, ['install', '-q', '-U', 'huggingface_hub', 'hf_transfer'], { stdio: 'inherit' });
         }
         if (canImportHfHub(venvPy)) return { bin: venvPy, mode: 'python' };
     }
@@ -181,7 +181,7 @@ export async function downloadHfModel(repoId, token, { localDir = null } = {}) {
         throw new Error(
             'huggingface_hub not available and no vLLM venv found.\n' +
             'Fix: re-run the installer on this NVIDIA host (installs vLLM + huggingface_hub),\n' +
-            '     or: pip install -U "huggingface_hub[cli,hf_transfer]"'
+            '     or: pip install -U huggingface_hub hf_transfer'
         );
     }
 
@@ -205,9 +205,18 @@ export async function downloadHfModel(repoId, token, { localDir = null } = {}) {
     process.stdout.write(`\nDownloading ${repoId} from HuggingFace (via ${cmd})…\n`);
 
     return new Promise((resolve, reject) => {
+        // Only enable hf_transfer acceleration when the package is actually
+        // present — forcing it otherwise makes huggingface_hub hard-error.
+        const env = { ...process.env };
+        const probePy = existsSync(`${vllmVenvDir()}/bin/python`) ? `${vllmVenvDir()}/bin/python` : 'python3';
+        try {
+            if (spawnSync(probePy, ['-c', 'import hf_transfer'], { stdio: 'ignore' }).status === 0) {
+                env.HF_HUB_ENABLE_HF_TRANSFER = '1';
+            }
+        } catch { /* leave acceleration off */ }
         const child = spawn(cmd, finalArgs, {
             stdio: ['ignore', 'inherit', 'inherit'],
-            env: { ...process.env, HF_HUB_ENABLE_HF_TRANSFER: '1' },
+            env,
         });
         const localPath = localDir;
         child.on('exit', code => {

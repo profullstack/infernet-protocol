@@ -860,7 +860,7 @@ try_install_vllm() {
     # hf:...` failed with "huggingface_hub not installed". Install it explicitly
     # (with hf_transfer for fast downloads) and symlink the CLI out.
     info "  → installing huggingface_hub CLI (for hf: model downloads)"
-    "$_vllm_dir/bin/pip" install --quiet -U "huggingface_hub[cli,hf_transfer]" \
+    "$_vllm_dir/bin/pip" install --quiet -U huggingface_hub hf_transfer \
         || warn "huggingface_hub install failed — hf: model pulls won't work"
     for _hf in huggingface-cli hf; do
         if [ -x "$_vllm_dir/bin/$_hf" ]; then

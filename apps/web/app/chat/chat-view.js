@@ -2,6 +2,15 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { getConversationKey, encrypt } from "@/lib/nip44";
+import { CATALOG } from "@/lib/model-catalog";
+
+// served_models carries raw ids (ollama tags like `dolphin3:8b`, or the full
+// `hf:org/repo` pull name for vLLM). Map those to the catalog's friendly names
+// so the dropdown is readable; fall back to the raw id.
+const MODEL_LABELS = new Map(CATALOG.map((m) => [m.pull, m.name]));
+function modelLabel(name) {
+  return MODEL_LABELS.get(name) ?? name;
+}
 
 const EXAMPLE_PROMPTS = [
   "Explain how Infernet's P2P GPU network scales compared to a centralized data center.",
@@ -359,8 +368,8 @@ export default function ChatView({ initialModels = [] }) {
             >
               <option value="">(any available)</option>
               {initialModels.map((m) => (
-                <option key={m.id} value={m.name}>
-                  {m.name}
+                <option key={m.id} value={m.name} title={m.name}>
+                  {modelLabel(m.name)}
                 </option>
               ))}
             </select>

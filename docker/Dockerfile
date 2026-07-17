@@ -11,7 +11,7 @@
 # ---------------------------------------------------------------------------
 # Base — corepack-managed pnpm so the version is pinned & reproducible.
 # ---------------------------------------------------------------------------
-FROM node:20-alpine AS base
+FROM node:lts-alpine AS base
 WORKDIR /app
 ENV PNPM_HOME=/pnpm \
     PATH=/pnpm:$PATH

@@ -513,10 +513,10 @@ ensure_apt_prereqs() {
 need_node_install_hint() {
     cat <<EOF
 
-  Install Node.js 18+ first. Easiest path on any platform:
+  Install Node.js (LTS) first. Easiest path on any platform:
 
     curl https://mise.run | sh
-    ~/.local/bin/mise use --global node@20
+    ~/.local/bin/mise use --global node@lts
 
   Then re-run this script.
 
@@ -540,7 +540,7 @@ try_install_node_unattended() {
         unset _node_v _node_major
     fi
 
-    info "installing Node.js 20 via mise (https://mise.jdx.dev)"
+    info "installing Node.js (latest LTS) via mise (https://mise.jdx.dev)"
     # Resolve where mise binary will land: $MISE_INSTALL_PATH if set
     # by detect_install_volume (volume-relocation case), else default.
     _mise_bin="${MISE_INSTALL_PATH:-$HOME/.local/bin/mise}"
@@ -589,9 +589,9 @@ try_install_node_unattended() {
     # so the user can see what's happening (Node 20 download is ~80 MB
     # and takes 30-60s on a fresh box; gagging it makes the script
     # look hung).
-    info "  → installing Node 20 (~80 MB)"
-    "$_mise_bin" install node@20 || warn "mise install node@20 failed"
-    "$_mise_bin" use --global node@20 || warn "mise use --global node@20 failed"
+    info "  → installing Node.js LTS (~80 MB)"
+    "$_mise_bin" install node@lts || warn "mise install node@lts failed"
+    "$_mise_bin" use --global node@lts || warn "mise use --global node@lts failed"
 
     # Trust the config we just wrote. mise refuses to read untrusted
     # config.toml files (security feature) and `mise use --global`
@@ -650,8 +650,8 @@ check_node() {
         if command -v mise >/dev/null 2>&1; then
             info "trying to repair via mise reshim + reinstall…"
             mise reshim >/dev/null 2>&1 || true
-            mise install node@20 >/dev/null 2>&1 || true
-            mise use --global node@20 >/dev/null 2>&1 || true
+            mise install node@lts >/dev/null 2>&1 || true
+            mise use --global node@lts >/dev/null 2>&1 || true
             mise reshim >/dev/null 2>&1 || true
         fi
         # Re-probe; if still broken, fall through to unattended install.

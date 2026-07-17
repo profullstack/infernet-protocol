@@ -14,7 +14,7 @@
 # ---------------------------------------------------------------------------
 # Build stage — install workspace deps + produce a self-contained CLI deploy.
 # ---------------------------------------------------------------------------
-FROM node:20-slim AS builder
+FROM node:lts-slim AS builder
 
 RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
 
@@ -35,7 +35,7 @@ RUN pnpm --filter @infernetprotocol/cli deploy --legacy --prod /out
 # ---------------------------------------------------------------------------
 # Runtime stage — minimal.
 # ---------------------------------------------------------------------------
-FROM node:20-slim
+FROM node:lts-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \

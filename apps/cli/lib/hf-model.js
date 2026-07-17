@@ -6,7 +6,8 @@
  * The HF token is read from config.huggingface.token or HUGGINGFACE_TOKEN.
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { loadConfig } from './config.js';
 
 const HF_API = 'https://huggingface.co/api';
@@ -123,49 +124,75 @@ export async function fetchHfModelInfo(repoId, token) {
     };
 }
 
-/** Check whether huggingface-cli (Python) is available. */
-async function hfCliAvailable() {
-    return new Promise(resolve => {
-        const p = spawn('huggingface-cli', ['--help'], { stdio: 'ignore' });
-        p.on('exit', code => resolve(code === 0));
-        p.on('error', () => resolve(false));
-    });
+/** The vLLM venv the installer creates on NVIDIA hosts — it has (or can get)
+ *  huggingface_hub, so we prefer it over a maybe-missing system tool. */
+function vllmVenvDir() {
+    const home = process.env.HOME || process.env.USERPROFILE || '';
+    const base = process.env.INFERNET_HOME || `${home}/.infernet`;
+    return `${base}/vllm-venv`;
 }
 
-/** Check whether Python huggingface_hub is importable. */
-async function hfHubAvailable() {
-    return new Promise(resolve => {
-        const p = spawn('python3', ['-c', 'import huggingface_hub'], { stdio: 'ignore' });
-        p.on('exit', code => resolve(code === 0));
-        p.on('error', () => resolve(false));
-    });
+function canImportHfHub(python) {
+    try {
+        return spawnSync(python, ['-c', 'import huggingface_hub'], { stdio: 'ignore' }).status === 0;
+    } catch { return false; }
 }
 
 /**
- * Download a model from HuggingFace using huggingface-cli.
- * Streams CLI output directly to the terminal (progress bars etc.).
- * Returns the local cache path.
+ * Resolve how to run HuggingFace downloads, most-reliable first:
+ *   1) the vLLM venv's huggingface-cli / hf binary
+ *   2) the vLLM venv's python (auto-`pip install huggingface_hub` into the venv
+ *      if it's missing — so `hf:` pulls self-heal without a reinstall)
+ *   3) huggingface-cli on PATH
+ *   4) system python3 with huggingface_hub importable
+ * Returns { bin, mode: 'cli' | 'python' } or null.
+ */
+function resolveHfRunner() {
+    const venv = vllmVenvDir();
+    for (const name of ['huggingface-cli', 'hf']) {
+        const p = `${venv}/bin/${name}`;
+        if (existsSync(p)) return { bin: p, mode: 'cli' };
+    }
+    const venvPy = `${venv}/bin/python`;
+    if (existsSync(venvPy)) {
+        if (!canImportHfHub(venvPy) && existsSync(`${venv}/bin/pip`)) {
+            process.stdout.write('Installing huggingface_hub into the vLLM venv…\n');
+            spawnSync(`${venv}/bin/pip`, ['install', '-q', '-U', 'huggingface_hub[cli,hf_transfer]'], { stdio: 'inherit' });
+        }
+        if (canImportHfHub(venvPy)) return { bin: venvPy, mode: 'python' };
+    }
+    try {
+        if (spawnSync('huggingface-cli', ['--help'], { stdio: 'ignore' }).status === 0) {
+            return { bin: 'huggingface-cli', mode: 'cli' };
+        }
+    } catch { /* not on PATH */ }
+    if (canImportHfHub('python3')) return { bin: 'python3', mode: 'python' };
+    return null;
+}
+
+/**
+ * Download a model from HuggingFace. Streams progress to the terminal and
+ * returns the local cache path. Uses the vLLM venv's huggingface_hub when
+ * present (installing it if needed) so it works even when nothing is on PATH.
  */
 export async function downloadHfModel(repoId, token, { localDir = null } = {}) {
-    const hasCli = await hfCliAvailable();
-    const hasHub = hasCli || await hfHubAvailable();
-
-    if (!hasHub) {
+    const runner = resolveHfRunner();
+    if (!runner) {
         throw new Error(
-            'huggingface_hub not installed.\n' +
-            'Fix: pip install -U huggingface_hub\n' +
-            '     (or: pip3 install -U huggingface_hub)'
+            'huggingface_hub not available and no vLLM venv found.\n' +
+            'Fix: re-run the installer on this NVIDIA host (installs vLLM + huggingface_hub),\n' +
+            '     or: pip install -U "huggingface_hub[cli,hf_transfer]"'
         );
     }
 
-    // Build the download command
-    const args = ['download', repoId];
-    if (token) args.push('--token', token);
-    if (localDir) args.push('--local-dir', localDir);
-
-    return new Promise((resolve, reject) => {
-        const cmd = hasCli ? 'huggingface-cli' : 'python3';
-        const finalArgs = hasCli ? args : [
+    let cmd = runner.bin;
+    let finalArgs;
+    if (runner.mode === 'cli') {
+        finalArgs = ['download', repoId];
+        if (token) finalArgs.push('--token', token);
+        if (localDir) finalArgs.push('--local-dir', localDir);
+    } else {
+        finalArgs = [
             '-c',
             `from huggingface_hub import snapshot_download; ` +
             `p = snapshot_download(${JSON.stringify(repoId)}` +
@@ -173,15 +200,16 @@ export async function downloadHfModel(repoId, token, { localDir = null } = {}) {
             `${localDir ? `, local_dir=${JSON.stringify(localDir)}` : ''}` +
             `); print(p)`
         ];
+    }
 
-        process.stdout.write(`\nDownloading ${repoId} from HuggingFace...\n`);
-        if (!hasCli) {
-            process.stdout.write('(tip: pip install huggingface_hub for a nicer progress bar)\n\n');
-        }
+    process.stdout.write(`\nDownloading ${repoId} from HuggingFace (via ${cmd})…\n`);
 
-        const child = spawn(cmd, finalArgs, { stdio: ['ignore', 'inherit', 'inherit'] });
-        let localPath = localDir;
-
+    return new Promise((resolve, reject) => {
+        const child = spawn(cmd, finalArgs, {
+            stdio: ['ignore', 'inherit', 'inherit'],
+            env: { ...process.env, HF_HUB_ENABLE_HF_TRANSFER: '1' },
+        });
+        const localPath = localDir;
         child.on('exit', code => {
             if (code === 0) resolve(localPath ?? defaultCachePath(repoId));
             else reject(new Error(`huggingface download exited ${code}`));

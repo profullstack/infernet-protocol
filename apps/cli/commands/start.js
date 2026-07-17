@@ -48,6 +48,7 @@ import { executeChatJob, failChatJob, shutdownEngine } from '../lib/chat-executo
 import { gatherCoarseSpecs } from './register.js';
 import { checkModelFits, formatFitFailure } from '../lib/model-fit.js';
 import { downloadHfModel, resolveHfToken } from '../lib/hf-model.js';
+import { startVllmServe, vllmInstalled } from '../lib/vllm.js';
 import { detectGpus, detectHost } from '@infernetprotocol/gpu';
 import { getOrCreateModelKey, getModelPublicKeys } from '../lib/model-key.js';
 import { pullLatestBinary } from './upgrade.js';
@@ -625,16 +626,26 @@ async function runDaemon(args, ctx) {
             if (command === 'model_install') {
                 const modelName = String(args?.model);
                 if (modelName.startsWith('hf:')) {
-                    // HuggingFace model → weights are downloaded and served via
-                    // vLLM/SGLang, NOT `ollama pull` (Ollama 400s on an hf: repo).
+                    // HuggingFace model → download the weights, then TURN ON
+                    // vLLM to serve them (Ollama can't — it 400s on an hf: repo).
+                    if (!vllmInstalled()) {
+                        throw new Error(
+                            `${modelName} needs vLLM, which isn't installed on this node. ` +
+                            `Re-run the installer on this NVIDIA host (it installs vLLM), or: pip install vllm.`
+                        );
+                    }
                     const repoId = modelName.slice(3);
                     const token = process.env.HF_TOKEN || (await resolveHfToken().catch(() => null));
                     const localPath = await downloadHfModel(repoId, token);
+                    // Serve under the hf: pull name so it matches chat requests
+                    // and gets advertised in served_models → shows in /chat.
+                    const serve = await startVllmServe({ source: localPath, servedName: modelName, token });
                     result = {
                         model: modelName,
                         backend: 'vllm',
                         localPath,
-                        note: 'Weights downloaded. Serve with: infernet inference serve --backend vllm --model ' + modelName,
+                        vllm: { pid: serve.pid, port: serve.port },
+                        note: `Serving on vLLM :${serve.port} (first load can take a minute while weights map to GPU).`,
                     };
                 } else {
                     const fits = await checkModelFits(modelName);

@@ -193,7 +193,15 @@ export async function gatherCoarseSpecs() {
 
     // Advertise all pulled models — operator explicitly installed them so we
     // trust they know their hardware. The fit check is informational only.
-    const served_models = [...new Set(pulledModels.map((m) => m.name))];
+    // Also fold in any model vLLM is currently serving (:8000/v1/models),
+    // advertised under its `hf:` pull name via --served-model-name, so vLLM
+    // models show up in /chat alongside Ollama ones.
+    let vllmModels = [];
+    try {
+        const { detectVllmModels } = await import('../lib/vllm.js');
+        vllmModels = await detectVllmModels();
+    } catch { /* vLLM not installed / not serving — Ollama-only */ }
+    const served_models = [...new Set([...pulledModels.map((m) => m.name), ...vllmModels])];
 
     return {
         cpu: summarizeCpu(),

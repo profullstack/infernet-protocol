@@ -93,44 +93,63 @@ class EventBuffer {
 // /chat endpoint sometimes doesn't pass a model name). Without this
 // fallback, every model-unspecified job died with
 // "ollama backend: no model — set INFERNET_ENGINE_MODEL or pass model in the job"
-let enginePromise = null;
-function getEngine() {
-    if (!enginePromise) {
-        enginePromise = (async () => {
-            const config = (await loadConfig()) ?? {};
-            const eng = config.engine ?? {};
-            const opts = {};
-            if (eng.backend) opts.backend = eng.backend;
-            if (eng.model) opts.defaultModel = eng.model;
-            if (eng.ollamaHost) opts.host = eng.ollamaHost;
-            // Optional override for the per-request num_thread cap.
-            // Default (50% of cores) is computed inside the Ollama
-            // backend; only forward when the operator explicitly set
-            // an override in config.
-            if (Number.isFinite(eng.ollama_num_thread) && eng.ollama_num_thread > 0) {
-                opts.numThread = eng.ollama_num_thread;
-            }
-            return createEngine(opts);
-        })().catch((err) => {
+// One engine per backend, cached. We route PER MODEL: if the requested model
+// is being served by vLLM (:8000), use the vLLM engine; otherwise the default
+// (config backend or auto-select → Ollama). This is what makes vLLM the actual
+// serving path for hf: models while Ollama keeps handling its own tags.
+const engineCache = new Map(); // cacheKey -> Promise<engine>
+
+function buildEngine(cacheKey, opts) {
+    if (!engineCache.has(cacheKey)) {
+        const p = (async () => createEngine(opts))().catch((err) => {
             // Reset so a transient failure doesn't permanently poison the
             // daemon — next job will retry initialization.
-            enginePromise = null;
+            engineCache.delete(cacheKey);
             throw err;
         });
+        engineCache.set(cacheKey, p);
     }
-    return enginePromise;
+    return engineCache.get(cacheKey);
+}
+
+async function defaultEngine() {
+    const config = (await loadConfig()) ?? {};
+    const eng = config.engine ?? {};
+    const opts = {};
+    if (eng.backend) opts.backend = eng.backend;
+    if (eng.model) opts.defaultModel = eng.model;
+    if (eng.ollamaHost) opts.host = eng.ollamaHost;
+    // Optional override for the per-request num_thread cap. Default (50% of
+    // cores) is computed inside the Ollama backend; only forward when set.
+    if (Number.isFinite(eng.ollama_num_thread) && eng.ollama_num_thread > 0) {
+        opts.numThread = eng.ollama_num_thread;
+    }
+    return buildEngine(`default:${eng.backend ?? 'auto'}`, opts);
+}
+
+async function getEngineForModel(modelName) {
+    // vLLM-first for models vLLM is actually serving. Best-effort probe; if
+    // vLLM isn't installed/serving, fall straight through to the default.
+    if (modelName) {
+        try {
+            const { detectVllmModels, VLLM_HOST } = await import('./vllm.js');
+            const vModels = await detectVllmModels();
+            if (vModels.includes(modelName)) {
+                return buildEngine('vllm', { backend: 'vllm', host: VLLM_HOST, defaultModel: modelName });
+            }
+        } catch {
+            // vLLM module/probe failed — use the default backend.
+        }
+    }
+    return defaultEngine();
 }
 
 export async function shutdownEngine() {
-    if (!enginePromise) return;
-    try {
-        const engine = await enginePromise;
-        await engine.shutdown();
-    } catch {
-        // best-effort
-    } finally {
-        enginePromise = null;
-    }
+    const engines = [...engineCache.values()];
+    engineCache.clear();
+    await Promise.all(engines.map(async (p) => {
+        try { (await p).shutdown(); } catch { /* best-effort */ }
+    }));
 }
 
 /**
@@ -167,7 +186,7 @@ export async function executeChatJob({ client, job, node }) {
         }
     }
 
-    const engine = await getEngine();
+    const engine = await getEngineForModel(job.model_name);
     const buffer = new EventBuffer(client, job.id);
 
     const t0 = Date.now();

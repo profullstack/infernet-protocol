@@ -85,6 +85,13 @@ export async function POST(request, { params }) {
                 throw err;
             }
             args.model = model;
+            // Optional HF repo — lets a GPU node serve this model on vLLM
+            // instead of Ollama. Keep it well-shaped or drop it.
+            if (command === "model_install" && args.hf != null) {
+                const hf = String(args.hf).trim();
+                if (hf && hf.length <= 256) args.hf = hf;
+                else delete args.hf;
+            }
         }
         if (command === "train_shard") {
             if (!args.shard_url || !args.base_model) {

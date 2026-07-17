@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { recommendModels, vramFromSpecs, USE_CASES } from "@/lib/model-catalog";
+import { recommendModels, vramFromSpecs, USE_CASES, CATALOG } from "@/lib/model-catalog";
 
 /**
  * Per-node model management button on the dashboard.
@@ -98,10 +98,15 @@ export default function PushModelButton({ pubkey, servedModels = [], specs }) {
         setError(null);
         setSubmitting(true);
         try {
+            // Send the model's HF repo (if the catalog has one) so a GPU node
+            // serves it on vLLM; the node falls back to the Ollama tag when it
+            // has no vLLM. Free-text `hf:` names carry their own repo.
+            const entry = CATALOG.find((m) => m.pull === model);
+            const installArgs = entry?.hf ? { model, hf: entry.hf } : { model };
             const res = await fetch(`/api/v1/user/nodes/${encodeURIComponent(pubkey)}/commands`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ command: "model_install", args: { model } })
+                body: JSON.stringify({ command: "model_install", args: installArgs })
             });
             const body = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);

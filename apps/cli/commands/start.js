@@ -629,50 +629,54 @@ async function runDaemon(args, ctx) {
             let result;
             if (command === 'model_install') {
                 const modelName = String(args?.model);
-                if (modelName.startsWith('hf:')) {
-                    // HuggingFace model → download the weights, then TURN ON
-                    // vLLM to serve them (Ollama can't — it 400s on an hf: repo).
-                    if (!vllmInstalled()) {
-                        throw new Error(
-                            `${modelName} needs vLLM, which isn't installed on this node. ` +
-                            `Re-run the installer on this NVIDIA host (it installs vLLM), or: pip install vllm.`
-                        );
-                    }
-                    const repoId = modelName.slice(3);
+                // The node decides the backend by HARDWARE: prefer vLLM (GPU),
+                // fall back to Ollama (CPU/Mac). A catalog model carries an
+                // `hf` repo (ungated, vLLM-servable); a bare `hf:` name is
+                // vLLM-only; everything else is an Ollama tag.
+                const hfRepo = args?.hf
+                    ? String(args.hf)
+                    : (modelName.startsWith('hf:') ? modelName.slice(3) : null);
+
+                if (vllmInstalled() && hfRepo) {
+                    // GPU path — serve the HF weights on vLLM. Keep the friendly
+                    // name (e.g. "qwen2.5:7b" or "hf:org/repo") as the served
+                    // model name so chat requests + served_models match, but the
+                    // engine underneath is vLLM.
                     const token = process.env.HF_TOKEN || (await resolveHfToken().catch(() => null));
-                    const localPath = await downloadHfModel(repoId, token);
-                    // Serve the repo id, not a computed cache path — vLLM
-                    // resolves it straight from the HF cache we just filled
-                    // (the snapshot dir is a commit hash, not "main"). Serve
-                    // under the hf: pull name so it matches chat requests and
-                    // gets advertised in served_models → shows in /chat.
-                    const serve = await startVllmServe({ source: repoId, servedName: modelName, token });
+                    const localPath = await downloadHfModel(hfRepo, token);
                     // Don't report "completed" on spawn — wait until vLLM has
                     // mapped the weights and /v1/models actually lists the model.
-                    // If it never comes up (OOM, unsupported arch, bad dtype),
-                    // fail the command WITH the log tail so the operator sees why
-                    // instead of a lying "completed".
-                    process.stdout.write(`[${new Date().toISOString()}] ${modelName} downloaded; waiting for vLLM to load weights…\n`);
+                    // If it never comes up (OOM, unsupported arch, gated repo),
+                    // fail the command WITH the log root cause instead of lying.
+                    const serve = await startVllmServe({ source: hfRepo, servedName: modelName, token });
+                    process.stdout.write(`[${new Date().toISOString()}] ${modelName} (${hfRepo}) downloaded; waiting for vLLM to load weights…\n`);
                     const up = await waitForVllmModel(modelName, { pid: serve.pid, timeoutMs: 300_000 });
                     if (!up.serving) {
                         const tail = await extractVllmError();
                         throw new Error(
-                            `vLLM failed to serve ${modelName}: ${up.reason}.` +
+                            `vLLM failed to serve ${modelName} (${hfRepo}): ${up.reason}.` +
                             (tail ? `\n--- vllm.log (root cause) ---\n${tail}` : ' (no vllm.log output)')
                         );
                     }
-                    // Serving for real — bust the specs cache so the very next
-                    // heartbeat advertises the new model in served_models
-                    // (otherwise it's stale until the TTL lapses).
                     invalidateSpecsCache();
                     result = {
                         model: modelName,
                         backend: 'vllm',
+                        source: hfRepo,
                         localPath,
                         vllm: { pid: serve.pid, port: serve.port },
                         note: `Serving on vLLM :${serve.port} and advertised in served_models.`,
                     };
+                } else if (modelName.startsWith('hf:')) {
+                    // hf: model requested but this node has no vLLM (CPU/Mac).
+                    throw new Error(
+                        `${modelName} needs vLLM, which isn't installed on this node. ` +
+                        `Re-run the installer on an NVIDIA host (it installs vLLM), or: pip install vllm. ` +
+                        `Alternatively push an Ollama model — those run on CPU.`
+                    );
                 } else {
+                    // CPU/Mac path (or a GPU box without a vLLM-servable repo) —
+                    // Ollama serves the GGUF tag.
                     const fits = await checkModelFits(modelName);
                     if (fits && !fits.ok) {
                         throw new Error(formatFitFailure(modelName, fits));

@@ -121,6 +121,11 @@ INFERNET_BIN="${INFERNET_BIN:-$HOME/.local/bin}"
 INFERNET_REF="${INFERNET_REF:-$DEFAULT_REF}"
 INFERNET_NPM_VERSION="${INFERNET_NPM_VERSION:-latest}"
 INFERNET_FORCE_GIT="${INFERNET_FORCE_GIT:-}"
+# --force (or INFERNET_FORCE=1): wipe models + inference state from a previous,
+# not-quite-working install before reinstalling — all Ollama models, the vLLM
+# serve + its state, and the downloaded HF weights. Keeps the node identity so
+# it stays the same registered provider (just with a clean model list).
+INFERNET_FORCE="${INFERNET_FORCE:-}"
 INFERNET_AUTOSTART="${INFERNET_AUTOSTART:-1}"
 INFERNET_CONTROL_PLANE="${INFERNET_CONTROL_PLANE:-https://infernetprotocol.com}"
 # Default model: qwen2.5:7b for GPU nodes, qwen2.5:0.5b for CPU-only.
@@ -1293,11 +1298,61 @@ auto_bootstrap_native() {
 
     info "running infernet setup --yes (this takes a few minutes the first time)"
     export INFERNET_NONINTERACTIVE=1
-    "$INFERNET_CMD" setup --yes --model "$INFERNET_MODEL" --port "$INFERNET_PUBLIC_PORT" \
-        || warn "infernet setup exited with errors — re-run 'infernet setup' to retry"
+    # On --force we deliberately DON'T re-pull an Ollama starter model — the
+    # operator wanted a clean slate to push vLLM models from the UI. Otherwise
+    # setup pulls $INFERNET_MODEL as before.
+    if [ -n "$INFERNET_FORCE" ]; then
+        "$INFERNET_CMD" setup --yes --skip-pull --port "$INFERNET_PUBLIC_PORT" \
+            || warn "infernet setup exited with errors — re-run 'infernet setup' to retry"
+    else
+        "$INFERNET_CMD" setup --yes --model "$INFERNET_MODEL" --port "$INFERNET_PUBLIC_PORT" \
+            || warn "infernet setup exited with errors — re-run 'infernet setup' to retry"
+    fi
+}
+
+# Wipe models + inference state left by a previous install. Preserves the node
+# identity (config.json / keypair) so the dashboard keeps the same provider —
+# it just re-advertises an empty model list on the next heartbeat.
+force_wipe() {
+    warn "--force: wiping models + inference state from previous install(s)"
+    _cfg="$HOME/.config/infernet"
+
+    # 1. Stop the daemon so it isn't advertising stale served_models.
+    if [ -x "$WRAPPER" ]; then "$WRAPPER" stop >/dev/null 2>&1 || true; fi
+    if [ -f "$_cfg/daemon.pid" ]; then
+        _dp="$(cat "$_cfg/daemon.pid" 2>/dev/null || true)"
+        [ -n "$_dp" ] && kill "$_dp" 2>/dev/null || true
+    fi
+
+    # 2. Stop any vLLM serve + clear its state/log.
+    pkill -f "vllm serve" 2>/dev/null || true
+    rm -f "$_cfg/vllm.json" "$_cfg/vllm.log" 2>/dev/null || true
+
+    # 3. Remove ALL Ollama models (via the daemon if up, else nuke the store).
+    if command -v ollama >/dev/null 2>&1; then
+        ollama list 2>/dev/null | awk 'NR>1 && $1 != "" {print $1}' | while IFS= read -r _m; do
+            [ -n "$_m" ] && ollama rm "$_m" >/dev/null 2>&1 || true
+        done
+    fi
+    rm -rf "$HOME/.ollama/models" 2>/dev/null || true
+
+    # 4. Clear downloaded HuggingFace weights (the vLLM model cache).
+    rm -rf "$HOME/.cache/huggingface/hub" 2>/dev/null || true
+
+    ok "--force: cleared all Ollama models, vLLM serve/state, and HF weights"
+    unset _cfg _dp _m
 }
 
 main() {
+    # Flag parsing — the script is usually piped (curl | sh -s -- --force).
+    for _arg in "$@"; do
+        case "$_arg" in
+            --force) INFERNET_FORCE=1 ;;
+            *) : ;;
+        esac
+    done
+    unset _arg
+
     printf '\n'
     printf '%sInfernet Protocol installer%s\n' "$BOLD" "$RESET"
     printf '  user:        %s (uid=%s)\n' "$USER" "$(id -u 2>/dev/null || echo ?)"
@@ -1309,6 +1364,13 @@ main() {
 
     detect_os
     ok "OS: $OS"
+
+    # --force: clear a previous, not-quite-working install's models + state
+    # before we reinstall. Ollama is present from that prior install, so this
+    # runs before we touch anything else.
+    if [ -n "$INFERNET_FORCE" ]; then
+        force_wipe
+    fi
 
     # Bail early if there isn't enough headroom to finish the install
     # (and pull the model, if INFERNET_BEARER is set so auto-bootstrap

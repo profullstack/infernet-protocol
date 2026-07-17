@@ -854,6 +854,22 @@ try_install_vllm() {
         ok "Ray CLI linked to $INFERNET_BIN/ray (for distributed vLLM)"
     fi
 
+    # huggingface_hub CLI — the daemon downloads HF/vLLM model weights with it
+    # (apps/cli/lib/hf-model.js probes `huggingface-cli`). vLLM pulls the lib in
+    # transitively, but the CLI binary isn't on PATH, so `infernet model pull
+    # hf:...` failed with "huggingface_hub not installed". Install it explicitly
+    # (with hf_transfer for fast downloads) and symlink the CLI out.
+    info "  → installing huggingface_hub CLI (for hf: model downloads)"
+    "$_vllm_dir/bin/pip" install --quiet -U "huggingface_hub[cli,hf_transfer]" \
+        || warn "huggingface_hub install failed — hf: model pulls won't work"
+    for _hf in huggingface-cli hf; do
+        if [ -x "$_vllm_dir/bin/$_hf" ]; then
+            ln -sf "$_vllm_dir/bin/$_hf" "$INFERNET_BIN/$_hf"
+            ok "$_hf linked to $INFERNET_BIN/$_hf"
+        fi
+    done
+    unset _hf
+
     # Optional: bring up a Ray cluster head or join an existing one.
     # Operators with one big GPU box leave INFERNET_RAY_MODE unset
     # (vLLM still uses Ray internally for single-node TP). Operators

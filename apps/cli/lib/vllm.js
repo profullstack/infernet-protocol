@@ -212,13 +212,42 @@ export async function startVllmServe({ source, servedName, port = VLLM_PORT, tok
         args.push('--max-model-len', String(maxLen));
     }
     if (!has('--gpu-memory-utilization')) {
-        const util = process.env.VLLM_GPU_MEMORY_UTILIZATION || '0.92';
+        const util = process.env.VLLM_GPU_MEMORY_UTILIZATION || '0.90';
         args.push('--gpu-memory-utilization', String(util));
+    }
+    // --enforce-eager: skip torch.compile + CUDA-graph capture. On normal GPUs
+    // that costs a little throughput, but on network-attached/virtualized GPUs
+    // (ThunderCompute, vGPU) compile + graph capture are pathologically slow and
+    // blow past vLLM's engine-ready timeout — so default it ON for reliable
+    // startup. Set VLLM_ENFORCE_EAGER=0 to re-enable compilation on fast GPUs.
+    const enforceEager = !/^(0|false|no)$/i.test(process.env.VLLM_ENFORCE_EAGER || '');
+    if (enforceEager && !has('--enforce-eager')) {
+        args.push('--enforce-eager');
     }
     args.push(...extraArgs);
 
     const env = { ...process.env };
     if (token) env.HF_TOKEN = token;
+    // Put the venv's bin on PATH so vLLM can find tools it shells out to at
+    // runtime — notably `ninja`, which FlashInfer needs to JIT-compile its
+    // sampling kernel during profile_run. Without this vLLM dies with
+    // "FileNotFoundError: 'ninja'" even though it's pip-installed in the venv.
+    const venvBin = path.dirname(bin);
+    env.PATH = `${venvBin}${path.delimiter}${env.PATH || ''}`;
+    // Give the engine plenty of time to come up on slow (virtualized) GPUs —
+    // vLLM's own default is 600s, which ThunderCompute exceeds. Overridable.
+    if (!env.VLLM_ENGINE_READY_TIMEOUT_S) {
+        env.VLLM_ENGINE_READY_TIMEOUT_S = process.env.VLLM_ENGINE_READY_TIMEOUT_S || '1800';
+    }
+    // Default OFF the V2 model runner. Its GPU worker maps pinned host memory to
+    // a device pointer (cudaHostGetDevicePointer / UVA), which FAILS on
+    // network-attached & virtualized GPUs (ThunderCompute, many vGPU/cloud
+    // providers) with "invalid argument" — killing EngineCore at init_device.
+    // The stable V1 runner has no such requirement and works everywhere. On
+    // bare-metal you can re-enable it with VLLM_USE_V2_MODEL_RUNNER=1.
+    if (env.VLLM_USE_V2_MODEL_RUNNER == null || env.VLLM_USE_V2_MODEL_RUNNER === '') {
+        env.VLLM_USE_V2_MODEL_RUNNER = '0';
+    }
 
     await fs.mkdir(getConfigDir(), { recursive: true, mode: 0o700 });
     const out = fss.openSync(logPath(), 'a');

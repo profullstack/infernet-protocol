@@ -650,7 +650,10 @@ async function runDaemon(args, ctx) {
                     // fail the command WITH the log root cause instead of lying.
                     const serve = await startVllmServe({ source: hfRepo, servedName: modelName, token });
                     process.stdout.write(`[${new Date().toISOString()}] ${modelName} (${hfRepo}) downloaded; waiting for vLLM to load weights…\n`);
-                    const up = await waitForVllmModel(modelName, { pid: serve.pid, timeoutMs: 300_000 });
+                    // Slow (virtualized) GPUs can take 10+ min to bring the
+                    // engine up; match vLLM's raised VLLM_ENGINE_READY_TIMEOUT_S.
+                    const vllmWaitMs = Number(process.env.VLLM_ENGINE_READY_TIMEOUT_S || 1800) * 1000;
+                    const up = await waitForVllmModel(modelName, { pid: serve.pid, timeoutMs: vllmWaitMs });
                     if (!up.serving) {
                         const tail = await extractVllmError();
                         throw new Error(

@@ -832,11 +832,14 @@ try_install_vllm() {
     "$_vllm_dir/bin/pip" install --upgrade --quiet pip uv || warn "uv install failed; will fall back to pip"
 
     info "  → installing vLLM (~5 GB of CUDA wheels; this takes 5-15 min)"
+    # ninja: FlashInfer JIT-compiles its sampling kernel at runtime and shells
+    # out to `ninja` during profile_run — without it vLLM dies with
+    # "FileNotFoundError: 'ninja'" after loading weights. Install it in the venv.
     if [ -x "$_vllm_dir/bin/uv" ]; then
-        "$_vllm_dir/bin/uv" pip install --python "$_vllm_dir/bin/python" vllm \
-            || { warn "uv pip install vllm failed; trying pip"; "$_vllm_dir/bin/pip" install vllm; }
+        "$_vllm_dir/bin/uv" pip install --python "$_vllm_dir/bin/python" vllm ninja \
+            || { warn "uv pip install vllm failed; trying pip"; "$_vllm_dir/bin/pip" install vllm ninja; }
     else
-        "$_vllm_dir/bin/pip" install vllm || { warn "pip install vllm failed"; unset _vllm_dir _mise_bin; return 1; }
+        "$_vllm_dir/bin/pip" install vllm ninja || { warn "pip install vllm failed"; unset _vllm_dir _mise_bin; return 1; }
     fi
 
     # Symlink vllm onto $INFERNET_BIN so operators can run it without

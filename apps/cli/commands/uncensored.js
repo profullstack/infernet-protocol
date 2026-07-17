@@ -61,6 +61,17 @@ const HF_MODELS = [
         minVramGb: 40,
         description: 'Dolphin 2.9.4 70B (Eric Hartford) — uncensored, Llama 3.1 base',
     },
+    {
+        // 754B MoE, FP8 weights (~755 GB) — flagship uncensored model. Only
+        // auto-selected on a cluster that can actually hold it (minVramGb set
+        // so it never picks on a single GPU). Gated on HF: set HF_TOKEN to pull.
+        repoId: 'zandenAI/GLM-5.2-FP8-Uncensored',
+        sizeGb: 755.0,
+        sizeGb4bit: 755.0,
+        minVramGb: 768,
+        gated: true,
+        description: 'GLM-5.2 754B FP8 (abliterated) — uncensored flagship; needs a multi-GPU cluster (~768 GB VRAM) + HF token',
+    },
 ];
 
 // Ollama models, ordered by VRAM requirement ascending

@@ -39,7 +39,9 @@ export const CATALOG = [
     { id: "llama3.3-70b",     name: "Llama 3.3 70B",           paramsB: 70,  vramMin: 40, ramMin: 64, pull: "llama3.3:70b",                           backend: "ollama", quality: 10,useCases: ["chat", "study", "coding", "research", "agents"] },
     { id: "qwen2.5-72b",      name: "Qwen2.5 72B",             paramsB: 72,  vramMin: 40, ramMin: 64, pull: "qwen2.5:72b",                            backend: "ollama", quality: 10,useCases: ["chat", "coding", "study", "research", "agents"] },
     // ── MoE ──
-    { id: "mixtral-8x7b",     name: "Dolphin Mixtral 8x7B",    paramsB: 47,  vramMin: 30, ramMin: 64, pull: "dolphin-mixtral:8x7b",                   backend: "ollama", quality: 9, useCases: ["chat", "coding", "uncensored"], uncensored: true }
+    { id: "mixtral-8x7b",     name: "Dolphin Mixtral 8x7B",    paramsB: 47,  vramMin: 30, ramMin: 64, pull: "dolphin-mixtral:8x7b",                   backend: "ollama", quality: 9, useCases: ["chat", "coding", "uncensored"], uncensored: true },
+    // ── flagship / cluster-tier (multi-GPU or cloud; won't fit a single card) ──
+    { id: "glm-5.2-uncensored", name: "GLM-5.2 754B FP8 (uncensored)", paramsB: 754, vramMin: 768, ramMin: 768, pull: "hf:zandenAI/GLM-5.2-FP8-Uncensored", backend: "vllm", quality: 10, useCases: ["chat", "uncensored", "cybersecurity", "agents"], uncensored: true, gated: true }
 ];
 
 /** Map sanitized vram_tier strings → representative GB for ranking. */

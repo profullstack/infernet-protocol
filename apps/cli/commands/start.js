@@ -48,7 +48,7 @@ import { executeChatJob, failChatJob, shutdownEngine } from '../lib/chat-executo
 import { gatherCoarseSpecs } from './register.js';
 import { checkModelFits, formatFitFailure } from '../lib/model-fit.js';
 import { downloadHfModel, resolveHfToken } from '../lib/hf-model.js';
-import { startVllmServe, vllmInstalled, waitForVllmModel, readVllmLogTail } from '../lib/vllm.js';
+import { startVllmServe, vllmInstalled, waitForVllmModel, extractVllmError } from '../lib/vllm.js';
 import { detectGpus, detectHost } from '@infernetprotocol/gpu';
 import { getOrCreateModelKey, getModelPublicKeys } from '../lib/model-key.js';
 import { pullLatestBinary } from './upgrade.js';
@@ -655,10 +655,10 @@ async function runDaemon(args, ctx) {
                     process.stdout.write(`[${new Date().toISOString()}] ${modelName} downloaded; waiting for vLLM to load weights…\n`);
                     const up = await waitForVllmModel(modelName, { pid: serve.pid, timeoutMs: 300_000 });
                     if (!up.serving) {
-                        const tail = await readVllmLogTail(40);
+                        const tail = await extractVllmError();
                         throw new Error(
                             `vLLM failed to serve ${modelName}: ${up.reason}.` +
-                            (tail ? `\n--- vllm.log (last 40 lines) ---\n${tail}` : ' (no vllm.log output)')
+                            (tail ? `\n--- vllm.log (root cause) ---\n${tail}` : ' (no vllm.log output)')
                         );
                     }
                     // Serving for real — bust the specs cache so the very next

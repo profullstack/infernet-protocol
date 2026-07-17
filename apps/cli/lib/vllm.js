@@ -96,6 +96,43 @@ export async function readVllmLogTail(lines = 40) {
     }
 }
 
+// The lines that actually explain a vLLM EngineCore failure. vLLM prints the
+// root cause (OOM, unsupported arch, dtype/quant mismatch) ABOVE the API-server
+// traceback, then says "See root cause above" — so a plain tail misses it.
+const VLLM_ERROR_PATTERNS = [
+    /OutOfMemory|CUDA out of memory|No available memory for the cache|KV cache/i,
+    /max_model_len|max seq len|model.?s max/i,
+    /not supported|unsupported|no.*implementation|unrecognized|unknown (model|architecture)/i,
+    /ValueError|RuntimeError|AssertionError|ImportError|ModuleNotFoundError/,
+    /\bERROR\b/,
+];
+
+/**
+ * Pull the MEANINGFUL error window out of the vLLM log rather than the last
+ * few useless traceback frames. Finds the first genuine error line and returns
+ * a window around it; falls back to the plain tail if nothing matches.
+ */
+export async function extractVllmError({ context = 24, fallbackTail = 60 } = {}) {
+    let txt;
+    try {
+        txt = await fs.readFile(logPath(), 'utf8');
+    } catch {
+        return '';
+    }
+    const lines = txt.split('\n');
+    // Ignore the generic wrapper line — it points elsewhere for the real cause.
+    const isReal = (l) =>
+        !/Engine core initialization failed/i.test(l) &&
+        VLLM_ERROR_PATTERNS.some((re) => re.test(l));
+    const firstErr = lines.findIndex(isReal);
+    if (firstErr === -1) {
+        return lines.slice(-fallbackTail).join('\n').trim();
+    }
+    const start = Math.max(0, firstErr - 2);
+    const end = Math.min(lines.length, firstErr + context);
+    return lines.slice(start, end).join('\n').trim();
+}
+
 /**
  * Block until vLLM is actually serving `servedName` (weights mapped, :8000
  * answering /v1/models) — NOT just spawned. Returns as soon as the model
@@ -151,6 +188,22 @@ export async function startVllmServe({ source, servedName, port = VLLM_PORT, tok
 
     const args = ['serve', source, '--host', '0.0.0.0', '--port', String(port)];
     if (servedName) args.push('--served-model-name', servedName);
+
+    // Sane defaults so a model that fits BY WEIGHT doesn't blow up on KV-cache
+    // allocation. Many finetunes inherit a huge native context (Qwen3.5 →
+    // 256K); vLLM pre-allocates KV cache for the FULL context, which OOMs the
+    // EngineCore even when the weights fit easily. Cap the served context and
+    // leave GPU headroom. Both overridable via env; only applied when the
+    // caller didn't already pass the flag in extraArgs.
+    const has = (flag) => extraArgs.includes(flag);
+    if (!has('--max-model-len')) {
+        const maxLen = process.env.VLLM_MAX_MODEL_LEN || '16384';
+        args.push('--max-model-len', String(maxLen));
+    }
+    if (!has('--gpu-memory-utilization')) {
+        const util = process.env.VLLM_GPU_MEMORY_UTILIZATION || '0.92';
+        args.push('--gpu-memory-utilization', String(util));
+    }
     args.push(...extraArgs);
 
     const env = { ...process.env };

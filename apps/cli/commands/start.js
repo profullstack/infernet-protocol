@@ -47,6 +47,7 @@ import { resolveP2pPort, detectLocalAddress, formatEndpoint } from '../lib/netwo
 import { executeChatJob, failChatJob, shutdownEngine } from '../lib/chat-executor.js';
 import { gatherCoarseSpecs } from './register.js';
 import { checkModelFits, formatFitFailure } from '../lib/model-fit.js';
+import { downloadHfModel, resolveHfToken } from '../lib/hf-model.js';
 import { detectGpus, detectHost } from '@infernetprotocol/gpu';
 import { getOrCreateModelKey, getModelPublicKeys } from '../lib/model-key.js';
 import { pullLatestBinary } from './upgrade.js';
@@ -623,11 +624,25 @@ async function runDaemon(args, ctx) {
             let result;
             if (command === 'model_install') {
                 const modelName = String(args?.model);
-                const fits = await checkModelFits(modelName);
-                if (fits && !fits.ok) {
-                    throw new Error(formatFitFailure(modelName, fits));
+                if (modelName.startsWith('hf:')) {
+                    // HuggingFace model → weights are downloaded and served via
+                    // vLLM/SGLang, NOT `ollama pull` (Ollama 400s on an hf: repo).
+                    const repoId = modelName.slice(3);
+                    const token = process.env.HF_TOKEN || (await resolveHfToken().catch(() => null));
+                    const localPath = await downloadHfModel(repoId, token);
+                    result = {
+                        model: modelName,
+                        backend: 'vllm',
+                        localPath,
+                        note: 'Weights downloaded. Serve with: infernet inference serve --backend vllm --model ' + modelName,
+                    };
+                } else {
+                    const fits = await checkModelFits(modelName);
+                    if (fits && !fits.ok) {
+                        throw new Error(formatFitFailure(modelName, fits));
+                    }
+                    result = await ollamaPullWithProgress(modelName, id);
                 }
-                result = await ollamaPullWithProgress(modelName, id);
             } else if (command === 'model_remove') {
                 result = await ollamaSpawn(['rm', String(args?.model)]);
             } else if (command === 'train_shard') {

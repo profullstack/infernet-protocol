@@ -53,6 +53,12 @@ COPY --from=deps /app /app
 COPY apps/web      ./apps/web
 COPY packages      ./packages
 
+# The canonical installer lives at the repo root; apps/web's prebuild
+# (scripts/sync-install-sh.mjs) generates apps/web/public/install.sh from it,
+# so the builder needs it on disk before `next build`. The generated public
+# copy then flows into the production image via the apps/web COPY above.
+COPY install.sh    ./install.sh
+
 RUN pnpm --filter @infernetprotocol/web build
 
 # ---------------------------------------------------------------------------

@@ -9,9 +9,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "predev": "node scripts/build-book-data.mjs",
-    "prebuild": "node scripts/build-book-data.mjs",
-    "book:gen": "node scripts/build-book-data.mjs"
+    "predev": "node scripts/build-book-data.mjs && node scripts/sync-install-sh.mjs",
+    "prebuild": "node scripts/build-book-data.mjs && node scripts/sync-install-sh.mjs",
+    "book:gen": "node scripts/build-book-data.mjs",
+    "install:sync": "node scripts/sync-install-sh.mjs"
   },
   "dependencies": {
     "@infernetprotocol/auth": "workspace:*",

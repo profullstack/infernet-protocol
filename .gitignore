@@ -14,3 +14,7 @@ coverage/
 # Local Supabase CLI state (project-ref, version pins, etc.)
 supabase/.temp/
 .claude/
+
+# Generated from the canonical repo-root install.sh by
+# apps/web/scripts/sync-install-sh.mjs (predev/prebuild). Do not edit or commit.
+apps/web/public/install.sh

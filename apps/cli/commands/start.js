@@ -48,7 +48,7 @@ import { executeChatJob, failChatJob, shutdownEngine } from '../lib/chat-executo
 import { gatherCoarseSpecs } from './register.js';
 import { checkModelFits, formatFitFailure } from '../lib/model-fit.js';
 import { downloadHfModel, resolveHfToken } from '../lib/hf-model.js';
-import { startVllmServe, vllmInstalled } from '../lib/vllm.js';
+import { startVllmServe, vllmInstalled, waitForVllmModel, readVllmLogTail } from '../lib/vllm.js';
 import { detectGpus, detectHost } from '@infernetprotocol/gpu';
 import { getOrCreateModelKey, getModelPublicKeys } from '../lib/model-key.js';
 import { pullLatestBinary } from './upgrade.js';
@@ -234,6 +234,10 @@ async function runDaemon(args, ctx) {
     const SPECS_TTL_MS = 5 * 60 * 1000;
     let cachedSpecs = null;
     let cachedSpecsAt = 0;
+    // Force the next freshSpecs() to re-detect (served_models etc.) instead of
+    // returning the cached copy. Called after any capability change (model
+    // install/remove) so the change is advertised on the very next heartbeat.
+    const invalidateSpecsCache = () => { cachedSpecs = null; cachedSpecsAt = 0; };
 
     // Rolling benchmark — last N completed chat jobs' (tokens, duration)
     // pairs. Used to compute tokens_per_second_avg for the heartbeat,
@@ -643,12 +647,30 @@ async function runDaemon(args, ctx) {
                     // under the hf: pull name so it matches chat requests and
                     // gets advertised in served_models → shows in /chat.
                     const serve = await startVllmServe({ source: repoId, servedName: modelName, token });
+                    // Don't report "completed" on spawn — wait until vLLM has
+                    // mapped the weights and /v1/models actually lists the model.
+                    // If it never comes up (OOM, unsupported arch, bad dtype),
+                    // fail the command WITH the log tail so the operator sees why
+                    // instead of a lying "completed".
+                    process.stdout.write(`[${new Date().toISOString()}] ${modelName} downloaded; waiting for vLLM to load weights…\n`);
+                    const up = await waitForVllmModel(modelName, { pid: serve.pid, timeoutMs: 300_000 });
+                    if (!up.serving) {
+                        const tail = await readVllmLogTail(40);
+                        throw new Error(
+                            `vLLM failed to serve ${modelName}: ${up.reason}.` +
+                            (tail ? `\n--- vllm.log (last 40 lines) ---\n${tail}` : ' (no vllm.log output)')
+                        );
+                    }
+                    // Serving for real — bust the specs cache so the very next
+                    // heartbeat advertises the new model in served_models
+                    // (otherwise it's stale until the TTL lapses).
+                    invalidateSpecsCache();
                     result = {
                         model: modelName,
                         backend: 'vllm',
                         localPath,
                         vllm: { pid: serve.pid, port: serve.port },
-                        note: `Serving on vLLM :${serve.port} (first load can take a minute while weights map to GPU).`,
+                        note: `Serving on vLLM :${serve.port} and advertised in served_models.`,
                     };
                 } else {
                     const fits = await checkModelFits(modelName);
@@ -656,9 +678,11 @@ async function runDaemon(args, ctx) {
                         throw new Error(formatFitFailure(modelName, fits));
                     }
                     result = await ollamaPullWithProgress(modelName, id);
+                    invalidateSpecsCache();
                 }
             } else if (command === 'model_remove') {
                 result = await ollamaSpawn(['rm', String(args?.model)]);
+                invalidateSpecsCache();
             } else if (command === 'train_shard') {
                 result = await runTrainShard(args, id);
             } else {
@@ -666,6 +690,11 @@ async function runDaemon(args, ctx) {
             }
             await client.completeCommand(id, { status: 'completed', result });
             process.stdout.write(`[${new Date().toISOString()}] completed command ${id}\n`);
+            // Push the capability change immediately — don't wait up to 30s for
+            // the next scheduled heartbeat. freshSpecs() re-detects because the
+            // cache was invalidated above, so served_models reflects the change
+            // and the model shows in "Installed on node" + /chat right away.
+            heartbeat().catch(() => { /* next scheduled beat will retry */ });
         } catch (err) {
             const msg = err?.message ?? String(err);
             process.stderr.write(`command ${id} failed: ${msg}\n`);

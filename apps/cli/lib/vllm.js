@@ -84,6 +84,39 @@ export async function detectVllmModels(host = VLLM_HOST, timeoutMs = 1500) {
     }
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Last N lines of the vLLM serve log — surfaced on startup failure. */
+export async function readVllmLogTail(lines = 40) {
+    try {
+        const txt = await fs.readFile(logPath(), 'utf8');
+        return txt.split('\n').slice(-lines).join('\n').trim();
+    } catch {
+        return '';
+    }
+}
+
+/**
+ * Block until vLLM is actually serving `servedName` (weights mapped, :8000
+ * answering /v1/models) — NOT just spawned. Returns as soon as the model
+ * appears, bails early if the process dies, and times out otherwise.
+ * A 9B model maps to GPU in ~1-2 min, so the default budget is generous.
+ */
+export async function waitForVllmModel(servedName, { pid = null, timeoutMs = 300_000, intervalMs = 3000 } = {}) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        if (pid && !isPidAlive(pid)) {
+            return { serving: false, reason: 'vLLM process exited during startup (check the log tail below)' };
+        }
+        const models = await detectVllmModels();
+        if (servedName ? models.includes(servedName) : models.length > 0) {
+            return { serving: true, models };
+        }
+        await sleep(intervalMs);
+    }
+    return { serving: false, reason: `timed out after ${Math.round(timeoutMs / 1000)}s waiting for /v1/models to list ${servedName}` };
+}
+
 /** True when the tracked serve pid is alive AND /v1/models answers. */
 export async function isVllmServing() {
     const st = await readVllmState();

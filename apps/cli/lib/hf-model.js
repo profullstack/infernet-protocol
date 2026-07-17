@@ -6,7 +6,7 @@
  * The HF token is read from config.huggingface.token or HUGGINGFACE_TOKEN.
  */
 
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { loadConfig } from './config.js';
 
@@ -124,118 +124,43 @@ export async function fetchHfModelInfo(repoId, token) {
     };
 }
 
-/** The vLLM venv the installer creates on NVIDIA hosts — it has (or can get)
- *  huggingface_hub, so we prefer it over a maybe-missing system tool. */
-function vllmVenvDir() {
+/** The `hf` CLI the installer puts in the vLLM venv. One place, no fallbacks. */
+function hfCli() {
     const home = process.env.HOME || process.env.USERPROFILE || '';
     const base = process.env.INFERNET_HOME || `${home}/.infernet`;
-    return `${base}/vllm-venv`;
-}
-
-function canImportHfHub(python) {
-    try {
-        return spawnSync(python, ['-c', 'import huggingface_hub'], { stdio: 'ignore' }).status === 0;
-    } catch { return false; }
+    return `${base}/vllm-venv/bin/hf`;
 }
 
 /**
- * Resolve how to run HuggingFace downloads, most-reliable first:
- *   1) the vLLM venv's huggingface-cli / hf binary
- *   2) the vLLM venv's python (auto-`pip install huggingface_hub` into the venv
- *      if it's missing — so `hf:` pulls self-heal without a reinstall)
- *   3) huggingface-cli on PATH
- *   4) system python3 with huggingface_hub importable
- * Returns { bin, mode: 'cli' | 'python' } or null.
- */
-function resolveHfRunner() {
-    const venv = vllmVenvDir();
-    // Prefer `hf` (the current CLI in huggingface_hub 1.x); `huggingface-cli`
-    // is a deprecated shim whose `download` subcommand can be gone.
-    for (const name of ['hf', 'huggingface-cli']) {
-        const p = `${venv}/bin/${name}`;
-        if (existsSync(p)) return { bin: p, mode: 'cli' };
-    }
-    const venvPy = `${venv}/bin/python`;
-    if (existsSync(venvPy)) {
-        if (!canImportHfHub(venvPy) && existsSync(`${venv}/bin/pip`)) {
-            process.stdout.write('Installing huggingface_hub into the vLLM venv…\n');
-            spawnSync(`${venv}/bin/pip`, ['install', '-q', '-U', 'huggingface_hub', 'hf_transfer'], { stdio: 'inherit' });
-        }
-        if (canImportHfHub(venvPy)) return { bin: venvPy, mode: 'python' };
-    }
-    try {
-        if (spawnSync('huggingface-cli', ['--help'], { stdio: 'ignore' }).status === 0) {
-            return { bin: 'huggingface-cli', mode: 'cli' };
-        }
-    } catch { /* not on PATH */ }
-    if (canImportHfHub('python3')) return { bin: 'python3', mode: 'python' };
-    return null;
-}
-
-/**
- * Download a model from HuggingFace. Streams progress to the terminal and
- * returns the local cache path. Uses the vLLM venv's huggingface_hub when
- * present (installing it if needed) so it works even when nothing is on PATH.
+ * Download a HuggingFace model via `hf download`. Streams progress and returns
+ * the local cache path; surfaces the CLI's stderr on failure.
  */
 export async function downloadHfModel(repoId, token, { localDir = null } = {}) {
-    const runner = resolveHfRunner();
-    if (!runner) {
+    const cli = hfCli();
+    if (!existsSync(cli)) {
         throw new Error(
-            'huggingface_hub not available and no vLLM venv found.\n' +
-            'Fix: re-run the installer on this NVIDIA host (installs vLLM + huggingface_hub),\n' +
-            '     or: pip install -U huggingface_hub hf_transfer'
+            `HuggingFace CLI not found at ${cli}. Re-run the installer on this NVIDIA ` +
+            `host — it installs vLLM + huggingface_hub.`
         );
     }
 
-    let cmd = runner.bin;
-    let finalArgs;
-    if (runner.mode === 'cli') {
-        finalArgs = ['download', repoId];
-        if (token) finalArgs.push('--token', token);
-        if (localDir) finalArgs.push('--local-dir', localDir);
-    } else {
-        finalArgs = [
-            '-c',
-            `from huggingface_hub import snapshot_download; ` +
-            `p = snapshot_download(${JSON.stringify(repoId)}` +
-            `${token ? `, token=${JSON.stringify(token)}` : ''}` +
-            `${localDir ? `, local_dir=${JSON.stringify(localDir)}` : ''}` +
-            `); print(p)`
-        ];
-    }
+    const args = ['download', repoId];
+    if (token) args.push('--token', token);
+    if (localDir) args.push('--local-dir', localDir);
 
-    process.stdout.write(`\nDownloading ${repoId} from HuggingFace (via ${cmd})…\n`);
+    process.stdout.write(`\nDownloading ${repoId} from HuggingFace…\n`);
 
     return new Promise((resolve, reject) => {
-        // Only enable hf_transfer acceleration when the package is actually
-        // present — forcing it otherwise makes huggingface_hub hard-error.
-        const env = { ...process.env };
-        const probePy = existsSync(`${vllmVenvDir()}/bin/python`) ? `${vllmVenvDir()}/bin/python` : 'python3';
-        try {
-            if (spawnSync(probePy, ['-c', 'import hf_transfer'], { stdio: 'ignore' }).status === 0) {
-                env.HF_HUB_ENABLE_HF_TRANSFER = '1';
-            }
-        } catch { /* leave acceleration off */ }
-        const child = spawn(cmd, finalArgs, {
-            // Capture stderr so the failure reason surfaces in the command
-            // result (the dashboard only sees the rejection message, not the
-            // daemon's stderr) — no more mystery "exited 1".
-            stdio: ['ignore', 'inherit', 'pipe'],
-            env,
-        });
+        const child = spawn(cli, args, { stdio: ['ignore', 'inherit', 'pipe'] });
         let errTail = '';
         child.stderr.on('data', (d) => {
             const s = d.toString();
-            process.stderr.write(s);            // still echo live
+            process.stderr.write(s);
             errTail = (errTail + s).slice(-1200);
         });
-        const localPath = localDir;
         child.on('exit', code => {
-            if (code === 0) resolve(localPath ?? defaultCachePath(repoId));
-            else reject(new Error(
-                `huggingface download exited ${code}` +
-                (errTail.trim() ? `:\n${errTail.trim()}` : ' (no stderr captured)')
-            ));
+            if (code === 0) resolve(localDir ?? defaultCachePath(repoId));
+            else reject(new Error(`hf download exited ${code}${errTail.trim() ? `:\n${errTail.trim()}` : ''}`));
         });
         child.on('error', reject);
     });

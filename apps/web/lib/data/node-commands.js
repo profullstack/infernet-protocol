@@ -61,6 +61,54 @@ export async function issueCommand({ userId, pubkey, command, args }) {
 }
 
 /**
+ * Owner cancels an in-flight command. Only pending/running commands can be
+ * cancelled; terminal ones (completed/failed/cancelled) are left as-is.
+ * The daemon learns about the cancel via its next progress post (whose
+ * response echoes the current status) and stops the running process.
+ */
+export async function cancelCommand({ userId, pubkey, commandId }) {
+    if (!(await userOwnsPubkey(userId, pubkey))) {
+        const err = new Error("not the owner of that pubkey");
+        err.status = 403;
+        throw err;
+    }
+    const supabase = getSupabaseServerClient();
+    const { data: row, error: lookErr } = await supabase
+        .from("node_commands")
+        .select("id, pubkey, status")
+        .eq("id", commandId)
+        .maybeSingle();
+    if (lookErr) throw new Error(lookErr.message);
+    if (!row) {
+        const err = new Error("command not found");
+        err.status = 404;
+        throw err;
+    }
+    if (row.pubkey !== pubkey) {
+        const err = new Error("command does not target this pubkey");
+        err.status = 403;
+        throw err;
+    }
+    if (!["pending", "running"].includes(row.status)) {
+        // Already terminal — nothing to cancel.
+        return { id: commandId, status: row.status, cancelled: false };
+    }
+    const { data, error } = await supabase
+        .from("node_commands")
+        .update({
+            status: "cancelled",
+            completed_at: new Date().toISOString(),
+            error: "cancelled by user"
+        })
+        .eq("id", commandId)
+        .in("status", ["pending", "running"])
+        .select("id, status")
+        .maybeSingle();
+    if (error) throw new Error(error.message);
+    return { id: commandId, status: data?.status ?? "cancelled", cancelled: true };
+}
+
+/**
  * List recent commands targeting a pubkey. Owner-side dashboard view —
  * caller passes the user_id and we re-verify ownership.
  */
@@ -135,7 +183,7 @@ export async function completeCommandForNode({ pubkey, commandId, status, result
     const supabase = getSupabaseServerClient();
     const { data: row, error: lookErr } = await supabase
         .from("node_commands")
-        .select("id, pubkey")
+        .select("id, pubkey, status")
         .eq("id", commandId)
         .maybeSingle();
     if (lookErr) throw new Error(lookErr.message);
@@ -150,6 +198,12 @@ export async function completeCommandForNode({ pubkey, commandId, status, result
         throw err;
     }
 
+    // Guard: only complete a command that's still 'running'. If the owner
+    // cancelled it (status='cancelled') meanwhile, don't clobber that — the
+    // daemon's completion loses the race and the cancel stands.
+    if (row.status !== "running") {
+        return { id: commandId, status: row.status, noop: true };
+    }
     const patch = {
         status,
         completed_at: new Date().toISOString(),
@@ -159,7 +213,8 @@ export async function completeCommandForNode({ pubkey, commandId, status, result
     const { error: upErr } = await supabase
         .from("node_commands")
         .update(patch)
-        .eq("id", commandId);
+        .eq("id", commandId)
+        .eq("status", "running");
     if (upErr) throw new Error(upErr.message);
     return { id: commandId, status };
 }
@@ -198,8 +253,12 @@ export async function updateCommandProgressForNode({ pubkey, commandId, progress
         throw err;
     }
     // Slim sanitization — keep the shape predictable for the frontend.
+    // phase/step/steps drive the stepped progress bar (e.g. download → serve).
     const safe = {
         status: typeof progress.status === "string" ? progress.status.slice(0, 64) : null,
+        phase: typeof progress.phase === "string" ? progress.phase.slice(0, 32) : null,
+        step: Number.isFinite(progress.step) ? progress.step : null,
+        steps: Number.isFinite(progress.steps) ? progress.steps : null,
         total: Number.isFinite(progress.total) ? progress.total : null,
         completed: Number.isFinite(progress.completed) ? progress.completed : null,
         pct: Number.isFinite(progress.pct) ? Math.max(0, Math.min(100, progress.pct)) : null
@@ -209,5 +268,8 @@ export async function updateCommandProgressForNode({ pubkey, commandId, progress
         .update({ progress: safe })
         .eq("id", commandId);
     if (upErr) throw new Error(upErr.message);
-    return { id: commandId, progress: safe };
+    // Echo the command's current status so the daemon can detect a cancel
+    // (owner set status='cancelled') on its next progress tick — no extra
+    // endpoint needed.
+    return { id: commandId, progress: safe, status: row.status };
 }

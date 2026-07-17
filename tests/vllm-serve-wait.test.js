@@ -51,6 +51,19 @@ describe("waitForVllmModel", () => {
         expect(r.reason).toMatch(/timed out/i);
     });
 
+    it("cancels when onTick returns 'cancel'", async () => {
+        models = ["some-other-model"]; // target never appears
+        let ticks = 0;
+        const r = await waitForVllmModel("hf:org/repo", {
+            timeoutMs: 5000,
+            intervalMs: 40,
+            onTick: async () => { ticks += 1; return ticks >= 2 ? "cancel" : undefined; }
+        });
+        expect(r.serving).toBe(false);
+        expect(r.cancelled).toBe(true);
+        expect(r.reason).toMatch(/cancel/i);
+    });
+
     it("bails early when the serve process has died", async () => {
         const deadPid = 2 ** 30; // a pid that does not exist
         const t0 = Date.now();

@@ -150,8 +150,9 @@ export async function extractVllmError({ headLines = 16, tailLines = 30, fallbac
  * appears, bails early if the process dies, and times out otherwise.
  * A 9B model maps to GPU in ~1-2 min, so the default budget is generous.
  */
-export async function waitForVllmModel(servedName, { pid = null, timeoutMs = 300_000, intervalMs = 3000 } = {}) {
-    const deadline = Date.now() + timeoutMs;
+export async function waitForVllmModel(servedName, { pid = null, timeoutMs = 300_000, intervalMs = 3000, onTick = null } = {}) {
+    const start = Date.now();
+    const deadline = start + timeoutMs;
     while (Date.now() < deadline) {
         if (pid && !isPidAlive(pid)) {
             return { serving: false, reason: 'vLLM process exited during startup (check the log tail below)' };
@@ -160,9 +161,19 @@ export async function waitForVllmModel(servedName, { pid = null, timeoutMs = 300
         if (servedName ? models.includes(servedName) : models.length > 0) {
             return { serving: true, models };
         }
+        // Per-tick hook: report progress + let the caller abort (user cancel).
+        // Returning 'cancel' (or a truthy .cancel) stops the wait immediately.
+        if (onTick) {
+            try {
+                const r = await onTick({ elapsedMs: Date.now() - start, timeoutMs });
+                if (r === 'cancel' || r?.cancel) {
+                    return { serving: false, cancelled: true, reason: 'cancelled by user' };
+                }
+            } catch { /* onTick is best-effort */ }
+        }
         await sleep(intervalMs);
     }
-    return { serving: false, reason: `timed out after ${Math.round(timeoutMs / 1000)}s waiting for /v1/models to list ${servedName}` };
+    return { serving: false, timedOut: true, reason: `timed out after ${Math.round(timeoutMs / 1000)}s waiting for /v1/models to list ${servedName}` };
 }
 
 /** True when the tracked serve pid is alive AND /v1/models answers. */

@@ -48,7 +48,7 @@ import { executeChatJob, failChatJob, shutdownEngine } from '../lib/chat-executo
 import { gatherCoarseSpecs } from './register.js';
 import { checkModelFits, formatFitFailure } from '../lib/model-fit.js';
 import { downloadHfModel, resolveHfToken } from '../lib/hf-model.js';
-import { startVllmServe, vllmInstalled, waitForVllmModel, extractVllmError } from '../lib/vllm.js';
+import { startVllmServe, stopVllmServe, vllmInstalled, waitForVllmModel, extractVllmError } from '../lib/vllm.js';
 import { detectGpus, detectHost } from '@infernetprotocol/gpu';
 import { getOrCreateModelKey, getModelPublicKeys } from '../lib/model-key.js';
 import { pullLatestBinary } from './upgrade.js';
@@ -643,24 +643,55 @@ async function runDaemon(args, ctx) {
                     // model name so chat requests + served_models match, but the
                     // engine underneath is vLLM.
                     const token = process.env.HF_TOKEN || (await resolveHfToken().catch(() => null));
+                    // Step 1/3 — download weights.
+                    await client.updateCommandProgress(id, {
+                        phase: 'download', step: 1, steps: 3, status: 'downloading weights'
+                    }).catch(() => {});
                     const localPath = await downloadHfModel(hfRepo, token);
                     // Don't report "completed" on spawn — wait until vLLM has
                     // mapped the weights and /v1/models actually lists the model.
                     // If it never comes up (OOM, unsupported arch, gated repo),
                     // fail the command WITH the log root cause instead of lying.
+                    // Step 2/3 — start the engine + wait for it to serve.
+                    await client.updateCommandProgress(id, {
+                        phase: 'serve', step: 2, steps: 3, status: 'starting vLLM engine', pct: 0
+                    }).catch(() => {});
                     const serve = await startVllmServe({ source: hfRepo, servedName: modelName, token });
                     process.stdout.write(`[${new Date().toISOString()}] ${modelName} (${hfRepo}) downloaded; waiting for vLLM to load weights…\n`);
-                    // Slow (virtualized) GPUs can take 10+ min to bring the
-                    // engine up; match vLLM's raised VLLM_ENGINE_READY_TIMEOUT_S.
-                    const vllmWaitMs = Number(process.env.VLLM_ENGINE_READY_TIMEOUT_S || 1800) * 1000;
-                    const up = await waitForVllmModel(modelName, { pid: serve.pid, timeoutMs: vllmWaitMs });
+                    // Auto-cancel ceiling: give up after VLLM_INSTALL_TIMEOUT_S
+                    // (default 10 min). Each tick reports progress AND checks
+                    // whether the owner cancelled (the progress response echoes
+                    // the command status) so a stuck install can be stopped.
+                    const vllmWaitMs = Number(process.env.VLLM_INSTALL_TIMEOUT_S || 600) * 1000;
+                    const up = await waitForVllmModel(modelName, {
+                        pid: serve.pid,
+                        timeoutMs: vllmWaitMs,
+                        onTick: async ({ elapsedMs, timeoutMs }) => {
+                            const pct = Math.min(99, Math.round((elapsedMs / timeoutMs) * 100));
+                            const resp = await client.updateCommandProgress(id, {
+                                phase: 'serve', step: 2, steps: 3, status: 'starting vLLM engine', pct
+                            }).catch(() => null);
+                            if (resp?.status === 'cancelled') return 'cancel';
+                        }
+                    });
+                    if (up.cancelled) {
+                        await stopVllmServe().catch(() => {});
+                        invalidateSpecsCache();
+                        process.stdout.write(`[${new Date().toISOString()}] ${modelName} install cancelled — stopped vLLM\n`);
+                        return; // status is already 'cancelled'; don't complete
+                    }
                     if (!up.serving) {
+                        await stopVllmServe().catch(() => {});
                         const tail = await extractVllmError();
                         throw new Error(
                             `vLLM failed to serve ${modelName} (${hfRepo}): ${up.reason}.` +
                             (tail ? `\n--- vllm.log (root cause) ---\n${tail}` : ' (no vllm.log output)')
                         );
                     }
+                    // Step 3/3 — serving.
+                    await client.updateCommandProgress(id, {
+                        phase: 'serve', step: 3, steps: 3, status: 'serving', pct: 100
+                    }).catch(() => {});
                     invalidateSpecsCache();
                     result = {
                         model: modelName,

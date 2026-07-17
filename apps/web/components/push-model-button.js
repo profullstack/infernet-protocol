@@ -22,6 +22,7 @@ export default function PushModelButton({ pubkey, servedModels = [], specs }) {
     const [model, setModel] = useState("qwen2.5:7b");
     const [submitting, setSubmitting] = useState(false);
     const [removing, setRemoving] = useState(null);
+    const [cancelling, setCancelling] = useState(null);
     const [error, setError] = useState(null);
     const [commands, setCommands] = useState([]);
     const [loadingCommands, setLoadingCommands] = useState(false);
@@ -116,6 +117,26 @@ export default function PushModelButton({ pubkey, servedModels = [], specs }) {
             setError(err?.message ?? String(err));
         } finally {
             setSubmitting(false);
+        }
+    }
+
+    async function cancelCommand(id) {
+        setError(null);
+        setCancelling(id);
+        try {
+            const res = await fetch(
+                `/api/v1/user/nodes/${encodeURIComponent(pubkey)}/commands/${encodeURIComponent(id)}`,
+                { method: "DELETE" }
+            );
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
+            // Optimistically mark it cancelled in the list; the poll will confirm.
+            setCommands((prev) => prev.map((c) => (c.id === id ? { ...c, status: "cancelled" } : c)));
+            router.refresh();
+        } catch (err) {
+            setError(err?.message ?? String(err));
+        } finally {
+            setCancelling(null);
         }
     }
 
@@ -296,10 +317,22 @@ export default function PushModelButton({ pubkey, servedModels = [], specs }) {
                                         {c.command === "model_install" ? "+" : c.command === "model_remove" ? "−" : "?"}{" "}
                                         {c.args?.model ?? "—"}
                                     </span>
-                                    <CommandStatus s={c.status} />
+                                    <div className="flex shrink-0 items-center gap-2">
+                                        <CommandStatus s={c.status} />
+                                        {c.status === "pending" || c.status === "running" ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => cancelCommand(c.id)}
+                                                disabled={cancelling === c.id}
+                                                className="rounded border border-red-400/30 bg-red-400/10 px-1.5 py-0.5 text-[10px] text-red-200 hover:bg-red-400/20 disabled:opacity-50"
+                                            >
+                                                {cancelling === c.id ? "…" : "Cancel"}
+                                            </button>
+                                        ) : null}
+                                    </div>
                                 </div>
-                                {c.status === "running" && c.progress ? (
-                                    <ProgressBar progress={c.progress} />
+                                {c.progress || c.status === "running" ? (
+                                    <StepBar progress={c.progress} status={c.status} />
                                 ) : null}
                             </li>
                         ))}
@@ -352,6 +385,59 @@ function ProgressBar({ progress }) {
     );
 }
 
+// Labels for a stepped install. Keyed by step count so the bar reads
+// "download | load engine | serve" for a 3-step vLLM install.
+const STEP_LABELS = { 3: ["download", "load engine", "serve"], 2: ["download", "serve"] };
+
+/**
+ * Segmented progress bar: one segment per step, filled left-to-right as the
+ * install advances (download → load → serve), until the whole thing is
+ * finished / failed / cancelled. Falls back to the plain bar when the daemon
+ * didn't send stepped info (e.g. an Ollama pull).
+ */
+function StepBar({ progress, status }) {
+    const steps = Number.isFinite(progress?.steps) ? progress.steps : null;
+    if (!steps || steps < 2) return <ProgressBar progress={progress} />;
+
+    const cur = Number.isFinite(progress?.step) ? progress.step : 1;
+    const pct = Number.isFinite(progress?.pct) ? Math.max(0, Math.min(100, progress.pct)) : 0;
+    const done = status === "completed";
+    const failed = status === "failed";
+    const cancelled = status === "cancelled";
+    const labels = STEP_LABELS[steps] ?? Array.from({ length: steps }, (_, i) => `step ${i + 1}`);
+
+    return (
+        <div className="mt-1">
+            <div className="flex gap-1">
+                {Array.from({ length: steps }, (_, i) => {
+                    const idx = i + 1;
+                    let fill = 0;
+                    if (done || idx < cur) fill = 100;
+                    else if (idx === cur) fill = (failed || cancelled) ? 100 : pct;
+                    const color =
+                        done || idx < cur ? "bg-emerald-400" :
+                        (failed && idx === cur) ? "bg-red-400" :
+                        (cancelled && idx === cur) ? "bg-white/25" :
+                        "bg-[var(--accent)]";
+                    return (
+                        <div key={i} className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                            <div className={`h-full ${color} transition-all duration-500`} style={{ width: `${fill}%` }} />
+                        </div>
+                    );
+                })}
+            </div>
+            <p className="mt-0.5 text-[10px] text-[var(--muted)]">
+                {cancelled ? "cancelled"
+                    : failed ? "failed"
+                    : done ? "done"
+                    : (labels[cur - 1] ?? progress?.status ?? "working…")}
+                {!done && !failed && !cancelled && pct ? ` · ${pct}%` : ""}
+                {` · step ${Math.min(cur, steps)}/${steps}`}
+            </p>
+        </div>
+    );
+}
+
 function formatBytes(n) {
     if (!Number.isFinite(n) || n <= 0) return "0 B";
     const units = ["B", "KB", "MB", "GB", "TB"];
@@ -365,6 +451,7 @@ function CommandStatus({ s }) {
     const tone =
         s === "completed" ? "bg-emerald-400/15 text-emerald-200 border-emerald-400/30" :
         s === "failed"    ? "bg-red-400/15 text-red-200 border-red-400/30" :
+        s === "cancelled" ? "bg-white/10 text-[var(--muted)] border-white/15 line-through" :
         s === "running"   ? "bg-amber-400/15 text-amber-100 border-amber-400/30" :
                             "bg-white/5 text-[var(--muted)] border-white/10";
     return (

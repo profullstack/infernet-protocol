@@ -232,7 +232,7 @@ detect_hosting_platform_ports || true
 # Relocates everything we can:
 #   INFERNET_HOME   → $VOLUME/infernet      (clone + node_modules)
 #   INFERNET_BIN    → $VOLUME/infernet/bin  (wrapper + mise binary)
-#   MISE_DATA_DIR   → $VOLUME/mise          (node 20)
+#   MISE_DATA_DIR   → $VOLUME/mise          (node LTS)
 #   OLLAMA_MODELS   → $VOLUME/ollama-models (model blobs)
 #   PNPM_HOME       → $VOLUME/pnpm          (pnpm store)
 #   /usr/local/lib/ollama → symlink → $VOLUME/ollama-libs (CUDA libs)
@@ -381,7 +381,7 @@ detect_os() {
 #
 # Realistic disk math for a zero-touch bearer install on a CUDA box:
 #   pnpm install (monorepo) ........ ~2.0 GB
-#   Node 20 via mise ............... ~0.1 GB
+#   Node LTS via mise ............... ~0.1 GB
 #   Ollama base binary ............. ~1.0 GB
 #   Ollama mlx_cuda_v13 libs ....... ~3.0 GB  (only on CUDA hosts)
 #   Ollama vulkan libs ............. ~0.3 GB
@@ -525,7 +525,7 @@ EOF
 
 try_install_node_unattended() {
     # Idempotent: skips if Node 18+ is already on PATH. Otherwise
-    # installs Node 20 via mise (a polyglot version manager — single
+    # installs Node LTS via mise (a polyglot version manager — single
     # static binary, works on linux + macOS, lives entirely under
     # $HOME so it doesn't fight any system-bundled `node` left over
     # from a base image like RunPod's vllm-workspace, which ships
@@ -586,7 +586,7 @@ try_install_node_unattended() {
     export MISE_YES
 
     # Use mise by absolute path — no PATH dependency. Stream output
-    # so the user can see what's happening (Node 20 download is ~80 MB
+    # so the user can see what's happening (Node LTS download is ~80 MB
     # and takes 30-60s on a fresh box; gagging it makes the script
     # look hung).
     info "  → installing Node.js LTS (~80 MB)"
@@ -684,6 +684,25 @@ check_git() {
         esac
     fi
     ok "git $(git --version | awk '{print $3}')"
+}
+
+ensure_bun() {
+    if command -v bun >/dev/null 2>&1; then
+        ok "bun $(bun --version)"
+        return 0
+    fi
+    if [ -x "$HOME/.bun/bin/bun" ]; then
+        PATH="$HOME/.bun/bin:$PATH"; export PATH
+        ok "bun $("$HOME/.bun/bin/bun" --version) (already installed)"
+        return 0
+    fi
+    info "installing bun (preferred runtime — faster than node, no mise shims)"
+    if curl -fsSL https://bun.sh/install | bash >/dev/null 2>&1 && [ -x "$HOME/.bun/bin/bun" ]; then
+        PATH="$HOME/.bun/bin:$PATH"; export PATH
+        ok "bun installed → $HOME/.bun/bin/bun"
+    else
+        warn "bun install failed — will use node/pnpm instead"
+    fi
 }
 
 ensure_pnpm() {
@@ -921,14 +940,24 @@ ensure_cpu_baseline_model() {
 }
 
 run_install() {
+    # Prefer bun — it's fast, self-contained, and (crucially) doesn't route
+    # through mise's shim layer, which breaks pnpm with "No version is set for
+    # shim: pnpm" on boxes where mise's node was upgraded. The monorepo's
+    # `workspaces` field lets bun resolve the @infernetprotocol/* packages.
+    if command -v bun >/dev/null 2>&1; then
+        info "installing dependencies with bun…"
+        if (cd "$SOURCE_DIR" && bun install); then
+            ok "dependencies installed (bun)"
+            return 0
+        fi
+        warn "bun install failed — falling back to pnpm"
+    fi
     info "running pnpm install (downloads ~1.5 GB of node_modules; takes 1-3 min)"
-    # Stream pnpm output directly to the terminal so the operator can
-    # see download / link progress. Exit code propagates because no pipe.
     if (cd "$SOURCE_DIR" && pnpm install --prefer-offline); then
-        ok "dependencies installed"
+        ok "dependencies installed (pnpm)"
         return 0
     fi
-    fail "pnpm install failed (see output above)"
+    fail "dependency install failed — bun and pnpm both unavailable/failed"
 }
 
 # ---------------------------------------------------------------------------
@@ -957,19 +986,22 @@ write_wrapper() {
 : "\${MISE_YES:=1}"
 export MISE_DATA_DIR MISE_TRUSTED_CONFIG_PATHS MISE_YES
 
-# Prepend mise shims (Node 20) ahead of the rest of PATH so we don't
-# get a stale system Node.
+# Prefer bun on PATH; then mise shims (Node LTS) ahead of the rest so we
+# don't pick up a stale system Node.
+[ -x "\$HOME/.bun/bin/bun" ] && PATH="\$HOME/.bun/bin:\$PATH"
 [ -d "\$MISE_DATA_DIR/shims" ] && PATH="\$MISE_DATA_DIR/shims:\$PATH"
 export PATH
 
-# Sanity check — fail loud rather than mysterious.
-if ! command -v node >/dev/null 2>&1; then
-    printf 'infernet: node not found on PATH (looked in %s/shims)\n' "\$MISE_DATA_DIR" >&2
+# Run on bun (preferred — fast startup), fall back to node.
+if command -v bun >/dev/null 2>&1; then
+    exec bun "$SOURCE_DIR/apps/cli/index.js" "\$@"
+elif command -v node >/dev/null 2>&1; then
+    exec node "$SOURCE_DIR/apps/cli/index.js" "\$@"
+else
+    printf 'infernet: neither bun nor node found on PATH\n' >&2
     printf '  re-run installer: curl -fsSL https://infernetprotocol.com/install.sh | sh\n' >&2
     exit 127
 fi
-
-exec node "$SOURCE_DIR/apps/cli/index.js" "\$@"
 EOF
     chmod +x "$WRAPPER"
     ok "wrapper installed at $WRAPPER"
@@ -1271,6 +1303,8 @@ main() {
     ensure_apt_prereqs
 
     check_node
+    # bun is the preferred runtime + dep installer (node stays as fallback).
+    ensure_bun
 
     if [ -z "$INFERNET_FORCE_GIT" ] && try_npm_install; then
         # npm dropped the binary at $(npm prefix -g)/bin/infernet. Symlink

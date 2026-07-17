@@ -4,6 +4,10 @@
   "version": "2.0.10",
   "description": "Infernet Protocol monorepo",
   "packageManager": "pnpm@10.6.5",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "pnpm --filter @infernetprotocol/web dev",
     "build": "pnpm --filter @infernetprotocol/web build",

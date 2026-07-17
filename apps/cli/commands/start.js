@@ -637,9 +637,12 @@ async function runDaemon(args, ctx) {
                     const repoId = modelName.slice(3);
                     const token = process.env.HF_TOKEN || (await resolveHfToken().catch(() => null));
                     const localPath = await downloadHfModel(repoId, token);
-                    // Serve under the hf: pull name so it matches chat requests
-                    // and gets advertised in served_models → shows in /chat.
-                    const serve = await startVllmServe({ source: localPath, servedName: modelName, token });
+                    // Serve the repo id, not a computed cache path — vLLM
+                    // resolves it straight from the HF cache we just filled
+                    // (the snapshot dir is a commit hash, not "main"). Serve
+                    // under the hf: pull name so it matches chat requests and
+                    // gets advertised in served_models → shows in /chat.
+                    const serve = await startVllmServe({ source: repoId, servedName: modelName, token });
                     result = {
                         model: modelName,
                         backend: 'vllm',

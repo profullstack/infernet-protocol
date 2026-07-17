@@ -14,6 +14,10 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: true,
-    include: ["tests/**/*.test.js"]
+    include: ["tests/**/*.test.js"],
+    // Generate the gitignored apps/web/public/install.sh (a build artifact)
+    // before any test runs, so tests that read it work on a fresh checkout
+    // without a prebuild.
+    globalSetup: ["./tests/global-setup.js"]
   }
 });

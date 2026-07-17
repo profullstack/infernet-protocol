@@ -861,6 +861,13 @@ try_install_vllm() {
         ln -sf "$_vllm_dir/bin/ray" "$INFERNET_BIN/ray"
         ok "Ray CLI linked to $INFERNET_BIN/ray (for distributed vLLM)"
     fi
+    # ninja lives in the venv but vLLM/FlashInfer shell out to it by PATH name;
+    # symlink it onto INFERNET_BIN (already on the daemon's PATH) so it's found
+    # even when vLLM is invoked via the ~/.local/bin/vllm symlink.
+    if [ -x "$_vllm_dir/bin/ninja" ]; then
+        ln -sf "$_vllm_dir/bin/ninja" "$INFERNET_BIN/ninja"
+        ok "ninja linked to $INFERNET_BIN/ninja (FlashInfer JIT)"
+    fi
 
     # huggingface_hub CLI — the daemon downloads HF/vLLM model weights with it
     # (apps/cli/lib/hf-model.js probes `huggingface-cli`). vLLM pulls the lib in

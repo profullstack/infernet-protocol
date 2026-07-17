@@ -232,8 +232,15 @@ export async function startVllmServe({ source, servedName, port = VLLM_PORT, tok
     // runtime — notably `ninja`, which FlashInfer needs to JIT-compile its
     // sampling kernel during profile_run. Without this vLLM dies with
     // "FileNotFoundError: 'ninja'" even though it's pip-installed in the venv.
-    const venvBin = path.dirname(bin);
-    env.PATH = `${venvBin}${path.delimiter}${env.PATH || ''}`;
+    // NOTE: `bin` is usually a symlink (~/.local/bin/vllm -> the venv), so
+    // dirname(bin) is the symlink dir, NOT the venv bin where ninja lives.
+    // Resolve the real path AND add the canonical venv bin dir to be safe.
+    const home = process.env.HOME || process.env.USERPROFILE || '';
+    const infernetHome = process.env.INFERNET_HOME || `${home}/.infernet`;
+    let realBinDir = path.dirname(bin);
+    try { realBinDir = path.dirname(fss.realpathSync(bin)); } catch { /* keep dirname */ }
+    const pathDirs = [realBinDir, path.join(infernetHome, 'vllm-venv', 'bin'), env.PATH || ''];
+    env.PATH = pathDirs.filter(Boolean).join(path.delimiter);
     // Give the engine plenty of time to come up on slow (virtualized) GPUs —
     // vLLM's own default is 600s, which ThunderCompute exceeds. Overridable.
     if (!env.VLLM_ENGINE_READY_TIMEOUT_S) {

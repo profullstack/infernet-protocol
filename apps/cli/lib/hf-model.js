@@ -149,7 +149,9 @@ function canImportHfHub(python) {
  */
 function resolveHfRunner() {
     const venv = vllmVenvDir();
-    for (const name of ['huggingface-cli', 'hf']) {
+    // Prefer `hf` (the current CLI in huggingface_hub 1.x); `huggingface-cli`
+    // is a deprecated shim whose `download` subcommand can be gone.
+    for (const name of ['hf', 'huggingface-cli']) {
         const p = `${venv}/bin/${name}`;
         if (existsSync(p)) return { bin: p, mode: 'cli' };
     }
@@ -215,13 +217,25 @@ export async function downloadHfModel(repoId, token, { localDir = null } = {}) {
             }
         } catch { /* leave acceleration off */ }
         const child = spawn(cmd, finalArgs, {
-            stdio: ['ignore', 'inherit', 'inherit'],
+            // Capture stderr so the failure reason surfaces in the command
+            // result (the dashboard only sees the rejection message, not the
+            // daemon's stderr) — no more mystery "exited 1".
+            stdio: ['ignore', 'inherit', 'pipe'],
             env,
+        });
+        let errTail = '';
+        child.stderr.on('data', (d) => {
+            const s = d.toString();
+            process.stderr.write(s);            // still echo live
+            errTail = (errTail + s).slice(-1200);
         });
         const localPath = localDir;
         child.on('exit', code => {
             if (code === 0) resolve(localPath ?? defaultCachePath(repoId));
-            else reject(new Error(`huggingface download exited ${code}`));
+            else reject(new Error(
+                `huggingface download exited ${code}` +
+                (errTail.trim() ? `:\n${errTail.trim()}` : ' (no stderr captured)')
+            ));
         });
         child.on('error', reject);
     });

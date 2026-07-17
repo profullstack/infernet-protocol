@@ -62,21 +62,33 @@ describe("waitForVllmModel", () => {
 });
 
 describe("extractVllmError", () => {
-    it("surfaces the real OOM root cause, not the generic wrapper line", async () => {
-        // A realistic vLLM failure: the true cause (KV-cache OOM) is printed
-        // far ABOVE the API-server traceback that ends in the generic wrapper.
+    it("surfaces an early root cause (KV-cache OOM in the head)", async () => {
         const log = [
             "(EngineCore_0 pid=1) INFO loading model weights...",
-            "(EngineCore_0 pid=1) INFO Model loaded in 42s",
-            "(EngineCore_0 pid=1) ERROR ValueError: To serve at least one request with the model's max seq len (262144), (72.00 GiB KV cache) is needed, which is larger than the available KV cache memory (18.30 GiB). Try increasing gpu_memory_utilization or decreasing max_model_len.",
+            "(EngineCore_0 pid=1) ERROR ValueError: (72.00 GiB KV cache) is needed, larger than available KV cache memory (18.30 GiB). Decrease max_model_len.",
             "(EngineCore_0 pid=1) Process EngineCore_0 died.",
-            ...Array.from({ length: 30 }, (_, i) => `(APIServer pid=9) File "async_llm.py", line ${i}, in init`),
-            "(APIServer pid=9) RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}",
         ].join("\n");
         await fs.writeFile(LOG, log);
         const out = await extractVllmError();
-        expect(out).toMatch(/KV cache|max seq len|262144/);
-        expect(out).not.toMatch(/Engine core initialization failed/);
+        expect(out).toMatch(/KV cache|18.30 GiB/);
+    });
+
+    it("surfaces the real exception at the TAIL of a long traceback", async () => {
+        // The dolphin3 case: 'EngineCore failed to start' banner, then a long
+        // traceback whose ACTUAL exception is the very last line. The head-only
+        // extractor missed it; head+tail must show it.
+        const log = [
+            "(EngineCore pid=127686) INFO torch.compile took 43.03 s",
+            "(EngineCore pid=127686) INFO Initial profiling/warmup run took 92.81 s",
+            "(EngineCore pid=127686) ERROR EngineCore failed to start.",
+            "(EngineCore pid=127686) ERROR Traceback (most recent call last):",
+            ...Array.from({ length: 60 }, (_, i) => `(EngineCore pid=127686) ERROR   File "core.py", line ${i}, in determine_available_memory`),
+            "(EngineCore pid=127686) ERROR torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.00 GiB. GPU 0 has a total capacity of 44.32 GiB.",
+        ].join("\n");
+        await fs.writeFile(LOG, log);
+        const out = await extractVllmError();
+        expect(out).toMatch(/OutOfMemoryError|CUDA out of memory/);
+        expect(out).toMatch(/elided/); // middle collapsed
     });
 
     it("falls back to the tail when no error pattern is present", async () => {

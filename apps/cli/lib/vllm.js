@@ -112,7 +112,7 @@ const VLLM_ERROR_PATTERNS = [
  * few useless traceback frames. Finds the first genuine error line and returns
  * a window around it; falls back to the plain tail if nothing matches.
  */
-export async function extractVllmError({ context = 24, fallbackTail = 60 } = {}) {
+export async function extractVllmError({ headLines = 16, tailLines = 30, fallbackTail = 60 } = {}) {
     let txt;
     try {
         txt = await fs.readFile(logPath(), 'utf8');
@@ -128,9 +128,20 @@ export async function extractVllmError({ context = 24, fallbackTail = 60 } = {})
     if (firstErr === -1) {
         return lines.slice(-fallbackTail).join('\n').trim();
     }
-    const start = Math.max(0, firstErr - 2);
-    const end = Math.min(lines.length, firstErr + context);
-    return lines.slice(start, end).join('\n').trim();
+    // The error region runs from the first error line to the end of the log.
+    // vLLM's ACTUAL exception (RuntimeError/OutOfMemory/ValueError) is the LAST
+    // line of the traceback, so we must show the tail — not just the head where
+    // the "EngineCore failed to start" banner sits. For a long region, show the
+    // banner + the final exception with the middle elided.
+    const region = lines.slice(Math.max(0, firstErr - 2));
+    if (region.length <= headLines + tailLines) {
+        return region.join('\n').trim();
+    }
+    return [
+        ...region.slice(0, headLines),
+        `  … (${region.length - headLines - tailLines} lines elided) …`,
+        ...region.slice(-tailLines),
+    ].join('\n').trim();
 }
 
 /**

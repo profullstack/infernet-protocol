@@ -62,10 +62,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Stamp workspace versions
+        # Use `npm pkg set` (a pure package.json field edit) rather than
+        # `npm version`. Newer npm makes `npm version` reconcile the dep tree,
+        # which throws EUNSUPPORTEDPROTOCOL on our `workspace:*` deps in a pnpm
+        # monorepo. `npm pkg set` just rewrites the version field.
         run: |
           pnpm -r --workspace-concurrency=1 \
-            exec npm version "${{ steps.version.outputs.version }}" \
-            --no-git-tag-version --allow-same-version
+            exec npm pkg set version="${{ steps.version.outputs.version }}"
 
       - name: Publish public @infernetprotocol/* packages
         env:

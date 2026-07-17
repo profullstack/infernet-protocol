@@ -41,6 +41,7 @@ export const CATALOG = [
     { id: "qwen2.5-coder-14b",name:"Qwen2.5 Coder 14B",  paramsB: 14,  vramMin: 12, ramMin: 32, pullName: "qwen2.5-coder:14b",     backend: "ollama", quality: 9, speed: 5,  useCases: ["coding","agents"] },
 
     // ── 32B (24GB+ VRAM, RTX 4090 / A100 sweet spot) ──
+    { id: "qwen3.5-9b-heretic", name: "Qwen3.5 9B Heretic (uncensored)", paramsB: 9, vramMin: 24, ramMin: 32, pullName: "hf:DavidAU/Qwen3.5-9B-Claude-4.6-HighIQ-THINKING-HERETIC-UNCENSORED", backend: "vllm", quality: 8, speed: 6, useCases: ["chat","uncensored","vision","agents","study"], uncensored: true },
     { id: "qwen2.5-32b",     name: "Qwen2.5 32B",        paramsB: 32,  vramMin: 24, ramMin: 48, pullName: "qwen2.5:32b",           backend: "ollama", quality: 9, speed: 4,  useCases: ["chat","coding","study","agents"], notes: "Single-80GB-GPU sweet spot." },
     { id: "qwen2.5-coder-32b",name:"Qwen2.5 Coder 32B",  paramsB: 32,  vramMin: 24, ramMin: 48, pullName: "qwen2.5-coder:32b",     backend: "ollama", quality: 10, speed: 4, useCases: ["coding","agents"] },
 

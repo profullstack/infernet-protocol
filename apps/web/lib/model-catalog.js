@@ -32,6 +32,7 @@ export const CATALOG = [
     { id: "qwen2.5-14b",      name: "Qwen2.5 14B",             paramsB: 14,  vramMin: 12, ramMin: 32, pull: "qwen2.5:14b",                            backend: "ollama", quality: 9, useCases: ["chat", "coding", "study", "agents"] },
     { id: "qwen2.5-coder-14b",name: "Qwen2.5 Coder 14B",       paramsB: 14,  vramMin: 12, ramMin: 32, pull: "qwen2.5-coder:14b",                      backend: "ollama", quality: 9, useCases: ["coding", "agents"] },
     // ── 32B (24GB+ sweet spot) ──
+    { id: "qwen3.5-9b-heretic", name: "Qwen3.5 9B Heretic (uncensored, thinking, vision)", paramsB: 9, vramMin: 24, ramMin: 32, pull: "hf:DavidAU/Qwen3.5-9B-Claude-4.6-HighIQ-THINKING-HERETIC-UNCENSORED", backend: "vllm", quality: 8, useCases: ["chat", "uncensored", "vision", "agents", "study"], uncensored: true },
     { id: "qwen2.5-32b",      name: "Qwen2.5 32B",             paramsB: 32,  vramMin: 24, ramMin: 48, pull: "qwen2.5:32b",                            backend: "ollama", quality: 9, useCases: ["chat", "coding", "study", "research", "agents"] },
     { id: "qwen2.5-coder-32b",name: "Qwen2.5 Coder 32B",       paramsB: 32,  vramMin: 24, ramMin: 48, pull: "qwen2.5-coder:32b",                      backend: "ollama", quality: 10,useCases: ["coding", "agents"] },
     { id: "deepseek-r1-32b",  name: "DeepSeek-R1 32B",         paramsB: 32,  vramMin: 24, ramMin: 48, pull: "deepseek-r1:32b",                        backend: "ollama", quality: 9, useCases: ["study", "coding", "research", "agents"] },

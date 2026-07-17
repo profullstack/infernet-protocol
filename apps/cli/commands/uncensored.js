@@ -55,6 +55,13 @@ const HF_MODELS = [
         description: 'Hermes 3 8B (Nous Research) — uncensored, instruction-tuned, Apache 2.0',
     },
     {
+        repoId: 'DavidAU/Qwen3.5-9B-Claude-4.6-HighIQ-THINKING-HERETIC-UNCENSORED',
+        sizeGb: 18.8,
+        sizeGb4bit: 6.0,
+        minVramGb: 24,
+        description: 'Qwen3.5 9B Heretic (DavidAU) — uncensored, thinking + vision, bf16 via vLLM',
+    },
+    {
         repoId: 'cognitivecomputations/dolphin-2.9.4-llama3.1-70b',
         sizeGb: 140.0,
         sizeGb4bit: 40.0,

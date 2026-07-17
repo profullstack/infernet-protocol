@@ -175,6 +175,40 @@ export async function getProviders({ limit, status, pubkey } = {}) {
   return rows.map(mapProvider);
 }
 
+/**
+ * IPIP-0006 bootstrap seed peers. Recently-heartbeat'd providers that
+ * advertise a dialable address, as `{ pubkey, multiaddr, last_seen,
+ * served_models, gpu_model }`. Public read — the daemon calls this on startup
+ * (apps/cli/lib/peers.js) to join the p2p mesh, so keep it cheap and unsigned.
+ */
+export async function getBootstrapPeers({ limit } = {}) {
+  const supabase = getSupabaseServerClient();
+  // Only peers seen recently enough to likely still be dialable.
+  const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  const query = supabase
+    .from("providers")
+    .select("public_key,address,port,last_seen,gpu_model,specs")
+    .not("address", "is", null)
+    .gte("last_seen", cutoff)
+    .order("last_seen", { ascending: false });
+
+  const rows = await runQuery(withLimit(query, limit));
+  return rows
+    .filter((r) => r.public_key && r.address && Number.isFinite(r.port) && r.port > 0)
+    .map((r) => {
+      // Raw IPv4 → /ip4/, anything else (hostname) → /dns4/.
+      const scheme = /^\d{1,3}(\.\d{1,3}){3}$/.test(r.address) ? "ip4" : "dns4";
+      const served = Array.isArray(r?.specs?.served_models) ? r.specs.served_models : [];
+      return {
+        pubkey: r.public_key,
+        multiaddr: `/${scheme}/${r.address}/tcp/${r.port}`,
+        last_seen: r.last_seen,
+        served_models: served,
+        gpu_model: r.gpu_model || null
+      };
+    });
+}
+
 export async function getJobs({ limit, status, pubkey } = {}) {
   const supabase = getSupabaseServerClient();
   let query = supabase

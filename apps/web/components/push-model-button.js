@@ -31,8 +31,11 @@ export default function PushModelButton({ pubkey, servedModels = [], specs }) {
     // Privacy-sanitized telemetry only carries vram_tier strings, mapped to
     // representative GB inside vramFromSpecs.
     const vramGb = useMemo(() => vramFromSpecs(specs), [specs]);
+    // Show the FULL catalog (filtered by use case), best-fit first — not a
+    // truncated top-N. Users expect "Any" to list every model they can push,
+    // including ones they just added; capping at 6 silently hid them.
     const recommendations = useMemo(
-        () => recommendModels({ vramGb, useCase, limit: 6 }),
+        () => recommendModels({ vramGb, useCase, limit: Infinity }),
         [vramGb, useCase]
     );
 
@@ -167,7 +170,7 @@ export default function PushModelButton({ pubkey, servedModels = [], specs }) {
             <div className="mt-3">
                 <div className="flex items-center justify-between">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                        Recommended {vramGb > 0 ? `· ~${vramGb} GB VRAM` : "· no GPU detected"}
+                        Models · best fit first {vramGb > 0 ? `· ~${vramGb} GB VRAM` : "· no GPU detected"}
                     </p>
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-1">
@@ -186,7 +189,7 @@ export default function PushModelButton({ pubkey, servedModels = [], specs }) {
                         </button>
                     ))}
                 </div>
-                <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto pr-1">
+                <ul className="mt-2 max-h-72 space-y-1 overflow-y-auto pr-1">
                     {recommendations.map((rec) => {
                         const m = rec.model;
                         const isSelected = model === m.pull;

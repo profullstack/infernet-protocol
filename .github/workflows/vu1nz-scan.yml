@@ -1,7 +1,7 @@
 # Managed by sh1pt Actions Fleet
-# pack: vu1nz-scan@1.0.0
+# pack: vu1nz-scan@1.0.1
 # install: sh1pt-actions-store
-# hash: sha256:a5f27998f1a6ddd9e2ff263724a5d4eb5887a306210d9c00591d9a918a7136ad
+# hash: sha256:69dca6b225e64533cd02750003f56fd1ccb4f178c37f48d4398a8254a3fe887b
 name: vu1nz security scan
 
 on:
@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
@@ -166,7 +166,12 @@ jobs:
           fi
 
       - name: Comment on PR
-        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        # Best-effort only. Skip for Dependabot (read-only token can't comment)
+        # and never fail the job if posting the comment errors — the scan's
+        # pass/fail is decided by the "Build PR comment" step, and findings are
+        # always written to the job summary.
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
@@ -206,9 +211,9 @@ jobs:
                 });
               }
             } catch (err) {
-              if (err.status === 403) {
-                core.warning(`Cannot post PR comment (read-only token): ${err.message}. Findings are in the job summary.`);
-              } else {
-                throw err;
-              }
+              // Posting the comment is best-effort. Read-only tokens return 403
+              // and transient GitHub outages return 503 (the "Unicorn" HTML
+              // page); neither should fail the scan. Findings are in the job
+              // summary regardless.
+              core.warning(`Could not post PR comment (status ${err.status ?? 'unknown'}): ${err.message}. Findings are in the job summary.`);
             }

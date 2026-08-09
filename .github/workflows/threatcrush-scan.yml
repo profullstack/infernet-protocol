@@ -1,7 +1,7 @@
 # Managed by sh1pt Actions Fleet
 # pack: threatcrush-scan@1.1.0
 # install: sh1pt-actions-store
-# hash: sha256:8b7430185637af9aea9bef6223b7ed1754a7f1c5e0d78ad058d47832a1ac46d3
+# hash: sha256:581c5abba03af662b4bee6926f6e30954ad7338b28309b552344b00898d57089
 name: threatcrush security scan
 
 on:
@@ -95,7 +95,7 @@ jobs:
               # every finding reads as out-of-scope.
               PREFIX="$SCAN_PATH"
             fi
-            python3 .github/threatcrush-to-sarif.py \
+            python3 .github/scripts/threatcrush-to-sarif.py \
               --input threatcrush-output.txt \
               --output threatcrush.sarif \
               --path-prefix "$PREFIX" \

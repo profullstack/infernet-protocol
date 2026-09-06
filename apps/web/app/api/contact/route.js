@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { provenanceBlock, tagSubject } from "@profullstack/form-guard";
 import { parseAuthBody, wantsRedirect } from "@/lib/auth/parse-body";
 import { appUrl } from "@/lib/auth/app-url";
+import { contactGuard } from "@/lib/contact-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -21,16 +23,42 @@ export async function POST(request) {
     const body = await parseAuthBody(request);
     const wantHtml = wantsRedirect(request);
 
+    // Spam checks run before field validation on purpose. A bot that gets
+    // "all fields are required" back has learned what to send next time;
+    // one that gets a plain success has learned nothing at all.
+    const verdict = contactGuard
+        ? await contactGuard.check({ fields: body, headers: request.headers })
+        : null;
+
+    if (verdict && !verdict.allow) {
+        if (verdict.action === "drop") {
+            // Silently discarded. Reported as success so the sender cannot
+            // tell which check caught it.
+            console.warn(`contact: dropped submission (${verdict.reason}) ip=${verdict.ip ?? "?"}`);
+            return reply({ ok: true, sent: true, wantHtml, status: 200 });
+        }
+        if (verdict.action === "limited") {
+            return reply({
+                ok: false,
+                error: "Too many messages from this connection. Please try again later.",
+                wantHtml,
+                status: 429
+            });
+        }
+        // A real person whose token went stale or who submitted very
+        // fast. Ask them to send it again rather than losing it.
+        return reply({
+            ok: false,
+            error: "That took too long or came through too quickly. Please send it again.",
+            wantHtml,
+            status: 400
+        });
+    }
+
     const name = String(body.name ?? "").trim();
     const email = String(body.email ?? "").trim();
     const subject = String(body.subject ?? "").trim();
     const message = String(body.message ?? "").trim();
-    const honeypot = String(body.website ?? "").trim();
-
-    // Spam: bots fill the hidden honeypot. Pretend success.
-    if (honeypot) {
-        return reply({ ok: true, sent: true, wantHtml, status: 200 });
-    }
 
     if (!name || !email || !subject || !message) {
         return reply({
@@ -69,8 +97,8 @@ export async function POST(request) {
                 from: FROM,
                 to: [TO],
                 reply_to: email,
-                subject: `[contact] ${subject}`,
-                text: buildPlainBody({ name, email, subject, message })
+                subject: tagSubject(`[contact] ${subject}`, verdict ?? {}),
+                text: buildPlainBody({ name, email, subject, message, verdict })
             })
         });
         if (!res.ok) {
@@ -96,8 +124,8 @@ export async function POST(request) {
     return reply({ ok: true, sent: true, wantHtml, status: 200 });
 }
 
-function buildPlainBody({ name, email, subject, message }) {
-    return [
+function buildPlainBody({ name, email, subject, message, verdict }) {
+    const lines = [
         `From: ${name} <${email}>`,
         `Subject: ${subject}`,
         "",
@@ -105,7 +133,14 @@ function buildPlainBody({ name, email, subject, message }) {
         "",
         "—",
         "Sent from the contact form at https://infernetprotocol.com/contact"
-    ].join("\n");
+    ];
+    if (verdict) {
+        // Where the message came from and why it scored as it did. The
+        // mail headers cannot tell you any of this: the message is sent
+        // by us, to us, so it authenticates perfectly either way.
+        lines.push("", provenanceBlock({ ip: verdict.ip, userAgent: verdict.userAgent, verdict }));
+    }
+    return lines.join("\n");
 }
 
 // RFC 5322-strict is overkill — this catches obvious garbage; Resend
